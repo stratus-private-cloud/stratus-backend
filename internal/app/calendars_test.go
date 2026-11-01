@@ -1,9 +1,12 @@
 package app_test
 
 import (
+	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -108,6 +111,54 @@ func TestCalendarsAreWiredFromTheOrigin(t *testing.T) {
 	h.ServeHTTP(synced, report)
 	if synced.Code != http.StatusMultiStatus || !strings.Contains(synced.Body.String(), "SUMMARY:Retro") {
 		t.Errorf("a client syncing after the form = %d:\n%s", synced.Code, synced.Body.String())
+	}
+
+	// One occurrence changed and another deleted from the web (#445) are what
+	// a client asking for expand is handed.
+	weekly := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\nUID:w\r\n" +
+		"DTSTAMP:20240101T000000Z\r\nDTSTART:20240305T090000Z\r\nRRULE:FREQ=WEEKLY;COUNT=3\r\nSUMMARY:Weekly\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+	put = httptest.NewRequestWithContext(t.Context(), http.MethodPut, "/calendars/edu/default/w.ics", strings.NewReader(weekly))
+	put.Header.Set("Content-Type", "text/calendar")
+	put.SetBasicAuth("edu", password)
+	h.ServeHTTP(httptest.NewRecorder(), put)
+	page := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/event/edit/default/w.ics?instance=20240312T090000Z", nil)
+	page.SetBasicAuth("edu", password)
+	shown := httptest.NewRecorder()
+	h.ServeHTTP(shown, page)
+	etag := regexp.MustCompile(`name="etag" value="([^"]*)"`).FindStringSubmatch(shown.Body.String())
+	if etag == nil {
+		t.Fatalf("the occurrence's form carries no ETag:\n%s", shown.Body.String())
+	}
+	for _, c := range []struct{ target, body string }{
+		{"/event/edit/default/w.ics?instance=20240312T090000Z", "summary=Weekly%2C+once&start-date=2024-03-12&start-time=09:00&etag=" +
+			url.QueryEscape(html.UnescapeString(etag[1]))},
+		{"/event/delete/default/w.ics?instance=20240319T090000Z", ""},
+	} {
+		target := c.target
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, target, strings.NewReader(c.body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.SetBasicAuth("edu", password)
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusSeeOther {
+			t.Fatalf("POST %s = %d:\n%s", target, rec.Code, rec.Body.String())
+		}
+	}
+	query := httptest.NewRequestWithContext(t.Context(), "REPORT", "/calendars/edu/default/", strings.NewReader(
+		`<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav"><D:prop><C:calendar-data>`+
+			`<C:expand start="20240301T000000Z" end="20240401T000000Z"/></C:calendar-data></D:prop><C:filter>`+
+			`<C:comp-filter name="VCALENDAR"><C:comp-filter name="VEVENT"><C:time-range start="20240301T000000Z" end="20240401T000000Z"/>`+
+			`</C:comp-filter></C:comp-filter></C:filter></C:calendar-query>`))
+	query.Header.Set("Content-Type", "application/xml")
+	query.Header.Set("Depth", "1")
+	query.SetBasicAuth("edu", password)
+	expanded := httptest.NewRecorder()
+	h.ServeHTTP(expanded, query)
+	got := expanded.Body.String()
+	if expanded.Code != http.StatusMultiStatus || !strings.Contains(got, "RECURRENCE-ID:20240305T090000Z") ||
+		!strings.Contains(got, "RECURRENCE-ID:20240312T090000Z") || !strings.Contains(got, `SUMMARY:Weekly\, once`) ||
+		strings.Contains(got, "20240319T090000Z") {
+		t.Errorf("a client expanding after the web changed one and deleted one = %d:\n%s", expanded.Code, got)
 	}
 }
 

@@ -1,7 +1,8 @@
 {{/* One event's form (#444), new or stored, with no script. Dates and
      times are in the zone the month is drawn in; all day ignores the times.
      The first button is the save, hidden, because Enter in a field presses
-     the first one in the form. */}}
+     the first one in the form. A rule the form cannot write, and an
+     occurrence, get no rule fields: what is not posted is kept (#445). */}}
 {{define "content" -}}
 {{with .Event}}
 <div class="row justify-content-center">
@@ -11,7 +12,12 @@
       This event was changed or deleted somewhere else since this form was opened, so nothing was saved.
       {{if .Delete}}<a href="{{.Action}}">Open it again</a> to see it as it is now; what you typed is still below.{{end}}
     </div>{{end}}
-    {{with .Repeats}}<div class="alert alert-info py-2">{{.}}: what is saved here changes every occurrence.</div>{{end}}
+    {{if .Series}}<ul class="nav nav-pills mb-3">
+      <li class="nav-item"><a class="nav-link active" aria-current="page" href="{{.Action}}">This occurrence</a></li>
+      <li class="nav-item"><a class="nav-link" href="{{.Series}}">Every occurrence</a></li>
+    </ul>{{end}}
+    {{if .Instance}}<div class="alert alert-info py-2">One occurrence of a repeating event: what is saved here changes this one alone.</div>
+    {{- else}}{{with .Repeats}}<div class="alert alert-info py-2">{{.}}: what is saved here changes every occurrence.</div>{{end}}{{end}}
     <form method="post" action="{{.Action}}">
       <button class="d-none" type="submit" tabindex="-1" aria-hidden="true">Save</button>
       <input type="hidden" name="etag" value="{{.ETag}}">
@@ -45,6 +51,22 @@
             <input class="form-control" id="end-time" name="end-time" type="time" value="{{.EndTime}}">
           </div>
         </div>
+        {{if not .RuleFixed}}<div class="row g-2 mt-1">
+          <div class="col-7 col-sm-4">
+            <label class="form-label mb-1" for="repeat">Repeats</label>
+            <select class="form-select" id="repeat" name="repeat">
+              {{if not .Repeats}}<option value=""{{if not .Freq}} selected{{end}}>Does not repeat</option>{{end}}
+              <option value="daily"{{if eq .Freq "daily"}} selected{{end}}>Daily</option>
+              <option value="weekly"{{if eq .Freq "weekly"}} selected{{end}}>Weekly</option>
+              <option value="monthly"{{if eq .Freq "monthly"}} selected{{end}}>Monthly</option>
+              <option value="yearly"{{if eq .Freq "yearly"}} selected{{end}}>Yearly</option>
+            </select>
+          </div>
+          <div class="col-5 col-sm-4">
+            <label class="form-label mb-1" for="until">until</label>
+            <input class="form-control" id="until" name="until" type="date" value="{{.Until}}">
+          </div>
+        </div>{{end}}
         {{with .WhenErr}}<div class="text-danger small mt-1">{{.}}</div>{{end}}
         <div class="form-text">Times in {{.Zone}}.</div>
       </div></div>

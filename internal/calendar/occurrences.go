@@ -14,7 +14,10 @@ import (
 type Occurrence struct {
 	// Object is the name of the object the event is stored in, which is
 	// what a page links to for editing it.
-	Object            string
+	Object string
+	// Instance is the RECURRENCE-ID of an occurrence of a repeating event, as
+	// Expand writes it, and empty for an event that does not repeat.
+	Instance          string
 	Summary, Location string
 	Start, End        time.Time
 	// AllDay is an event dated by the day: Start is that day's midnight and
@@ -47,6 +50,9 @@ func Occurrences(objects []db.CalendarObject, start, end time.Time, loc *time.Lo
 				return nil, err
 			}
 			occ.Object = o.Name
+			if id := comp.Props.Get(ical.PropRecurrenceID); id != nil {
+				occ.Instance = id.Value
+			}
 			out = append(out, occ)
 		}
 	}
@@ -90,4 +96,20 @@ func When(comp *ical.Component, loc *time.Location) (Occurrence, error) {
 	occ.Start = at.In(loc)
 	occ.End = occ.Start.Add(length)
 	return occ, nil
+}
+
+// Occurs is whether master has an occurrence beginning at at, counted as
+// Expand counts them: its rule, every RDATE and every EXDATE.
+func Occurs(master *ical.Component, at time.Time) (bool, error) {
+	set, err := recurrence(master, time.UTC, nil)
+	if err != nil || set == nil {
+		return false, err
+	}
+	at = at.UTC()
+	for _, t := range set.Between(at.Add(-time.Second), at.Add(time.Second), true) {
+		if t.Equal(at) {
+			return true, nil
+		}
+	}
+	return false, nil
 }

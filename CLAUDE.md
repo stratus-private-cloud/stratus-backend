@@ -39,7 +39,25 @@ download files, the calendar and the contacts.
   and its `VTIMEZONE`. A repeating event is edited as a series -- its rule and
   its moved instances stay, and it cannot switch between all day and timed,
   since `UNTIL`, `EXDATE` and `RECURRENCE-ID` have to share `DTSTART`'s type.
-  One instance alone, and giving an event a rule, are #445. It is a convenience for the cases where
+
+  **One occurrence is the same form at `?instance=`** (#445), the
+  `RECURRENCE-ID` `Expand` gave it, which `calendar.Occurrence` now carries
+  so the month can link it. Saving writes an override -- the client's own if
+  there is one, or the series copied, alarms included, with its rule taken
+  off -- and deleting is an `EXDATE` on the series, both **in the form the
+  series' `DTSTART` is written in**: a date, a time in its `TZID`, UTC or
+  floating, since that is how a client pairs an override with its
+  occurrence. An `?instance=` the series does not produce is a 404 rather
+  than an override of nothing (`calendar.Occurs`). **A rule is `FREQ` and at
+  most `UNTIL`**, `UNTIL` the end of the chosen day as a date, floating or
+  UTC as RFC 5545 requires beside `DTSTART`; one with more in it is shown in
+  words and never rewritten, and taking a rule away is not offered.
+  **A series with exceptions refuses a new start or a new rule**, as it
+  refuses switching between all day and timed: an override and an `EXDATE`
+  name an occurrence by when it was, so either change leaves them naming
+  nothing, and a moved occurrence shows twice. Carrying them along was
+  weighed -- shifting each in its own zone's wall clock -- and left to the
+  clients that already do it. It is a convenience for the cases where
 reaching for rclone or DAVx5 is overkill, not the primary way to use Stratus.
 - **An address book is a list at its own address** (#423), the
   calendar's twin: `/contacts/<owner>/<book>/` is the page and the CardDAV
