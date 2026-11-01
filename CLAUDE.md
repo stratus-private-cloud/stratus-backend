@@ -192,8 +192,9 @@ Hard constraints, in the same spirit as the rest of the project:
   which is not an address at all, and until then it has fallen back to the
   very container the film was remuxed out of because a receiver will not play
   it. `play.js` sets `disableRemotePlayback` there, so what a browser offers
-  is either right or not offered -- casting from this UI on purpose, with a
-  button of our own, is still the decision in #305.
+  is either right or not offered. **A cast button of our own was decided
+  against** (#305): the browser's is enough, and a film that needs HLS is
+  cast from `stratus-app` instead.
 
   What keeps it on the right side of the line is the same as the first: **it
   degrades by construction.** The player is a `<video>` with two sources, the

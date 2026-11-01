@@ -14,7 +14,7 @@ document.querySelectorAll("video[data-hls]").forEach(function (video) {
   // is the one the server remuxes precisely because a receiver will not play
   // it, and the MediaSource below is not an address at all. So the cast
   // button the browser offers for it leads nowhere, and this is how it stops
-  // being offered -- casting from here is still a decision (#305).
+  // being offered. A sender of our own was decided against (#305).
   video.disableRemotePlayback = true;
   if (window.Hls && window.Hls.isSupported()) {
     var hls = new window.Hls({ enableWorker: false });
