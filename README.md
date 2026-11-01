@@ -29,7 +29,7 @@ of this file.
 | HTTP range | audio/video streaming, and a track transcoded on request | browsers, VLC, mpv | **works** |
 | HLS | films a player cannot take as they are, remuxed | Chromecast, Safari, VLC, the web UI's player | **works** § |
 | CalDAV | calendar events, tasks, journal entries | DAVx5, Thunderbird, iOS/macOS | **works** ¶ |
-| CardDAV | contacts | DAVx5, Thunderbird, iOS/macOS | **works** § |
+| CardDAV | contacts | DAVx5, Thunderbird, iOS/macOS | **works** ¶ |
 | OpenSubsonic | music | Symfonium, Substreamer, DSub, Feishin | **works** † |
 | Web UI | sign in, browse, search, upload, download, rename, delete, the trash, what is known about a file, a photo gallery, a music library, a month of a calendar and its events to write, an address book to read and write, library status | any browser | **partly** |
 | DLNA / UPnP-AV | TVs, set-top players | | planned |
@@ -64,13 +64,8 @@ a track out of the shipped container. **No real client has been pointed at it
 yet**, so read that row as the server holding up its end rather than as a
 promise about any particular app.
 
-¶ Asserted with go-webdav's own CalDAV client and with the requests DAVx5
-sends — discovery, writes, conditional writes, a recurring event and a task
-found by date, sync by token — but **no real client has been pointed at it
-yet**, so read the row the way the one above it reads.
-
-§ Synced both ways with DAVx5 on a phone. Thunderbird and iOS/macOS have not
-been tried.
+¶ Synced both ways with DAVx5 on a phone, calendars and contacts alike,
+found from the bare address. Thunderbird and iOS/macOS have not been tried.
 
 Nothing here is a private API: every feature is reachable from a client that
 already exists, and no Stratus app is required to use any of it. There is one —
