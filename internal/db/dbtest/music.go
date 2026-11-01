@@ -23,6 +23,7 @@ func RunMusic(t *testing.T, newRepo func(t *testing.T) db.Repo) {
 		{"tracks of one album group into one album", musicGroupsAlbums},
 		{"a compilation stays one album", musicCompilation},
 		{"an artist counts its albums", musicArtistsCountAlbums},
+		{"an artist is one artist whatever the case of its tag", musicArtistCase},
 		{"albums can be listed for one artist or for all", musicAlbumsByArtist},
 		{"tracks come back in disc then track order", musicTrackOrder},
 		{"a folder lists the audio directly inside it", musicTracksInDir},
@@ -117,6 +118,35 @@ func musicArtistsCountAlbums(t *testing.T, s db.Repo) {
 	}
 	if artists[0].AlbumCount != 2 {
 		t.Errorf("AlbumCount = %d, want 2: three tracks across two albums", artists[0].AlbumCount)
+	}
+}
+
+// musicArtistCase is a real library's: one album tagged "Queens of the Stone
+// Age" on most tracks and "Queens Of The Stone Age" on one was two artists and
+// two albums. A track takes the spelling the library already has.
+func musicArtistCase(t *testing.T, s db.Repo) {
+	track(t, s, owner, "music/1.flac", song("Queens of the Stone Age", "Queens of the Stone Age", "Era Vulgaris", "Turnin' on the Screw", 1))
+	track(t, s, owner, "music/2.flac", song("Queens of the Stone Age", "Queens of the Stone Age", "Era Vulgaris", "Sick, Sick, Sick", 2))
+	track(t, s, owner, "music/3.flac", song("Queens Of The Stone Age", "Queens Of The Stone Age", "Era Vulgaris", "I'm Designer", 3))
+
+	artists, err := s.Artists(t.Context(), owner)
+	if err != nil {
+		t.Fatalf("Artists: %v", err)
+	}
+	if len(artists) != 1 || artists[0].Name != "Queens of the Stone Age" {
+		t.Fatalf("Artists = %+v, want one, spelled as the library already had it", artists)
+	}
+	tracks, err := s.Tracks(t.Context(), owner, "Queens of the Stone Age", "Era Vulgaris")
+	if err != nil {
+		t.Fatalf("Tracks: %v", err)
+	}
+	if len(tracks) != 3 {
+		t.Errorf("Tracks = %d, want all three in the one album", len(tracks))
+	}
+	// The track's own artist is what its file says: only the grouping is
+	// spelled the library's way.
+	if got := tracks[2].Media.Artist; got != "Queens Of The Stone Age" {
+		t.Errorf("track artist = %q, want the tag as written", got)
 	}
 }
 
