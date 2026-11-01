@@ -13,7 +13,7 @@ require (
 	github.com/minio/minio-go/v7 v7.4.1
 	github.com/teambition/rrule-go v1.8.2
 	golang.org/x/image v0.47.0
-	golang.org/x/net v0.61.0
+	golang.org/x/net v0.62.0
 	golang.org/x/text v0.43.0
 	modernc.org/sqlite v1.61.0
 )
