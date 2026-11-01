@@ -224,7 +224,7 @@ func weekdays(start time.Weekday) []string {
 // day, and nothing when it is all day or began on a day before.
 func eventRow(e calendar.Occurrence, cal string, day time.Time) calendarEvent {
 	row := calendarEvent{
-		Href: eventHref(eventEditPrefix, cal, e.Object), Summary: e.Summary, Location: e.Location, AllDay: e.AllDay,
+		Href: eventHref(eventEditPrefix, cal, e.Object) + instanceQuery(e.Instance), Summary: e.Summary, Location: e.Location, AllDay: e.AllDay,
 	}
 	if row.Summary == "" {
 		row.Summary = "(no title)"

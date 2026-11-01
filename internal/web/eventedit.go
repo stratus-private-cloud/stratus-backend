@@ -21,8 +21,8 @@ import (
 // attendees and a client's X- properties stay, and a field that comes back as
 // it was shown is not written. A repeating event is edited as a series -- the
 // form changes the event its instances come from, keeps its rule and leaves
-// the instances a client moved alone. One instance on its own, and making an
-// event repeat, are #445.
+// the instances a client moved alone. One occurrence on its own, and the
+// rule, are eventrepeat.go's (#445).
 //
 // **A time is written in UTC unless the event already had a zone.** A new
 // event would need a VTIMEZONE to name one, which is a table of rules this
@@ -50,7 +50,18 @@ type eventForm struct {
 	StartDate, StartTime, EndDate, EndTime string
 	// Repeats is how a repeating event's rule reads, and empty for one that
 	// does not repeat.
-	Repeats    string
+	Repeats string
+	// Freq and Until are the rule as the form writes one, and RuleFixed is
+	// a rule it cannot, or an occurrence, which has none.
+	Freq, Until string
+	RuleFixed   bool
+	// Instance is the occurrence this form is for, and Series the form for
+	// every occurrence beside it, when there is one.
+	Instance, Series string
+	// Exceptions is a series with occurrences changed or deleted on their own.
+	Exceptions bool
+	// series is that the object holds the event its occurrences come from.
+	series     bool
 	Zone       string
 	SummaryErr string
 	WhenErr    string
@@ -91,13 +102,29 @@ func (h *handler) editEventForm(w http.ResponseWriter, r *http.Request, user str
 		h.fail(w, r, user, err)
 		return
 	}
-	f, err := eventFormOf(master(stored), h.zone())
+	f, _, err := h.formFor(stored, r.URL.Query().Get(instanceParam))
 	if err != nil {
 		h.fail(w, r, user, err)
 		return
 	}
 	f.ETag = etag
 	h.renderEvent(w, http.StatusOK, user, cal, name, f)
+}
+
+// formFor is the form for the event in stored, or for the occurrence instance
+// names, and the component it shows.
+func (h *handler) formFor(stored *ical.Calendar, instance string) (*eventForm, *ical.Component, error) {
+	comp, _, err := target(stored, instance)
+	if err != nil {
+		return nil, nil, err
+	}
+	f, err := eventFormOf(comp, h.zone())
+	if err != nil {
+		return nil, nil, err
+	}
+	f.Instance, f.series = instance, seriesOf(stored) != nil
+	f.Exceptions = instance == "" && hasExceptions(stored)
+	return f, comp, nil
 }
 
 func (h *handler) createEvent(w http.ResponseWriter, r *http.Request, user string) {
@@ -116,6 +143,8 @@ func (h *handler) saveEvent(w http.ResponseWriter, r *http.Request, user, cal, n
 	posted := postedEvent(r)
 
 	var stored *ical.Calendar
+	var ev *ical.Component
+	fresh := false
 	shown := &eventForm{}
 	if name == "" {
 		if err := h.holdsEvents(r, user, cal); err != nil {
@@ -123,12 +152,17 @@ func (h *handler) saveEvent(w http.ResponseWriter, r *http.Request, user, cal, n
 			return
 		}
 		stored = newEvent()
-		uid, _ := master(stored).Props.Text(ical.PropUID)
+		ev = master(stored)
+		uid, _ := ev.Props.Text(ical.PropUID)
 		name = uid + ".ics"
 		posted.ETag = ""
 	} else {
+		posted.Instance = r.URL.Query().Get(instanceParam)
 		var err error
 		stored, _, err = h.storedEvent(r, user, cal, name)
+		if err == nil {
+			ev, fresh, err = target(stored, posted.Instance)
+		}
 		switch {
 		case errors.Is(err, db.ErrNotFound):
 			posted.Changed = true
@@ -138,11 +172,14 @@ func (h *handler) saveEvent(w http.ResponseWriter, r *http.Request, user, cal, n
 			h.fail(w, r, user, err)
 			return
 		}
-		if shown, err = eventFormOf(master(stored), zone); err != nil {
+		if shown, err = eventFormOf(ev, zone); err != nil {
 			h.fail(w, r, user, err)
 			return
 		}
+		posted.series = seriesOf(stored) != nil
+		shown.Exceptions = posted.Instance == "" && hasExceptions(stored)
 	}
+	posted.keep(shown)
 
 	start, end, ok := posted.check(shown, zone)
 	if !ok {
@@ -150,10 +187,12 @@ func (h *handler) saveEvent(w http.ResponseWriter, r *http.Request, user, cal, n
 		return
 	}
 	back := monthHref(user, cal, start)
-	ev := master(stored)
-	if !posted.applyTo(ev, shown, start, end) {
+	if !posted.applyTo(ev, shown, start, end, zone) {
 		redirectLocal(w, r, back)
 		return
+	}
+	if fresh {
+		stored.Children = append(stored.Children, ev)
 	}
 	touch(ev, time.Now(), r.PathValue("name") != "")
 
@@ -181,24 +220,108 @@ func (h *handler) deleteEventForm(w http.ResponseWriter, r *http.Request, user s
 		h.fail(w, r, user, err)
 		return
 	}
-	f, err := eventFormOf(master(stored), h.zone())
+	f, _, err := h.formFor(stored, r.URL.Query().Get(instanceParam))
 	if err != nil {
 		h.fail(w, r, user, err)
 		return
 	}
-	h.render(w, http.StatusOK, pageUnevent, view{
+	h.renderUnevent(w, http.StatusOK, user, cal, name, f)
+}
+
+// renderUnevent asks before deleting an event, or one occurrence of it with
+// every occurrence offered beside it.
+func (h *handler) renderUnevent(w http.ResponseWriter, status int, user, cal, name string, f *eventForm) {
+	q := instanceQuery(f.Instance)
+	if f.Instance != "" && f.series {
+		f.Series = eventHref(eventDeletePrefix, cal, name)
+	}
+	h.render(w, status, pageUnevent, view{
 		Title: "Delete event", User: user, Event: f,
-		Action: eventHref(eventDeletePrefix, cal, name), Back: eventHref(eventEditPrefix, cal, name),
+		Action: eventHref(eventDeletePrefix, cal, name) + q, Back: eventHref(eventEditPrefix, cal, name) + q,
 	})
 }
 
 func (h *handler) deleteEvent(w http.ResponseWriter, r *http.Request, user string) {
-	cal := r.PathValue("cal")
-	if err := h.calendars.Delete(r.Context(), user, cal, r.PathValue("name")); err != nil {
+	cal, name := r.PathValue("cal"), r.PathValue("name")
+	if instance := r.URL.Query().Get(instanceParam); instance != "" {
+		h.deleteOccurrence(w, r, user, cal, name, instance)
+		return
+	}
+	if err := h.calendars.Delete(r.Context(), user, cal, name); err != nil {
 		h.fail(w, r, user, err)
 		return
 	}
 	redirectLocal(w, r, calendarHref(user, cal))
+}
+
+// deleteOccurrence takes one occurrence out of a series: an EXDATE on the
+// series and its override gone, or the override alone in an object that holds
+// no series -- and the object with it when that was the last.
+func (h *handler) deleteOccurrence(w http.ResponseWriter, r *http.Request, user, cal, name, instance string) {
+	ctx := r.Context()
+	stored, etag, err := h.storedEvent(r, user, cal, name)
+	if err != nil {
+		h.fail(w, r, user, err)
+		return
+	}
+	at, err := instanceTime(instance)
+	if err != nil {
+		h.fail(w, r, user, db.ErrNotFound)
+		return
+	}
+	f, _, err := h.formFor(stored, instance)
+	if err != nil {
+		h.fail(w, r, user, err)
+		return
+	}
+
+	override := overrideAt(stored, at)
+	kept := stored.Children[:0]
+	events := 0
+	for _, c := range stored.Children {
+		if c == override {
+			continue
+		}
+		if c.Name == ical.CompEvent {
+			events++
+		}
+		kept = append(kept, c)
+	}
+	stored.Children = kept
+	if series := seriesOf(stored); series != nil {
+		if ok, _ := calendar.Occurs(series, at); ok {
+			series.Props.Add(inFormOf(series.Props.Get(ical.PropDateTimeStart), ical.PropExceptionDates, at))
+		}
+		touch(series, time.Now(), true)
+	}
+
+	back := monthHref(user, cal, instanceDay(instance, at, h.zone()))
+	if events == 0 {
+		err = h.calendars.Delete(ctx, user, cal, name)
+	} else {
+		_, err = h.calendars.Put(ctx, user, cal, name, stored, func(now string, exists bool) error {
+			if !exists || now != etag {
+				return errChanged
+			}
+			return nil
+		})
+	}
+	switch {
+	case errors.Is(err, errChanged):
+		f.Changed = true
+		h.renderUnevent(w, http.StatusConflict, user, cal, name, f)
+	case err != nil:
+		h.fail(w, r, user, err)
+	default:
+		redirectLocal(w, r, back)
+	}
+}
+
+func instanceQuery(instance string) string {
+	if instance == "" {
+		return ""
+	}
+	return "?" + instanceParam + "=" + url.QueryEscape(instance)
 }
 
 // holdsEvents is a calendar that exists and takes events: a task list has
@@ -237,8 +360,12 @@ func (h *handler) renderEvent(w http.ResponseWriter, status int, user, cal, name
 	if name == "" {
 		f.Heading, f.Action = "New event", eventHref(eventNewPrefix, cal, "")
 	} else {
-		f.Heading, f.Action = "Edit event", eventHref(eventEditPrefix, cal, name)
-		f.Delete = eventHref(eventDeletePrefix, cal, name)
+		q := instanceQuery(f.Instance)
+		f.Heading, f.Action = "Edit event", eventHref(eventEditPrefix, cal, name)+q
+		f.Delete = eventHref(eventDeletePrefix, cal, name) + q
+		if f.Instance != "" && f.series {
+			f.Series = eventHref(eventEditPrefix, cal, name)
+		}
 	}
 	h.render(w, status, pageEvent, view{Title: f.Heading, User: user, Event: f})
 }
@@ -285,6 +412,9 @@ func eventFormOf(ev *ical.Component, zone *time.Location) (*eventForm, error) {
 		Summary: text(ical.PropSummary), Location: text(ical.PropLocation),
 		Description: text(ical.PropDescription), Repeats: repeats(ev),
 	}
+	var simple bool
+	f.Freq, f.Until, simple = simpleRule(ev, zone)
+	f.RuleFixed = !simple
 	if ev.Props.Get(ical.PropDateTimeStart) == nil {
 		return f, nil
 	}
@@ -331,6 +461,20 @@ func postedEvent(r *http.Request) *eventForm {
 		AllDay:      r.PostFormValue("allday") != "",
 		StartDate:   text("start-date"), StartTime: text("start-time"),
 		EndDate: text("end-date"), EndTime: text("end-time"),
+		Freq: text("repeat"), Until: text("until"),
+	}
+}
+
+// keep carries onto a posted form what it does not post: how the stored
+// event repeats, and a rule the form cannot write, which it then leaves as
+// it was. A rule is not taken away here, and has no last day without a FREQ.
+func (f *eventForm) keep(shown *eventForm) {
+	f.Repeats, f.RuleFixed, f.Exceptions = shown.Repeats, shown.RuleFixed, shown.Exceptions
+	if shown.RuleFixed || f.Freq == "" && shown.Freq != "" {
+		f.Freq, f.Until = shown.Freq, shown.Until
+	}
+	if f.Freq == "" {
+		f.Until = ""
 	}
 }
 
@@ -342,14 +486,35 @@ func (f *eventForm) check(shown *eventForm, zone *time.Location) (start, end tim
 	if f.Summary == "" {
 		f.SummaryErr, ok = "An event needs a title.", false
 	}
-	if shown.Repeats != "" && f.AllDay != shown.AllDay {
+	if (shown.Repeats != "" || f.Instance != "") && f.AllDay != shown.AllDay {
 		f.WhenErr = "A repeating event cannot change between all day and timed here."
+		return start, end, false
+	}
+	if f.Freq != "" && !freqs[f.Freq] {
+		f.WhenErr = "That is not a way to repeat."
+		return start, end, false
+	}
+	moved := f.StartDate != shown.StartDate || !f.AllDay && f.StartTime != shown.StartTime
+	if shown.Exceptions && (moved || f.Freq != shown.Freq || f.Until != shown.Until) {
+		f.WhenErr = "Some occurrences of this event were changed or deleted on their own, " +
+			"so when it starts and how it repeats cannot change here."
 		return start, end, false
 	}
 	day, err := time.ParseInLocation(time.DateOnly, f.StartDate, zone)
 	if err != nil {
 		f.WhenErr = "An event needs the day it starts on."
 		return start, end, false
+	}
+	if f.Until != "" {
+		last, untilErr := time.ParseInLocation(time.DateOnly, f.Until, zone)
+		switch {
+		case untilErr != nil:
+			f.WhenErr = "The last day it repeats on is not a date."
+			return start, end, false
+		case last.Before(day):
+			f.WhenErr = "An event cannot stop repeating before it starts."
+			return start, end, false
+		}
 	}
 	lastDay := day
 	if f.EndDate != "" {
@@ -394,8 +559,8 @@ func clock(day time.Time, v string) (time.Time, error) {
 }
 
 // applyTo writes onto ev what differs between the posted form and shown, and
-// says whether anything did.
-func (f *eventForm) applyTo(ev *ical.Component, shown *eventForm, start, end time.Time) bool {
+// says whether anything did. page is the zone the form's days are in.
+func (f *eventForm) applyTo(ev *ical.Component, shown *eventForm, start, end time.Time, page *time.Location) bool {
 	changed := false
 	for _, field := range []struct{ name, now, was string }{
 		{ical.PropSummary, f.Summary, shown.Summary},
@@ -418,6 +583,12 @@ func (f *eventForm) applyTo(ev *ical.Component, shown *eventForm, start, end tim
 		setWhen(ev, ical.PropDateTimeStart, start, f.AllDay, zone)
 		setWhen(ev, ical.PropDateTimeEnd, end, f.AllDay, zone)
 		ev.Props.Del(ical.PropDuration)
+		changed = true
+	}
+	if f.Freq != shown.Freq || f.Until != shown.Until {
+		rule := ical.NewProp(ical.PropRecurrenceRule)
+		rule.Value = ruleValue(ev.Props.Get(ical.PropDateTimeStart), f.Freq, f.Until, page)
+		ev.Props.Set(rule)
 		changed = true
 	}
 	return changed

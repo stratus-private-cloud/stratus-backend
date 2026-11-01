@@ -2,15 +2,23 @@
 <div class="row justify-content-center">
   <div class="col-12 col-md-8 col-lg-6">
     <h1 class="h4">Delete event</h1>
+    {{if .Event.Changed}}<div class="alert alert-warning py-2" role="alert">
+      This event was changed somewhere else since this page was opened, so nothing was deleted.
+    </div>{{end}}
     <div class="card card-body">
       <p class="mb-3">
-        <strong>{{.Event.Summary}}</strong>{{if .Event.Repeats}}, every occurrence of it,{{end}} will be deleted for good,
+        {{if .Event.Instance}}Delete <strong>{{.Event.Summary}}</strong> on {{.Event.StartDate}}
+        {{- if .Event.Series}}, or every occurrence of it{{end}}? Either is deleted for good,
+        {{- else}}<strong>{{.Event.Summary}}</strong>{{if .Event.Repeats}}, every occurrence of it,{{end}} will be deleted for good,{{end}}
         here and on every device that syncs this calendar. Calendars have no trash.
       </p>
-      <div class="d-flex gap-2">
+      <div class="d-flex flex-wrap gap-2">
         <form method="post" action="{{.Action}}">
-          <button class="btn btn-danger" type="submit">Delete</button>
+          <button class="btn btn-danger" type="submit">{{if .Event.Instance}}Delete this occurrence{{else}}Delete{{end}}</button>
         </form>
+        {{with .Event.Series}}<form method="post" action="{{.}}">
+          <button class="btn btn-outline-danger" type="submit">Delete every occurrence</button>
+        </form>{{end}}
         <a class="btn btn-outline-secondary" href="{{.Back}}">Cancel</a>
       </div>
     </div>

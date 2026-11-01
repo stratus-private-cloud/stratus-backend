@@ -973,9 +973,16 @@ its own. Events only; tasks are for a tasks app. **New event**, a day's number
 and the event itself open a form for the title, the day and the times or all
 day, the place and a description, and like a contact's it touches nothing
 else -- an alarm, the guests and a phone's own fields survive. A new event is
-written in UTC; one a client wrote in a zone stays in that zone. A repeating
-event is edited and deleted as a whole series: changing one instance of it,
-or making an event repeat, is for a calendar app for now. **Contacts**, beside it, is
+written in UTC; one a client wrote in a zone stays in that zone. **An
+occurrence of a repeating event opens on its own**, and is changed or deleted
+alone or, one click over, as the whole series. An event can be made to repeat
+daily, weekly, monthly or yearly, until a day or for ever; a rule a phone
+wrote with more in it -- some weekdays, every other week -- is shown and kept
+but not offered to change, and stopping a series from repeating is for a
+calendar app. **A series some of whose occurrences were changed or deleted on
+their own keeps its start and its rule** here, because moving it would leave
+those exceptions pointing at nothing: change it from a calendar app, which
+carries them along. **Contacts**, beside it, is
 one address book the same way: everybody in it by name under a letter, with
 each number and address a link a phone can dial or write to, and no
 photographs. That one can be written as well: **New contact** and **Edit** are
@@ -1865,7 +1872,7 @@ Working now:
 - A request log, migrations applied at startup, and a container asserted from
   the outside by 160 smoke checks.
 
-Not there yet: sharing, and one instance of a repeating event from the web UI. Work
+Not there yet: sharing. Work
 and the decisions behind it are tracked on the
 [Stratus project board](https://github.com/orgs/stratus-private-cloud/projects/1), where
 `Priority` says when and the `decision` label says what still needs a call.

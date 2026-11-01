@@ -49,6 +49,8 @@ var (
 	inputField    = regexp.MustCompile(`<input[^>]*\bname="([^"]+)"[^>]*>`)
 	inputValue    = regexp.MustCompile(`\bvalue="([^"]*)"`)
 	textareaField = regexp.MustCompile(`(?s)<textarea[^>]*\bname="([^"]+)"[^>]*>(.*?)</textarea>`)
+	selectField   = regexp.MustCompile(`(?s)<select[^>]*\bname="([^"]+)"[^>]*>(.*?)</select>`)
+	optionValue   = regexp.MustCompile(`<option value="([^"]*)"( selected)?`)
 )
 
 // formOf is what a browser would post back from a page untouched.
@@ -67,6 +69,19 @@ func formOf(t *testing.T, page string) url.Values {
 	}
 	for _, m := range textareaField.FindAllStringSubmatch(page, -1) {
 		form.Add(m[1], htmlstd.UnescapeString(m[2]))
+	}
+	for _, m := range selectField.FindAllStringSubmatch(page, -1) {
+		options := optionValue.FindAllStringSubmatch(m[2], -1)
+		if len(options) == 0 {
+			continue
+		}
+		v := options[0][1]
+		for _, o := range options {
+			if o[2] != "" {
+				v = o[1]
+			}
+		}
+		form.Add(m[1], v)
 	}
 	return form
 }
