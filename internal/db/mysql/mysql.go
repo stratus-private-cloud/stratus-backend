@@ -395,10 +395,39 @@ const mediaColumns = sqlutil.MediaColumns
 // about them.
 const mediaWriteColumns = sqlutil.MediaWriteColumns
 
+// albumArtistSpelling is the album artist as the library already spells it.
+// An artist is a GROUP BY over this column, so "RJD2" and "Rjd2" would be two
+// artists; a track adopts whichever spelling most tracks already carry,
+// matched on the folded tag, which Go wrote and every engine compares alike.
+func (r *repo) albumArtistSpelling(ctx context.Context, m db.Media, folded db.Folded) (string, error) {
+	if m.Kind != db.KindAudio || m.AlbumArtist == "" {
+		return m.AlbumArtist, nil
+	}
+	const query = `SELECT album_artist FROM media
+		WHERE kind = ? AND search_album_artist = ? AND file_id <> ?
+		GROUP BY album_artist
+		ORDER BY COUNT(*) DESC, album_artist
+		LIMIT 1`
+	var spelling string
+	err := r.q.QueryRowContext(ctx, query, string(db.KindAudio), folded.AlbumArtist, m.FileID).Scan(&spelling)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return m.AlbumArtist, nil
+	case err != nil:
+		return "", fmt.Errorf("spell album artist for file %d: %w", m.FileID, mapErr(err))
+	}
+	return spelling, nil
+}
+
 // PutMedia implements db.MediaIndex.
 func (r *repo) PutMedia(ctx context.Context, m db.Media) error {
 	m = m.Normalize()
 	folded := m.Fold()
+	spelling, err := r.albumArtistSpelling(ctx, m, folded)
+	if err != nil {
+		return err
+	}
+	m.AlbumArtist = spelling
 
 	takenAt := times.NullArg(m.TakenAt)
 
@@ -430,7 +459,7 @@ func (r *repo) PutMedia(ctx context.Context, m db.Media) error {
 			search_album_artist = new.search_album_artist,
 			search_photo = new.search_photo`
 
-	_, err := r.q.ExecContext(ctx, query,
+	_, err = r.q.ExecContext(ctx, query,
 		m.FileID, string(m.Kind), times.Arg(m.IndexedAt), m.Version, m.ETag, m.Error, retryAt, takenAt,
 		m.Width, m.Height, m.Orientation, lat, lon, m.Camera,
 		m.DurationMS, m.Codec, m.Bitrate, m.SampleRate, m.Channels, m.BitDepth, m.CodecProfile, m.Level, m.FrameRate, m.AudioCodec, m.ColorPrimaries, m.ColorTransfer, m.ColorSpace, m.DoViProfile, m.Artist, m.Album, m.Title,
@@ -446,7 +475,7 @@ func (r *repo) PutMedia(ctx context.Context, m db.Media) error {
 	// three dialects the same way. See sort_at in the schema.
 	const sortAt = `UPDATE media SET sort_at = COALESCE(taken_at, (SELECT mtime FROM files WHERE files.id = media.file_id))
 		WHERE file_id = ?`
-	if _, err := r.q.ExecContext(ctx, sortAt, m.FileID); err != nil {
+	if _, err = r.q.ExecContext(ctx, sortAt, m.FileID); err != nil {
 		return fmt.Errorf("sort media for file %d: %w", m.FileID, mapErr(err))
 	}
 	return nil

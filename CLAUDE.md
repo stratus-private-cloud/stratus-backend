@@ -801,6 +801,14 @@ Hard constraints, in the same spirit as the rest of the project:
   `/music/<artist>/<album>/cover`, the same folder-then-first-track rule as
   `getCoverArt` through `thumb.Service.Cover`; a 404 is the normal answer for
   half a library, and the page draws the empty square around it.
+
+  **An album artist has one spelling, whatever the case of its tags**: an
+  artist is a `GROUP BY`, so "RJD2" and "Rjd2" were two of them on a real
+  library. `PutMedia` gives a track the spelling most tracks already carry,
+  matched on the Go-folded `search_album_artist`, and migration 0012 did the
+  same to the rows already written. Only the grouping column changes; the
+  track's own artist stays as tagged. "&" against "And" and a collaboration
+  with no album artist tag are still separate artists.
 - **Renaming and deleting are pages, not buttons in the row.** Each is a GET
   that asks and a POST that does: a rename needs a name typed into something,
   and a delete takes a folder with everything in it. The page stays now that
