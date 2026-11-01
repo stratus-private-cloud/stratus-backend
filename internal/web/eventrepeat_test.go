@@ -409,3 +409,43 @@ func TestARuleWithAMistakeSavesNothing(t *testing.T) {
 		t.Errorf("a rule with a mistake saved %d objects", len(objects))
 	}
 }
+
+// TestAFloatingSeriesStaysFloating: a rule a phone wrote with INTERVAL=1, a
+// WKST and an UNTIL is still one the form writes, its UNTIL comes back
+// floating, and so does an occurrence's RECURRENCE-ID. Every other week is
+// not, and is left alone.
+func TestAFloatingSeriesStaysFloating(t *testing.T) {
+	t.Parallel()
+	h, _, meta := browserOver(t)
+	cookie := signIn(t, h)
+	putEvent(t, meta, calendar.DefaultName, "piano", "DTSTART:20240104T090000",
+		"RRULE:FREQ=WEEKLY;INTERVAL=1;WKST=MO;UNTIL=20240201T090000", "SUMMARY:Piano")
+	putEvent(t, meta, calendar.DefaultName, "bins", "DTSTART:20240104T090000Z", "RRULE:FREQ=WEEKLY;INTERVAL=2", "SUMMARY:Bins")
+
+	page := get(t, h, "/event/edit/default/piano.ics", cookie).Body.String()
+	if !strings.Contains(page, `<option value="weekly" selected>`) || !strings.Contains(page, `name="until" type="date" value="2024-02-01"`) {
+		t.Fatalf("the piano's rule is not offered as it is:\n%s", page)
+	}
+	form := formOf(t, page)
+	form.Set("until", "2024-03-01")
+	if rec := post(t, h, "/event/edit/default/piano.ics", form, cookie); rec.Code != http.StatusSeeOther {
+		t.Fatalf("saving = %d:\n%s", rec.Code, rec.Body)
+	}
+	if _, o := storedEvent(t, meta, "piano.ics"); !strings.Contains(o.Data, "RRULE:FREQ=WEEKLY;UNTIL=20240301T235959\r\n") {
+		t.Errorf("the piano repeats as:\n%s", o.Data)
+	}
+
+	link := "/event/edit/default/piano.ics?instance=20240111T090000Z"
+	occurrence := formOf(t, get(t, h, link, cookie).Body.String())
+	occurrence.Set("summary", "Piano, recital")
+	if rec := post(t, h, link, occurrence, cookie); rec.Code != http.StatusSeeOther {
+		t.Fatalf("saving the occurrence = %d:\n%s", rec.Code, rec.Body)
+	}
+	if _, _, o := events(t, meta, "piano.ics"); !strings.Contains(o.Data, "RECURRENCE-ID:20240111T090000\r\n") {
+		t.Errorf("the occurrence is not floating:\n%s", o.Data)
+	}
+
+	if page := get(t, h, "/event/edit/default/bins.ics", cookie).Body.String(); strings.Contains(page, `name="repeat"`) {
+		t.Errorf("every other week is offered to change:\n%s", page)
+	}
+}
