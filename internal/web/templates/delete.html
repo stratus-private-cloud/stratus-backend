@@ -1,16 +1,27 @@
 {{define "content" -}}
 <div class="row justify-content-center">
   <div class="col-12 col-md-8 col-lg-6">
+    {{if .Names}}
+    <h1 class="h4">Delete {{len .Names}} item{{if gt (len .Names) 1}}s{{end}}</h1>
+    {{else}}
     <h1 class="h4">Delete {{if .IsDir}}folder{{else}}file{{end}}</h1>
+    {{end}}
     <div class="card card-body">
       <p class="mb-3">
+        {{if .Names}}
+        {{range $i, $n := .Names}}{{if $i}}, {{end}}<code>{{$n}}</code>{{end}}
+        {{if gt (len .Names) 1}}and everything inside any folder among them{{else}}and everything inside it, if it is a folder,{{end}}
+        {{else}}
         <code>{{.Name}}</code>
         {{if .IsDir}}and everything inside it{{end}}
+        {{end}}
         will be moved to the <a href="/trash/">trash</a>, where it is kept
         {{if .Kept}}for {{.Kept}} days before it is destroyed for good{{else}}until you delete it from there{{end}}.
       </p>
       <div class="d-flex gap-2">
         <form method="post" action="{{.Action}}">
+          {{range .Names}}<input type="hidden" name="name" value="{{.}}">{{end}}
+          {{if .Names}}<input type="hidden" name="confirm" value="1">{{end}}
           <button class="btn btn-danger" type="submit">Delete</button>
         </form>
         <a class="btn btn-outline-secondary" href="{{.Back}}">Cancel</a>

@@ -4,6 +4,10 @@
 {{define "rows" -}}
 {{range .Entries}}
 <tr>
+  {{/* form= rather than a form around the table: a form cannot hold the
+       ones each row already has, and the rows htmx appends join it too. */}}
+  {{if $.Select}}<td class="align-middle"><input class="form-check-input" type="checkbox"
+    name="name" value="{{.Name}}" form="selection" aria-label="Select {{.Name}}"></td>{{end}}
   <td class="align-middle">
     {{/* A fixed box whether or not there is a picture in it, so the rows line
          up and the page does not jump as thumbnails arrive. loading="lazy" is
@@ -63,7 +67,7 @@
      next page, and the trigger htmx swaps this row out for when it scrolls into
      view. Whichever happens, the URL is the same one. */}}
 <tr hx-get="{{.NextPage}}" hx-trigger="revealed" hx-swap="outerHTML">
-  <td colspan="4" class="text-center py-3">
+  <td colspan="{{if $.Select}}5{{else}}4{{end}}" class="text-center py-3">
     <a href="{{.NextPage}}" class="link-secondary small text-decoration-none">{{if .Query}}More files{{else}}More in this folder{{end}}</a>
   </td>
 </tr>

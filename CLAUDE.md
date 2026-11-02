@@ -835,6 +835,16 @@ Hard constraints, in the same spirit as the rest of the project:
   cannot be undone" to how long you have to change your mind. It also keeps the
   listing from carrying two forms per row.
 
+  **Several at once is the listing's checkboxes** (#295), posted to
+  `/delete-selected/<folder>` twice -- the question and then, with `confirm`,
+  the answer, both POST because five hundred names do not fit in a URL. Each
+  name is a `Remove` of its own and so a line of its own in the trash. One
+  deletion for the lot was weighed and refused: it is a batch with several
+  roots, and `Restore`, the page and `internal/trash` all read a batch's root
+  as its shortest path with everything else under it. The boxes join the form
+  by `form=`, since a form cannot hold the rows' own and htmx appends rows
+  later; select-all is `select.js` and ticks only what has loaded.
+
   **Two kinds of row and two sections** (#276). A deletion has a path and
   comes back; a blob the sweep could not account for has only a key, so it
   cannot, and the page says that by not drawing the button rather than by

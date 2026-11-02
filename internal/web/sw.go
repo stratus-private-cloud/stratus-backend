@@ -67,6 +67,7 @@ func (h *handler) shell() []string {
 		ownPrefix + "/copy.js" + build,
 		ownPrefix + "/dialog.js" + build,
 		ownPrefix + "/register.js" + build,
+		ownPrefix + "/select.js" + build,
 		ownPrefix + "/favicon.svg" + build,
 	}
 }

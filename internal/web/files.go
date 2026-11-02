@@ -109,6 +109,9 @@ func (h *handler) browse(w http.ResponseWriter, r *http.Request, user string) {
 		Here:    href(p),
 		Folders: link(folderPrefix, p),
 	}
+	if token == "" {
+		v.Select = link(selectedPrefix, p)
+	}
 	if more {
 		v.NextPage = shared(href(p)+"?"+state.query("after",
 			encodeCursor(state.order().By, db.After(children[len(children)-1]))), token)
