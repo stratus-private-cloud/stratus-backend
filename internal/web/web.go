@@ -335,6 +335,7 @@ func Handler(d Deps) http.Handler {
 	mux.HandleFunc("POST /rename/{path...}", h.signedIn(h.rename))
 	mux.HandleFunc("GET /delete/{path...}", h.signedIn(h.deleteForm))
 	mux.HandleFunc("POST /delete/{path...}", h.signedIn(h.remove))
+	mux.HandleFunc("POST "+selectedPrefix+"{path...}", h.signedIn(h.removeSelected))
 	mux.HandleFunc("GET "+trashPrefix+"{$}", h.signedIn(h.trash))
 	// Everything under the list is the collection's (#323), which is why the
 	// two forms are at prefixes of their own beside /delete/ and /rename/:

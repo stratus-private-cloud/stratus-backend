@@ -41,6 +41,9 @@
      the whole state -- ordering, direction, row count, and the share token when
      there is one -- so that whichever is clicked, the other two survive it. */}}
 <div class="d-flex justify-content-end align-items-baseline gap-2 small text-body-secondary mb-2">
+  {{if .Select}}<form id="selection" method="post" action="{{.Select}}" class="me-auto">
+    <button class="btn btn-sm btn-outline-danger" type="submit">Delete selected</button>
+  </form>{{end}}
   <span>Rows</span>
   {{range .Rows}}
   {{if .Active}}<span class="fw-semibold text-body">{{.Label}}</span>
@@ -53,6 +56,10 @@
     <table class="table table-hover align-middle mb-0">
       <thead>
         <tr>
+          {{/* Shown by select.js: selecting everything is a script's job, and
+               with none the boxes are ticked one by one. */}}
+          {{if .Select}}<th scope="col"><input class="form-check-input d-none" type="checkbox"
+            data-selects="selection" aria-label="Select every row shown"></th>{{end}}
           {{range .Columns}}
           <th scope="col" class="{{.Class}}" aria-sort="{{.Sorted}}">
             <a class="link-body-emphasis text-decoration-none"

@@ -189,6 +189,18 @@ func TestWhenTheTreeWillNotAnswer(t *testing.T) {
 		}
 	})
 
+	t.Run("a selection the database refuses", func(t *testing.T) {
+		t.Parallel()
+		blobs, meta := backends(t)
+		write(t, files.New(blobs, meta), "notes.txt", "hello")
+
+		h := handlerOver(t, files.New(blobs, dbtest.FailOn(t, meta, "DeleteFile")), blobs, meta)
+		form := url.Values{"name": {"notes.txt"}, "confirm": {"1"}}
+		if got := post(t, h, "/delete-selected/", form, signIn(t, h)).Code; got != http.StatusInternalServerError {
+			t.Errorf("deleting a selection through a database that refuses = %d, want 500", got)
+		}
+	})
+
 	t.Run("a rename the database refuses", func(t *testing.T) {
 		t.Parallel()
 		blobs, meta := backends(t)
@@ -672,5 +684,72 @@ func TestTheTrashShowsWhatNobodyCanAccountFor(t *testing.T) {
 	}
 	if _, err := blobs.Stat(t.Context(), "image/2026/01/01/NOROWHOLDSTHIS.jpg"); err == nil {
 		t.Error("the blob survived being destroyed")
+	}
+}
+
+// TestDeleteSelected is the listing's checkboxes (#295): asked once for the
+// lot, and then each one is a deletion of its own in the trash.
+func TestDeleteSelected(t *testing.T) {
+	t.Parallel()
+	h, s := browser(t)
+	mkdir(t, s, "album")
+	write(t, s, "album/a.jpg", "a")
+	write(t, s, "album/b.jpg", "b")
+	write(t, s, "album/keep.jpg", "k")
+	cookie := signIn(t, h)
+
+	listing := get(t, h, "/files/album/", cookie).Body.String()
+	has(t, listing, `action="/delete-selected/album"`, `name="name" value="a.jpg" form="selection"`, `data-selects="selection"`)
+
+	picked := url.Values{"name": {"a.jpg", "b.jpg"}}
+	asked := post(t, h, "/delete-selected/album", picked, cookie)
+	if asked.Code != http.StatusOK {
+		t.Fatalf("asking = %d, want 200", asked.Code)
+	}
+	has(t, asked.Body.String(), "Delete 2 items", "<code>a.jpg</code>", `name="confirm"`, `value="b.jpg"`)
+	if _, err := s.Stat(t.Context(), username, "album/a.jpg"); err != nil {
+		t.Fatalf("asking deleted a file: %v", err)
+	}
+
+	picked.Set("confirm", "1")
+	picked["name"] = append(picked["name"], "gone.jpg")
+	rec := post(t, h, "/delete-selected/album", picked, cookie)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/files/album" {
+		t.Fatalf("deleting = %d %q", rec.Code, rec.Header().Get("Location"))
+	}
+	for _, p := range []string{"album/a.jpg", "album/b.jpg"} {
+		if _, err := s.Stat(t.Context(), username, p); !errors.Is(err, db.ErrNotFound) {
+			t.Errorf("%s survived: %v", p, err)
+		}
+	}
+	if _, err := s.Stat(t.Context(), username, "album/keep.jpg"); err != nil {
+		t.Errorf("one nobody picked went too: %v", err)
+	}
+	if n := strings.Count(get(t, h, "/trash/", cookie).Body.String(), "Delete for good"); n != 2 {
+		t.Errorf("the trash has %d deletions, want one each", n)
+	}
+}
+
+func TestDeleteSelectedRefuses(t *testing.T) {
+	t.Parallel()
+	h, s := browser(t)
+	mkdir(t, s, "album")
+	write(t, s, "notes.txt", "n")
+	cookie := signIn(t, h)
+
+	if rec := post(t, h, "/delete-selected/album", url.Values{}, cookie); rec.Code != http.StatusSeeOther {
+		t.Errorf("nothing selected = %d, want back to the folder", rec.Code)
+	}
+	for _, name := range []string{"../notes.txt", "a/b", "", "."} {
+		form := url.Values{"name": {name}, "confirm": {"1"}}
+		if rec := post(t, h, "/delete-selected/album", form, cookie); rec.Code != http.StatusBadRequest {
+			t.Errorf("name %q = %d, want 400", name, rec.Code)
+		}
+	}
+	if _, err := s.Stat(t.Context(), username, "notes.txt"); err != nil {
+		t.Errorf("a name outside the folder was deleted: %v", err)
+	}
+	if rec := post(t, h, "/delete-selected/a%01b", url.Values{"name": {"x"}}, cookie); rec.Code != http.StatusBadRequest {
+		t.Errorf("a folder that cannot be = %d, want 400", rec.Code)
 	}
 }

@@ -964,7 +964,10 @@ surfaces, only when they are set: with none configured `/login` is a 404 rather
 than a form for a user who does not exist.
 
 What it does today is sign you in, walk the tree, hand you a file, take one
-back, make a folder to put it in, and rename or delete what is there. The
+back, make a folder to put it in, and rename or delete what is there --
+several at once by ticking their rows, asked once for the lot and each still a
+deletion of its own in the trash. Ticking every row shown is the one part that
+needs JavaScript, and it ticks only what has loaded. The
 calendars answer over CalDAV, and **Calendar** in the menu under your name is a month of one of
 them: a grid on a wide screen and a list of the days with something on them on
 a phone, moved by links so a month is an address. Times are drawn in the

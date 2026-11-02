@@ -142,8 +142,8 @@ type view struct {
 	// from nothing else.
 	AppleIcon string
 	// Scripts are this project's own, with the build on the end so a new one is
-	// a new URL. Three of them, on every page: copy.js, dialog.js and the one
-	// that registers the service worker.
+	// a new URL. Four of them, on every page: copy.js, dialog.js, select.js
+	// and the one that registers the service worker.
 	Scripts []string
 	// User is who is signed in, and empty when nobody is.
 	User string
@@ -235,6 +235,11 @@ type view struct {
 	IsDir  bool
 	Action string
 	Back   string
+	// Names is the delete page asking about several at once (#295), and
+	// Select where a listing's checkboxes post them -- empty where a listing
+	// offers none.
+	Names  []string
+	Select string
 	// Info is what is known about one file: the page, and the row a listing
 	// opens under it.
 	Info *infoView
@@ -314,6 +319,7 @@ func (h *handler) renderTemplate(w http.ResponseWriter, status int, page, name s
 		ownPrefix + "/copy.js" + build,
 		ownPrefix + "/dialog.js" + build,
 		ownPrefix + "/register.js" + build,
+		ownPrefix + "/select.js" + build,
 	}
 	v.Favicon = ownPrefix + "/favicon.svg" + build
 	v.AppleIcon = ownPrefix + "/apple-touch-icon.png" + build
