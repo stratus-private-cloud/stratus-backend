@@ -68,3 +68,26 @@ func TestTheWorkerDoesNotReissueNavigations(t *testing.T) {
 		}
 	}
 }
+
+// TestEachWorkerDeletesOnlyItsOwnCaches: the backup page has a worker of its
+// own on this origin (#337), and a worker that deleted every cache but its own
+// when it activated would delete the other's -- each install undoing the
+// other's, with nothing on the server to see it.
+func TestEachWorkerDeletesOnlyItsOwnCaches(t *testing.T) {
+	t.Parallel()
+
+	body, err := staticFS.ReadFile(workerSource)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(body)
+
+	for _, want := range []string{".open(PREFIX + VERSION)", "name.indexOf(PREFIX) === 0"} {
+		if !strings.Contains(source, want) {
+			t.Errorf("the worker does not keep its caches under its own prefix (%s):\n%s", want, source)
+		}
+	}
+	if strings.Contains(source, "name !== VERSION") {
+		t.Errorf("the worker deletes every cache but its own build's, including another worker's:\n%s", source)
+	}
+}

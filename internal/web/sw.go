@@ -73,14 +73,27 @@ func (h *handler) shell() []string {
 }
 
 func (h *handler) worker(w http.ResponseWriter, _ *http.Request) {
+	h.writeWorker(w, shellCache, h.shell())
+}
+
+// shellCache is the prefix of the root worker's cache names. Each worker on
+// this origin deletes only the caches under its own prefix when it activates,
+// since the backup page has one of its own (#337) and the two would otherwise
+// delete each other's on every activation.
+const shellCache = "shell:"
+
+// writeWorker serves the one worker script with the constants a scope needs in
+// front of it: the build, the prefix of its cache names, the offline page and
+// what it precaches.
+func (h *handler) writeWorker(w http.ResponseWriter, prefix string, shell []string) {
 	// A list of strings is not something encoding/json can fail on, and a
 	// branch nothing can reach is a branch nothing can test.
-	shell, _ := json.Marshal(h.shell()) //nolint:errchkjson // []string
+	list, _ := json.Marshal(shell) //nolint:errchkjson // []string
 
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = fmt.Fprintf(w, "const VERSION = %q;\nconst OFFLINE = %q;\nconst SHELL = %s;\n",
-		h.version, offlinePath, shell)
+	_, _ = fmt.Fprintf(w, "const VERSION = %q;\nconst PREFIX = %q;\nconst OFFLINE = %q;\nconst SHELL = %s;\n",
+		h.version, prefix, offlinePath, list)
 	_, _ = w.Write(workerBody)
 }
 

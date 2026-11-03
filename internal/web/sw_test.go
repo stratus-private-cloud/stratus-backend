@@ -38,6 +38,9 @@ func TestTheWorkerAnswersWithoutASession(t *testing.T) {
 	if !strings.Contains(body, `const VERSION = "`+version+`"`) {
 		t.Errorf("the worker does not name this build, so its cache cannot turn over:\n%s", body)
 	}
+	if !strings.Contains(body, `const PREFIX = "shell:"`) {
+		t.Errorf("the worker does not name the prefix its caches live under:\n%s", body)
+	}
 	if !strings.Contains(body, "addEventListener(\"fetch\"") {
 		t.Error("the worker has no fetch handler, which is what a browser asks for before it offers to install")
 	}

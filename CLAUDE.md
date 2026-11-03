@@ -278,7 +278,11 @@ Hard constraints, in the same spirit as the rest of the project:
   spelled; a second copy of them in JavaScript is the drift this project keeps
   tests for everywhere else. So `sw.go` writes the version and the list as two
   constants in front of the script, which also means the bytes change when the
-  build does and a browser re-registers without being asked.
+  build does and a browser re-registers without being asked. **A third
+  constant is the prefix its caches are named under**, and activation deletes
+  only those: the backup page has a worker of its own on this origin (#337),
+  and two workers each deleting every cache but their own would undo each
+  other on every install.
 
   **It caches nothing that needs a session, and that is the rule rather than a
   preference.** The worker writes to the cache while it installs and never

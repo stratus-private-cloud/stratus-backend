@@ -1,6 +1,6 @@
-// The service worker. VERSION, OFFLINE and SHELL are written in front of this
-// file by the handler that serves it, so the addresses it caches have one
-// source and it is the Go beside the pages that link them: see sw.go.
+// The service worker. VERSION, PREFIX, OFFLINE and SHELL are written in front
+// of this file by the handler that serves it, so the addresses it caches have
+// one source and it is the Go beside the pages that link them: see sw.go.
 //
 // It writes to the cache while it installs and nowhere else. A page cached at
 // runtime would outlive a sign-out and show one person's folder to the next,
@@ -9,7 +9,7 @@
 self.addEventListener("install", function (event) {
   event.waitUntil(
     caches
-      .open(VERSION)
+      .open(PREFIX + VERSION)
       .then(function (cache) {
         return cache.addAll(SHELL);
       })
@@ -20,8 +20,11 @@ self.addEventListener("install", function (event) {
 });
 
 self.addEventListener("activate", function (event) {
-  // Every cache but this build's, because the addresses in SHELL carry the
-  // build and a new one is a new set of them.
+  // Every cache of this worker's but this build's, because the addresses in
+  // SHELL carry the build and a new one is a new set of them. Only this
+  // worker's: the backup page has a worker of its own on the same origin
+  // (#337), and each would otherwise delete the other's on every activation.
+  // A name with no prefix at all is from before there were two.
   event.waitUntil(
     caches
       .keys()
@@ -29,7 +32,8 @@ self.addEventListener("activate", function (event) {
         return Promise.all(
           names
             .filter(function (name) {
-              return name !== VERSION;
+              var ours = name.indexOf(PREFIX) === 0 || name.indexOf(":") === -1;
+              return ours && name !== PREFIX + VERSION;
             })
             .map(function (name) {
               return caches.delete(name);
