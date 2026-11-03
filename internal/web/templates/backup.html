@@ -26,8 +26,38 @@
 <div class="d-none" data-backup>
   <p class="text-body-secondary">
     Pick a folder once and this page copies into Stratus whatever in it is not
-    here yet, and does so again whenever it is open. It only ever adds:
-    nothing is deleted or replaced on either side.
+    here yet, and does it again every time the page is opened. It only ever
+    adds: nothing is deleted or replaced on either side, and a file deleted
+    here after it was copied is not copied again.
   </p>
+  <div class="d-flex gap-2 mb-3">
+    <button type="button" class="btn btn-primary" data-backup-add>Add a folder…</button>
+    <button type="button" class="btn btn-outline-secondary" data-backup-run>Back up now</button>
+  </div>
+  <div class="alert alert-secondary d-none" data-backup-busy>
+    Another tab is backing up already. This one waits for the next visit.
+  </div>
+  <ul class="list-group" data-backup-folders></ul>
+  {{/* One folder's row, cloned by the script per folder it remembers. */}}
+  <template data-backup-folder>
+    <li class="list-group-item">
+      <div class="d-flex justify-content-between align-items-start gap-2">
+        <div class="text-break">
+          <span class="fw-semibold" data-name></span>
+          <span class="text-body-secondary">into <a data-dest></a></span>
+        </div>
+        <div class="d-flex gap-2 flex-shrink-0">
+          <button type="button" class="btn btn-sm btn-outline-primary d-none" data-allow>Allow access</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-forget>Forget</button>
+        </div>
+      </div>
+      <div class="small text-body-secondary mt-1" data-state></div>
+      <progress class="w-100 d-none" data-progress></progress>
+      <details class="small mt-1 d-none" data-problems>
+        <summary></summary>
+        <ul class="mb-0"></ul>
+      </details>
+    </li>
+  </template>
 </div>
 {{- end}}

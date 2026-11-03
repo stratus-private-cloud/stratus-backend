@@ -24,3 +24,6 @@
 /.cache/
 coverage.out
 /coverage-smoke/
+
+# the JavaScript tests (#337)
+/web-test/node_modules/

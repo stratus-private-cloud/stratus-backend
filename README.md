@@ -31,7 +31,7 @@ of this file.
 | CalDAV | calendar events, tasks, journal entries | DAVx5, Thunderbird, iOS/macOS | **works** ¶ |
 | CardDAV | contacts | DAVx5, Thunderbird, iOS/macOS | **works** ¶ |
 | OpenSubsonic | music | Symfonium, Substreamer, DSub, Feishin | **works** † |
-| Web UI | sign in, browse, search, upload, download, rename, delete, the trash, what is known about a file, a photo gallery, a music library, a month of a calendar and its events to write, an address book to read and write, library status | any browser | **partly** |
+| Web UI | sign in, browse, search, upload, download, rename, delete, the trash, what is known about a file, a photo gallery, a music library, a month of a calendar and its events to write, an address book to read and write, library status, a desktop folder backed up | any browser; the backup Chrome or Edge on a desktop | **partly** |
 | DLNA / UPnP-AV | TVs, set-top players | | planned |
 
 § Two ways, and the player chooses between them by the codecs each declares.
@@ -1640,6 +1640,38 @@ is not. A named volume works too -- `docker run -v stratus-data:/data` -- since
 the image's `/data` belongs to the user it runs as and a fresh volume takes that
 ownership.
 
+### Backing a desktop folder up
+
+**Backup**, in the menu under your name, keeps a folder on this computer
+copied into Stratus. Pick it once and every visit to that page afterwards walks
+it and sends whatever the server does not have yet, into
+`/files/desktop_backup/<folder name>/`; closing the browser and coming back
+picks up where it stopped, a large file included, without asking for the folder
+again. Where the browser has not kept its permission to read it, the page asks
+for one click.
+
+**It only ever adds.** Nothing is deleted or replaced on either side: a file
+deleted on the server after it was copied is not copied again, and a name the
+server already has with a different size is listed as a conflict and left
+alone. Files are compared by name and size, not by content.
+
+What it needs, and what it does not do:
+
+- **Chrome or Edge on a desktop.** It hangs on the File System Access API,
+  which Firefox, Safari and every phone browser lack; those are told so. A
+  phone's camera roll is [stratus-app](https://github.com/stratus-private-cloud/stratus-app)'s,
+  and any other folder is rclone's, Finder's or FolderSync's.
+- **The page open.** It works while the tab is open and not in the
+  background; it backs up again each time it is opened, or on **Back up now**.
+- **JavaScript**, unlike every other page here.
+- One race it does not close: a large file goes by tus, which replaces what is
+  at its name when it completes, so a file written to that same path by
+  something else in the meantime is overwritten. Nothing else writes into a
+  backup's folder unless you point it there.
+
+It invents no API: it is the same WebDAV and tus any client speaks, on the
+session the page already has.
+
 ## Development
 
 `make help` lists every target. The toolchain runs in a container by default and
@@ -1650,6 +1682,7 @@ the same commands work on a laptop without Go and on a CI runner with it.
 make ci          # everything CI runs
 make test        # unit tests
 make test-race   # under the race detector (Debian image: -race needs cgo)
+make test-js     # the backup page's JavaScript, with vitest in a node container
 make test-s3     # the storage conformance suite against a throwaway Silo
 make test-db     # the metadata conformance suite against PostgreSQL and MySQL
 make cover       # coverage, against a floor per package

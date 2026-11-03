@@ -87,8 +87,13 @@ reaching for rclone or DAVx5 is overkill, not the primary way to use Stratus.
 
 Hard constraints, in the same spirit as the rest of the project:
 
-- **No JavaScript build step.** No npm, no bundler, no transpiler, no
-  `node_modules`. If a feature needs a build to work, the feature waits.
+- **No JavaScript build step.** No bundler, no transpiler, and nothing npm
+  fetched in the binary. If a feature needs a build to work, the feature waits.
+  **npm builds and serves nothing; it runs the JavaScript tests**, from
+  `web-test/` at the root of the repository, in a container (`make test-js`),
+  and that is the whole of what it was let in for (#337).
+  `TestNothingOfNpmIsEmbedded` fails if any of it reaches a directory this
+  package embeds.
 - **`html/template` from the stdlib**, served from `//go:embed`.
 - **Bootstrap for CSS, vendored and embedded** -- never from a CDN. A self-hosted
   cloud must work with no outbound network, and an embedded asset also keeps the
@@ -384,6 +389,56 @@ Hard constraints, in the same spirit as the rest of the project:
   degrades by construction** like the other three: a browser with no JavaScript
   registers nothing and gets the server-rendered site every page here already
   is, which is also what a browser with no worker support gets.
+
+- **The fifth is not a script but a page of them, and this is its paragraph**
+  (#337). `/backup/` backs a folder on a desktop up: pick it once, and every
+  visit after walks it, lists each directory on the server with `PROPFIND`
+  Depth 1, and sends what is missing -- `PUT` with `If-None-Match: *` up to
+  8 MB, tus above, resuming an upload a closed tab left half done. It is
+  the one page here that is a program rather than a document, and **it is the
+  first script that does not degrade by construction**: with no JavaScript
+  there is no backup at all, and the page says so in a `<noscript>`. A
+  browser with no `showDirectoryPicker` -- Firefox, Safari, every phone -- is
+  told why and pointed at rclone, Finder or `stratus-app`, never shown a
+  button that does nothing.
+
+  What makes it acceptable is that **it invents nothing on the server**: the
+  requests are the ones rclone sends, same-origin on the session (#234), and
+  `TestTheBackupPagesRequestsAreAnswered` in `internal/app` sends them in the
+  script's order so a change the script relies on breaks there. And that **it
+  stays on its page**: the modules are in `internal/web/backup/` and loaded by
+  `/backup/` alone, served under the build in the path
+  (`/backup/js/<version>/`) because a module's imports are relative and would
+  drop the `?v=` every other script carries; a module of another build is a
+  404 rather than these bytes under an immutable header.
+
+  **It has a service worker of its own**, `/backup/sw.js`, scoped to
+  `/backup/`: the root worker's file with the `backup:` prefix and a shell of
+  the root's plus these modules, so the shell every other page installs never
+  carries them and the two greps over `sw.js` cover both. What it buys is the
+  page's script with no network; what it does not do is back anything up in
+  the background -- Periodic Background Sync would need `requestPermission`,
+  which exists only in a window, and an event's lifetime is shorter than a
+  film.
+
+  **It only ever adds**, stratus-app#124's three rules: a file a pass has
+  settled is never sent again, so one deleted on the server stays deleted; a
+  name the server has at the same size is settled as it is, which is also how
+  a lost record is rebuilt; another size is a conflict, reported and left
+  alone. **Sizes and not hashes**: the ETag is a SHA-256, but Web Crypto
+  cannot hash a stream and reading every file twice to tell two of a size
+  apart buys little. **And one race is accepted**: a tus upload replaces what
+  is at its name when it completes and has no precondition, so a file written
+  there by somebody else between the listing and the last chunk is replaced.
+  One user, and one client writing into a backup's destination, is why that
+  was not worth a server change.
+
+  The folders, what each pass settled and the half-sent uploads are in the
+  browser's IndexedDB. The handle survives a restart; the permission is the
+  browser's to keep, and where it has not, the page offers a button, since
+  asking needs a click. Two tabs take turns through a Web Lock. New folders go
+  to `desktop_backup/<name>/`, beside the app's `phone_backup/` and clear of
+  the database's `backups/`.
 
 - **htmx only where it is genuinely required**, vendored and embedded like
   Bootstrap. Default to a plain form and a full page render. One page needs it

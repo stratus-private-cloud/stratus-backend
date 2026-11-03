@@ -115,6 +115,18 @@ jobs:
           path: coverage.out
           retention-days: 7
 
+  # The backup page's modules (#337). npm runs the tests and nothing else; see
+  # test-js in the Makefile.
+  test-js:
+    name: test-js
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: vitest
+        run: make test-js
+
   container:
     name: container
     runs-on: ubuntu-latest
@@ -170,7 +182,7 @@ jobs:
   # an image that failed the gate is worse than no image at all.
   publish:
     name: publish
-    needs: [lint, test, container]
+    needs: [lint, test, test-js, container]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20

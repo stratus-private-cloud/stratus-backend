@@ -223,6 +223,17 @@ vuln: | $(CACHE_DIR)
 test: | $(CACHE_DIR)
 	$(GO) test $(TEST_FLAGS) ./...
 
+## test-js: run the backup page's JavaScript tests (#337)
+#
+# npm builds and serves nothing here: it runs these tests, in a container, from
+# a directory outside everything the binary embeds. npm ci rather than install,
+# so the lock file is what runs and a test cannot pass on a newer dependency.
+NODE_IMAGE := node:24-alpine
+test-js:
+	docker run --rm -u $(STRATUS_UID):$(STRATUS_GID) -e HOME=/tmp \
+		-v "$(CURDIR)":/src -w /src/web-test $(NODE_IMAGE) \
+		sh -c 'npm ci --no-audit --no-fund --loglevel=error && npx vitest run'
+
 ## test-race: run tests under the race detector
 test-race: | $(CACHE_DIR)
 	$(GO_RACE) test -race $(TEST_FLAGS) ./...
@@ -280,7 +291,7 @@ smoke-cover: | $(CACHE_DIR)
 	@printf '\n  profile: coverage-smoke.out\n\n'
 
 ## ci: everything CI runs, in one command
-ci: fmt-check vet lint tidy-check test-race test-s3 test-db cover smoke smoke-cover litmus
+ci: fmt-check vet lint tidy-check test-race test-js test-s3 test-db cover smoke smoke-cover litmus
 
 # --- services for tests ---------------------------------------------------
 #

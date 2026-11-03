@@ -18,3 +18,4 @@ dist/
 # context and then baked into a layer: 2.3 GB of context for a 0.5 MB tree.
 .cache/
 coverage*.out
+web-test/
