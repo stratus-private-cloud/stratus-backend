@@ -354,6 +354,9 @@ func Handler(d Deps) http.Handler {
 	// session. See sw.go.
 	mux.HandleFunc("GET "+workerPath, h.worker)
 	mux.HandleFunc("GET "+offlinePath, h.offline)
+	mux.HandleFunc("GET "+backupPrefix+"{$}", h.signedIn(h.backupPage))
+	mux.HandleFunc("GET "+backupWorkerPath, h.backupWorker)
+	mux.HandleFunc("GET "+backupModulesPrefix+"{version}/{file}", h.backupScript)
 	mux.HandleFunc("GET /login", h.loginForm)
 	mux.HandleFunc("POST /login", h.login)
 	mux.HandleFunc("POST /logout", h.logout)

@@ -72,6 +72,7 @@ const (
 	pageEvent     = "event.html"
 	pageUnevent   = "event-delete.html"
 	pageSettings  = "settings.html"
+	pageBackup    = "backup.html"
 )
 
 // Each page is parsed with the layout into a set of its own. One set for all of
@@ -91,6 +92,7 @@ var pages = map[string]*template.Template{
 	pageShared:    parse(pageShared),
 	pageError:     parse(pageError),
 	pageOffline:   parse(pageOffline),
+	pageBackup:    parse(pageBackup),
 	pagePhotos:    parse(pagePhotos, pageTile, pageCrumbs, pageGlyphs),
 	pagePhoto:     parse(pagePhoto),
 	pageMonths:    parse(pageMonths, pageCrumbs),
@@ -254,6 +256,9 @@ type view struct {
 	// when it needs HLS: hls.js and this project's own that starts it.
 	Film          *filmView
 	PlayerScripts []string
+	// Modules are the ES modules a page loads besides Scripts. One page has
+	// any: the backup (#337).
+	Modules []string
 
 	// Player says this page is part of the music library, which carries the
 	// player bar and moves inside itself without reloading (player.go); Bar

@@ -1,0 +1,33 @@
+{{define "content" -}}
+<h1 class="h4 mb-3">Backup</h1>
+
+{{/* The one page here that is a program rather than a document (#337): with
+     no script there is nothing to show but why, and a browser that cannot
+     keep a folder is told so rather than offered a button that does
+     nothing. backup.js decides which of the two halves below is shown. */}}
+<noscript>
+  <div class="alert alert-secondary">
+    Backing a folder up happens in this browser, and it needs JavaScript.
+  </div>
+</noscript>
+
+<div class="alert alert-secondary d-none" data-backup-unsupported>
+  <p>
+    This browser cannot keep hold of a folder on this computer, so it cannot
+    back one up. Chrome and Edge on a desktop can; Firefox, Safari and every
+    browser on a phone cannot.
+  </p>
+  <p class="mb-0">
+    Without one, a folder is backed up by a client that speaks WebDAV:
+    rclone, Finder, or the Stratus app for a phone's camera roll.
+  </p>
+</div>
+
+<div class="d-none" data-backup>
+  <p class="text-body-secondary">
+    Pick a folder once and this page copies into Stratus whatever in it is not
+    here yet, and does so again whenever it is open. It only ever adds:
+    nothing is deleted or replaced on either side.
+  </p>
+</div>
+{{- end}}
