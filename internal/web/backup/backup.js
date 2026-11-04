@@ -12,6 +12,9 @@ import { backUp, fatal } from "./run.js";
 // DEST is where a new folder goes, beside the app's phone_backup.
 const DEST = "desktop_backup";
 const READ = { mode: "read" };
+// AGAIN is how often an open page looks again. A pass that finds nothing new
+// reads the folder and sends nothing.
+const AGAIN = 5 * 60 * 1000;
 
 const unsupported = document.querySelector("[data-backup-unsupported]");
 const panel = document.querySelector("[data-backup]");
@@ -162,6 +165,7 @@ async function start() {
 
   await render();
   runAll();
+  setInterval(runAll, AGAIN);
 }
 
 function progress(li, tally) {

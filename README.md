@@ -1661,8 +1661,9 @@ What it needs, and what it does not do:
   which Firefox, Safari and every phone browser lack; those are told so. A
   phone's camera roll is [stratus-app](https://github.com/stratus-private-cloud/stratus-app)'s,
   and any other folder is rclone's, Finder's or FolderSync's.
-- **The page open.** It works while the tab is open and not in the
-  background; it backs up again each time it is opened, or on **Back up now**.
+- **The page open.** It works while the tab is open, and looks again every
+  five minutes, each time the page is opened and on **Back up now**. A tab
+  the browser has frozen or discarded does nothing until it is back.
 - **JavaScript**, unlike every other page here.
 - One race it does not close: a large file goes by tus, which replaces what is
   at its name when it completes, so a file written to that same path by
