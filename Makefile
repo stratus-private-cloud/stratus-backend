@@ -105,6 +105,13 @@ GO_FILES := $(shell find . -name '*.go' -not -path './.cache/*' -not -path './di
 # -shuffle=on catches tests that depend on execution order.
 TEST_FLAGS ?= -shuffle=on -count=1
 
+# kept runs a command, shows its output and keeps it in .cache/<name>.log: an
+# intermittent failure is only worth having with its output, and a terminal
+# does not keep it (#476). The status goes through a file because POSIX sh has
+# no pipefail, and tee would otherwise turn a failed run into a passing one.
+kept = { $(2) 2>&1; echo $$? > "$(CACHE_DIR)/$(1).status"; } | tee "$(CACHE_DIR)/$(1).log"; \
+	exit $$(cat "$(CACHE_DIR)/$(1).status")
+
 .DEFAULT_GOAL := help
 
 ## help: show this help
@@ -221,11 +228,11 @@ vuln: | $(CACHE_DIR)
 
 ## test: run tests
 test: | $(CACHE_DIR)
-	$(GO) test $(TEST_FLAGS) ./...
+	@$(call kept,test,$(GO) test $(TEST_FLAGS) ./...)
 
 ## test-race: run tests under the race detector
 test-race: | $(CACHE_DIR)
-	$(GO_RACE) test -race $(TEST_FLAGS) ./...
+	@$(call kept,test-race,$(GO_RACE) test -race $(TEST_FLAGS) ./...)
 
 ## cover: run tests with coverage and enforce the per-package floors
 #

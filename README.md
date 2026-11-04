@@ -1648,8 +1648,8 @@ the same commands work on a laptop without Go and on a CI runner with it.
 
 ```sh
 make ci          # everything CI runs
-make test        # unit tests
-make test-race   # under the race detector (Debian image: -race needs cgo)
+make test        # unit tests, output kept in .cache/test.log
+make test-race   # under the race detector (Debian image: -race needs cgo), in .cache/test-race.log
 make test-s3     # the storage conformance suite against a throwaway Silo
 make test-db     # the metadata conformance suite against PostgreSQL and MySQL
 make cover       # coverage, against a floor per package
