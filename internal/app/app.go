@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -113,6 +114,9 @@ type App struct {
 	level *slog.LevelVar
 	// started is when New was called, which is when the process started.
 	started time.Time
+	// listener is what Run serves on when the caller bound one, and nil when
+	// Run binds cfg.Addr itself.
+	listener net.Listener
 	// swept is what the collector's last pass did, for the status page.
 	swept atomic.Pointer[web.Sweep]
 	// backedUp is the newest backup and what became of the last attempt, and
@@ -191,6 +195,14 @@ func New(cfg config.Config, version, buildDate string) *App {
 // setting in force can move it while the server runs (#397).
 func (a *App) WithLogLevel(level *slog.LevelVar) *App {
 	a.level = level
+	return a
+}
+
+// WithListener hands Run a socket that is already bound, which Run then owns
+// and closes. A test needs it: picking a free port and releasing it for Run to
+// bind is a window in which any other process can take it (#472).
+func (a *App) WithListener(l net.Listener) *App {
+	a.listener = l
 	return a
 }
 
@@ -343,6 +355,9 @@ func (a *App) Server(deps Deps) *http.Server {
 // handling belongs to the caller, which keeps Run testable with a plain
 // cancellable context.
 func (a *App) Run(ctx context.Context) error {
+	if a.listener != nil {
+		defer func() { _ = a.listener.Close() }()
+	}
 	deps, err := a.open(ctx)
 	if err != nil {
 		return err
@@ -385,6 +400,9 @@ func (a *App) Run(ctx context.Context) error {
 	defer background.Wait()
 
 	srv := a.Server(deps)
+	if a.listener != nil {
+		srv.Addr = a.listener.Addr().String()
+	}
 	errc := make(chan error, 1)
 	go func() {
 		// uid/gid are logged so the container smoke tests can assert the
@@ -392,7 +410,11 @@ func (a *App) Run(ctx context.Context) error {
 		slog.Info("stratus listening",
 			"version", a.version, "addr", srv.Addr, "data_dir", a.cfg.DataDir,
 			"uid", os.Getuid(), "gid", os.Getgid())
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		serve := srv.ListenAndServe
+		if a.listener != nil {
+			serve = func() error { return srv.Serve(a.listener) }
+		}
+		if err := serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errc <- err
 		}
 	}()
