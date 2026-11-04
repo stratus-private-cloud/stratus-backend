@@ -38,7 +38,9 @@ func runConfig(t *testing.T, vars map[string]string) config.Config {
 	if _, ok := vars["STRATUS_DATA_DIR"]; !ok {
 		vars["STRATUS_DATA_DIR"] = filepath.Join(t.TempDir(), "data")
 	}
-	vars["STRATUS_ADDR"] = freeAddr(t)
+	// Port 0 for the tests that are refused before Run binds anything; the
+	// ones that serve bind through listening instead.
+	vars["STRATUS_ADDR"] = "127.0.0.1:0"
 	// Indexing is off unless a test asks for it: a pass in the background is
 	// noise in a test about something else.
 	if _, ok := vars["STRATUS_INDEX_INTERVAL"]; !ok {
@@ -163,7 +165,8 @@ func TestRunSweepsAnImportFolder(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- app.New(cfg, "test", "2026-01-01T09:30:00Z").Run(ctx) }()
+	l := listening(t, &cfg)
+	go func() { done <- app.New(cfg, "test", "2026-01-01T09:30:00Z").WithListener(l).Run(ctx) }()
 
 	// Waited for rather than timed: two passes have to agree about the size
 	// before anything moves, and how long that takes on a loaded runner is not
@@ -202,20 +205,18 @@ func TestRunShutsDownCleanly(t *testing.T) {
 // on purpose: it only ever costs time when something is broken.
 const startupWait = 20 * time.Second
 
-// freeAddr reserves a port and hands it back. Binding :0 would be tidier, but
-// then the test cannot know where to knock.
-func freeAddr(t *testing.T) string {
+// listening binds a port for Run and points cfg at it. The socket goes to Run
+// still open: reserving a port and releasing it for Run to bind was a window in
+// which another test binary could take it (#472).
+func listening(t *testing.T, cfg *config.Config) net.Listener {
 	t.Helper()
 	var lc net.ListenConfig
 	l, err := lc.Listen(t.Context(), "tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("reserve a port: %v", err)
+		t.Fatalf("bind a port: %v", err)
 	}
-	addr := l.Addr().String()
-	if err := l.Close(); err != nil {
-		t.Fatalf("release the port: %v", err)
-	}
-	return addr
+	cfg.Addr = l.Addr().String()
+	return l
 }
 
 // runToShutdown starts Run, waits until it is actually serving, and stops it.
@@ -230,18 +231,26 @@ func runToShutdown(t *testing.T, cfg config.Config) error {
 	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- app.New(cfg, "test", "2026-01-01T09:30:00Z").Run(ctx) }()
+	l := listening(t, &cfg)
+	go func() { done <- app.New(cfg, "test", "2026-01-01T09:30:00Z").WithListener(l).Run(ctx) }()
 
 	deadline := time.Now().Add(startupWait)
-	for time.Now().Before(deadline) {
+	for {
 		select {
 		case err := <-done:
 			cancel()
 			return err // refused before it ever listened
 		default:
 		}
-		if app.Probe(cfg.Addr) == nil {
+		probe := app.Probe(cfg.Addr)
+		if probe == nil {
 			break
+		}
+		// Carrying on would hand the caller whatever Run returns on a cancel
+		// in the middle of starting, which is a failure that names nothing.
+		if time.Now().After(deadline) {
+			cancel()
+			t.Fatalf("the server did not answer within %s: %v (Run = %v)", startupWait, probe, <-done)
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -275,7 +284,8 @@ func liveServer(t *testing.T, vars map[string]string) (string, func()) {
 
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
-	go func() { done <- app.New(cfg, "test", "2026-01-01T09:30:00Z").Run(ctx) }()
+	l := listening(t, &cfg)
+	go func() { done <- app.New(cfg, "test", "2026-01-01T09:30:00Z").WithListener(l).Run(ctx) }()
 
 	deadline := time.Now().Add(startupWait)
 	for {
