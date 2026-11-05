@@ -4,11 +4,11 @@ name: demo reset
 # footer, which anybody can read off this repository -- so what keeps it from
 # being worth abusing is that it forgets everything, every hour.
 #
-# scripts/demo-reset.sh is the whole of it: it destroys the machine, whose
-# memory is the disk (see deploy/demo/fly.toml), deploys the same image onto a
-# new one, checks the tree is empty and seeds the demo media again. It leaves the demo down for the
-# length of a deploy, which is the honest price of a wipe that actually wipes,
-# and it is a demo.
+# scripts/demo-reset.sh is the whole of it: it restarts the machine, whose
+# memory is the disk and whose image seeds itself as it starts (see
+# deploy/demo/fly.toml), checks that what was there is gone and seeds again
+# from outside, which is what checks the result. Without a machine to restart
+# it builds a new one on what CI last published.
 #
 # Nothing here upgrades anything; the pipeline in ci.yml is what deploys new
 # code, through the same script.
@@ -46,33 +46,10 @@ jobs:
       # 1.6 and not v1.6; see the deploy job in ci.yml.
       - uses: superfly/flyctl-actions/setup-flyctl@1.6
 
-      - name: what it is running
-        id: running
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-        run: |
-          # Read off the machine rather than worked out from git: this job
-          # resets whatever is deployed, which is not necessarily this commit,
-          # and putting a different build back would make it a deploy.
-          image="$(flyctl image show --app "$FLY_APP" --json 2>/dev/null |
-            jq -r '.[0] | "\(.Registry)/\(.Repository)@\(.Digest)"' || true)"
-          case "$image" in
-          */*@sha256:*) ;;
-          *)
-            # No machine to read it off, which is what a reset that failed
-            # halfway leaves behind. deploy/demo/fly.toml names what CI
-            # publishes, so this recovers the instance rather than needing
-            # somebody to notice.
-            image=""
-            echo "no image on the app; falling back to the one in deploy/demo/fly.toml"
-            ;;
-          esac
-          echo "image=$image" >> "$GITHUB_OUTPUT"
-
       - name: empty it and seed the demo media again
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           # The address the demo is given out at, where there is one. Empty
           # falls back to the app's own .fly.dev name inside the script.
           DEMO_BASE: ${{ vars.DEMO_BASE }}
-        run: ./scripts/demo-reset.sh "$FLY_APP" "${{ steps.running.outputs.image }}"
+        run: ./scripts/demo-reset.sh "$FLY_APP"

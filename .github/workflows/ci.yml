@@ -80,6 +80,10 @@ jobs:
         with:
           dockerfile: build/ffprobe/Dockerfile
 
+      - uses: hadolint/hadolint-action@v3.5.0
+        with:
+          dockerfile: deploy/demo/Dockerfile
+
   test:
     name: test
     runs-on: ubuntu-latest

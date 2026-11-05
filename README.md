@@ -1704,7 +1704,7 @@ That instance is deliberately disposable, and deliberately open: the smallest
 machine Fly sells, a disk of about 100 MB made of its memory, and **the password is the version string in
 the page footer** — the short sha of the commit it is running, which anybody can
 read off this repository. It is the version alone: the build timestamp beside it
-is not part of it. Three things follow, and none of them is an accident:
+is not part of it. Four things follow, and none of them is an accident:
 
 - **Anyone can sign in and upload to it, but not much.** It is a demo, it
   holds nothing but the demo, and it is not a place to put anything of yours.
@@ -1715,23 +1715,27 @@ is not part of it. Three things follow, and none of them is an accident:
 - **Every deploy changes the password**, so every client and every browser
   session is logged out by the next merge to `main`. Reconfiguring a Subsonic
   client after a merge is the cost of not having a secret to manage.
-- **It never sleeps**, because its disk is memory and a stop would empty it:
-  that is what emptied the demo in the middle of an hour before (#238). What
-  is still out of anybody's hands is Fly restarting or moving the machine,
-  which leaves the demo empty until the next reset.
+- **It seeds itself whenever it starts**, because its disk is memory and any
+  restart empties it — Fly moving the machine as much as the reset. Its image
+  is the published one with the demo media and a shell laid over it
+  ([`deploy/demo/Dockerfile`](deploy/demo/Dockerfile)), so the binary is the
+  build's while the image people pull still has no shell. A restart costs
+  about a minute of an empty demo, and it never sleeps, since waking would
+  cost the same.
 - **It wipes itself every hour**, and on every deploy. That is what makes an open
   instance not worth abusing: whatever anybody leaves there — including you — is
   gone within the hour, and the demo media is put back.
   `scripts/demo-reset.sh`, which both the hourly reset and a deploy run,
-  destroys the machine, deploys a new one, with an empty disk, without
-  changing a line of what it runs, and checks the tree really is empty before
-  seeding it. It seeds and checks through `DEMO_BASE` where a repository sets
+  restarts the machine — or, for a deploy, destroys it and builds a new one on
+  the digest just published — checks that a file it wrote beforehand is gone,
+  and seeds it again from outside, which is what runs the checks below where
+  a failure is seen. It seeds and checks through `DEMO_BASE` where a repository sets
   one — the address people are actually given, so a certificate that expired or
   a DNS record somebody moved is found within the hour rather than by whoever
   clicks the link. Unset, it uses the app's own `.fly.dev` name, which is what
   a fork and an instance with no domain of its own get.
 
-  Destroying the machine is the point rather than an implementation detail. A
+  That the file is gone is the point rather than an implementation detail. A
   deploy replaces the image and can leave the disk under it: the demo once
   spent two days serving a database from before the schema the binary
   expected.

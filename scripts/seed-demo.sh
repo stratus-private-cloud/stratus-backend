@@ -2,9 +2,9 @@
 #
 # Puts the demo media into an instance, over the same WebDAV any client speaks.
 #
-# The test instance is emptied on every deploy and every hour -- its volume is
-# destroyed and a new one made (scripts/demo-reset.sh) -- so it starts with an
-# empty tree, an indexer with nothing to read and a music library with no
+# The test instance is emptied on every deploy and every hour -- its data is in
+# memory and the machine is restarted (scripts/demo-reset.sh) -- so it starts
+# with an empty tree, an indexer with nothing to read and a music library with no
 # artists in it. This fills it in again: five photographs with their EXIF, two tagged tracks with a cover, and
 # fifteen seconds of video in eight containers and codecs, each there for a
 # different thing a server has to do with a film (scripts/demo/CREDITS.md).
@@ -23,6 +23,13 @@
 #
 #   STRATUS_USERNAME=demo STRATUS_PASSWORD=... scripts/seed-demo.sh https://host
 #   make demo BASE=http://localhost:8080
+#
+# SEED_BUNDLE names a copy of the bundle already on disk, which is how the
+# demo's own image seeds itself when it starts (deploy/demo/Dockerfile).
+#
+# Running it twice is safe: every write is a PUT of the same bytes to the same
+# name, and the playlist is only made when it is not there. The reset relies
+# on that, seeding from outside an instance that has just seeded itself.
 #
 # It ends by asking the server what it just did: the listing, the artist, the
 # cover and a range request. That makes it the one check this project runs
@@ -98,7 +105,11 @@ rest() {
 }
 
 printf '\n\033[1mFetching\033[0m\n'
-curl -fsSL -o "$work/$BUNDLE" "$URL" || die "could not download $URL"
+if [ -n "${SEED_BUNDLE:-}" ]; then
+	cp "$SEED_BUNDLE" "$work/$BUNDLE" || die "could not read $SEED_BUNDLE"
+else
+	curl -fsSL -o "$work/$BUNDLE" "$URL" || die "could not download $URL"
+fi
 (cd "$work" && sha256sum -c "$HERE/demo/SHA256SUMS" >/dev/null 2>&1) ||
 	die "$BUNDLE does not match scripts/demo/SHA256SUMS"
 ok "$BUNDLE, and it is the bundle SHA256SUMS names"
@@ -179,8 +190,8 @@ done < <(tr '<' '\n' <<<"$(rest getAlbum "id=$(encode "$album")")" |
 [ -n "$songs" ] || die "getAlbum lists no songs to put in a playlist"
 
 # createPlaylist with no playlistId always creates, so running this twice would
-# make two. The demo's volume is destroyed on every reset, but `make demo`
-# against a server on this machine is run more than once.
+# make two -- and twice is what every reset of the demo does, once from inside
+# and once from outside.
 case "$(rest getPlaylists)" in
 *'name="Demo mix"'*) ok "the playlist is already there" ;;
 *)

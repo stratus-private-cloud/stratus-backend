@@ -19,14 +19,16 @@
 # make it bigger by uploading, since the server answers 507 once it is full.
 #
 # What that costs is that it goes with the machine: a stop, a restart, or Fly
-# moving it to another host is an empty demo until the next reset. So the
-# machine is never stopped for being idle, which is what emptied the demo in
-# the middle of an hour before it had a volume (#238). Destroying the machine
-# is what scripts/demo-reset.sh does before every deploy and every reset, and
-# with nothing on disk that is all a wipe needs.
+# moving it to another host is an empty server. So the image seeds itself
+# every time it starts -- the published one with the demo media and a shell
+# laid over it, deploy/demo/Dockerfile -- which makes a restart nobody asked
+# for cost about a minute rather than the rest of the hour, and makes the
+# hourly reset in scripts/demo-reset.sh a restart and nothing more. A deploy
+# destroys the machine and builds a new one. It is still never stopped for
+# being idle, since waking it would be that minute of an empty demo.
 #
-#   scripts/demo-reset.sh <app> [image]                         # by hand
-#   make demo BASE=https://<app>.fly.dev                        # the demo media
+#   scripts/demo-reset.sh <app>            # restart: empty it and reseed
+#   scripts/demo-reset.sh <app> <image>    # deploy that digest
 #
 # CI deploys this same file, through that script, with the digest it just
 # published; see ci.yml.
@@ -39,9 +41,10 @@ primary_region = "cdg"
 swap_size_mb = 512
 
 [build]
-  # What CI publishes on every merge to main: multi-arch and public, so Fly
-  # takes it as published.
-  image = "ghcr.io/stratus-private-cloud/stratus-backend:main"
+  # The published image with the seeding laid over it. scripts/demo-reset.sh
+  # passes the path again with the repository root as the context, and the
+  # digest to build on as IMAGE; without one it builds on :main.
+  dockerfile = "Dockerfile"
 
 [env]
   STRATUS_ADDR = ":8080"
