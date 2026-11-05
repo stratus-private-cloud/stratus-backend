@@ -1701,25 +1701,29 @@ has not been through all of them. Anywhere `FLY_APP` is unset, including every
 fork, the job does not run.
 
 That instance is deliberately disposable, and deliberately open: the smallest
-machine and the smallest volume Fly sells, and **the password is the version string in
+machine Fly sells, a disk of about 100 MB made of its memory, and **the password is the version string in
 the page footer** — the short sha of the commit it is running, which anybody can
 read off this repository. It is the version alone: the build timestamp beside it
 is not part of it. Three things follow, and none of them is an accident:
 
-- **Anyone can sign in and upload to it.** It is a demo, it holds nothing but
-  the demo, and it is not a place to put anything of yours.
+- **Anyone can sign in and upload to it, but not much.** It is a demo, it
+  holds nothing but the demo, and it is not a place to put anything of yours.
+  Its data is in `/dev/shm`, which the kernel sizes at half the machine's
+  memory: once the demo media is in there are some 20 MB left, and an upload
+  past that is refused with `507`. The smallest volume Fly sells would have
+  left nine hundred megabytes to anybody with the password.
 - **Every deploy changes the password**, so every client and every browser
   session is logged out by the next merge to `main`. Reconfiguring a Subsonic
   client after a merge is the cost of not having a secret to manage.
-- **It sleeps when nobody is looking**, and comes back holding what it held:
-  the data is on a volume, which a stop or a cold start leaves alone. Before
-  it was, one of those in the middle of an hour emptied the demo with nothing
-  having reset it (#238).
+- **It never sleeps**, because its disk is memory and a stop would empty it:
+  that is what emptied the demo in the middle of an hour before (#238). What
+  is still out of anybody's hands is Fly restarting or moving the machine,
+  which leaves the demo empty until the next reset.
 - **It wipes itself every hour**, and on every deploy. That is what makes an open
   instance not worth abusing: whatever anybody leaves there — including you — is
   gone within the hour, and the demo media is put back.
   `scripts/demo-reset.sh`, which both the hourly reset and a deploy run,
-  destroys the machine and its volume, deploys onto a new, empty one without
+  destroys the machine, deploys a new one, with an empty disk, without
   changing a line of what it runs, and checks the tree really is empty before
   seeding it. It seeds and checks through `DEMO_BASE` where a repository sets
   one — the address people are actually given, so a certificate that expired or
@@ -1727,10 +1731,10 @@ is not part of it. Three things follow, and none of them is an accident:
   clicks the link. Unset, it uses the app's own `.fly.dev` name, which is what
   a fork and an instance with no domain of its own get.
 
-  Destroying the volume is the point rather than an implementation detail. A
-  deploy replaces the image and leaves the disk under it, and so does stopping
-  the machine and starting it again: the demo once spent two days serving a
-  database from before the schema the binary expected.
+  Destroying the machine is the point rather than an implementation detail. A
+  deploy replaces the image and can leave the disk under it: the demo once
+  spent two days serving a database from before the schema the binary
+  expected.
 
 Which is why the deploy ends by seeding it: `scripts/seed-demo.sh` fetches a
 15.6 MB bundle of freely licensed media — five photographs with their EXIF, two

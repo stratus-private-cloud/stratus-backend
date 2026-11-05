@@ -5,11 +5,8 @@
 #
 #   FLY_API_TOKEN=... [DEMO_BASE=https://...] scripts/demo-reset.sh <app> [image]
 #
-# **The wipe is destroying the volume**, not the machine and not a deploy. The
-# data lives on a Fly volume (#238), which outlives the machine it is mounted
-# on -- that is what a volume is for, and what the demo needed after a cold
-# start threw away the machine's own disk in the middle of an hour. So both
-# go, and the deploy makes a new machine on a new, empty volume.
+# **The wipe is destroying the machine.** The data lives in its memory, on
+# /dev/shm (see deploy/demo/fly.toml), so a new machine is a new, empty disk.
 #
 # Then it checks the tree really is empty before seeding. A reset that kept
 # anything would seed on top of it and look fine, which is how a schema change
@@ -35,8 +32,9 @@ for id in $(flyctl machine list --app "$APP" --json | jq -r '.[].id'); do
 	flyctl machine destroy "$id" --app "$APP" --force
 done
 
-# A volume is still attached for a moment after its machine is destroyed, and
-# refuses to go until it is not.
+# The demo had a volume until it moved to /dev/shm, and one left behind is
+# still billed. A volume stays attached for a moment after its machine is
+# destroyed, and refuses to go until it is not.
 for id in $(flyctl volumes list --app "$APP" --json | jq -r '.[].id'); do
 	for attempt in 1 2 3 4 5 6; do
 		flyctl volumes destroy "$id" --app "$APP" --yes && break
@@ -45,14 +43,8 @@ for id in $(flyctl volumes list --app "$APP" --json | jq -r '.[].id'); do
 	done
 done
 
-# A deploy will not make a volume for a new machine, only mount one that is
-# there: the name, region and size are the demo fly.toml's. No snapshots,
-# which are billed, of a volume that is thrown away within the hour.
 toml="$HERE/../deploy/demo/fly.toml"
 setting() { sed -n "s/^ *$1 *= *\"\(.*\)\"/\1/p" "$toml" | head -1; }
-size="$(setting initial_size)"
-flyctl volumes create "$(setting source)" --app "$APP" --region "$(setting primary_region)" \
-	--size "${size%gb}" --scheduled-snapshots=false --yes
 
 flyctl deploy --config "$toml" --app "$APP" ${IMAGE:+--image "$IMAGE"} --ha=false --yes --wait-timeout 5m
 

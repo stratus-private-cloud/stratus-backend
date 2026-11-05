@@ -3,7 +3,7 @@
 # Test infrastructure, not a recommended way to run this: the fly.toml at the
 # root of the repository is the one meant to be launched, and it is kept apart
 # from this one so that `fly launch --from` finds that and not this. The
-# smallest machine there is, the smallest volume Fly sells, and a password that
+# smallest machine there is, a disk made of its memory, and a password that
 # is the version in the page footer, which is the short sha of the commit
 # deployed and therefore public.
 # Every merge to main is a fresh server with nothing in it but the demo media,
@@ -11,14 +11,19 @@
 # .github/workflows/demo-reset.yml empties it again without changing what it
 # runs. Do not put anything here that you would miss.
 #
-# **The data is on a volume** (#238). It used to sit on the machine's own disk,
-# which a cold start throws away: the demo emptied itself in the middle of an
-# hour with nothing destroyed. A volume survives the machine it is mounted on,
-# so **what empties it is destroying the volume**, which scripts/demo-reset.sh
-# does before every deploy and every reset. A deploy on its own replaces the
-# image and leaves the disk, and so does stopping the machine and starting it
-# again -- both were once believed to wipe, and the demo spent two days on a
-# database from before the schema the binary expected.
+# **The data is in /dev/shm, a tmpfs**, and that is for its size rather than
+# its speed. The demo is open to anybody, and the smallest volume Fly sells is
+# a gigabyte, nine hundred megabytes of it free for whoever signs in. The
+# kernel sizes this one at half the machine's memory -- about 105 MiB here,
+# against some 85 the demo media and its thumbnails take -- and nobody can
+# make it bigger by uploading, since the server answers 507 once it is full.
+#
+# What that costs is that it goes with the machine: a stop, a restart, or Fly
+# moving it to another host is an empty demo until the next reset. So the
+# machine is never stopped for being idle, which is what emptied the demo in
+# the middle of an hour before it had a volume (#238). Destroying the machine
+# is what scripts/demo-reset.sh does before every deploy and every reset, and
+# with nothing on disk that is all a wipe needs.
 #
 #   scripts/demo-reset.sh <app> [image]                         # by hand
 #   make demo BASE=https://<app>.fly.dev                        # the demo media
@@ -40,7 +45,7 @@ swap_size_mb = 512
 
 [env]
   STRATUS_ADDR = ":8080"
-  STRATUS_DATA_DIR = "/data"
+  STRATUS_DATA_DIR = "/dev/shm/stratus"
   # Not a secret, and the seeding step reads it from here so there is one place
   # that says who the user is. Neither is the password: CI stages it on every
   # deploy as the version string this build carries.
@@ -74,14 +79,10 @@ swap_size_mb = 512
   # Fly terminates TLS and forwards the scheme, which is what makes the session
   # cookie Secure -- see overTLS in internal/web.
   force_https = true
-  # Nobody is watching it most of the time, so it sleeps and the first request
-  # wakes it.
-  #
-  # stop rather than suspend, because Fly will not suspend a machine with swap.
-  # Either keeps the data now that it is on a volume; a stop only wakes slower.
-  auto_stop_machines = "stop"
+  # Never stopped for being idle: a stop empties the tmpfs, see the top.
+  auto_stop_machines = "off"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
   [[http_service.checks]]
     interval = "30s"
@@ -89,12 +90,6 @@ swap_size_mb = 512
     grace_period = "15s"
     method = "GET"
     path = "/healthz"
-
-# 1 GB is the smallest volume there is, and fifteen times the demo media.
-[mounts]
-  source = "stratus_data"
-  destination = "/data"
-  initial_size = "1gb"
 
 [[vm]]
   size = "shared-cpu-1x"
