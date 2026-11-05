@@ -1709,7 +1709,7 @@ is not part of it. Three things follow, and none of them is an accident:
 - **Anyone can sign in and upload to it, but not much.** It is a demo, it
   holds nothing but the demo, and it is not a place to put anything of yours.
   Its data is in `/dev/shm`, which the kernel sizes at half the machine's
-  memory: once the demo media is in there are some 20 MB left, and an upload
+  memory: once the demo media is in there are some 85 MB left, and an upload
   past that is refused with `507`. The smallest volume Fly sells would have
   left nine hundred megabytes to anybody with the password.
 - **Every deploy changes the password**, so every client and every browser

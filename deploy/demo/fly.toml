@@ -15,7 +15,7 @@
 # its speed. The demo is open to anybody, and the smallest volume Fly sells is
 # a gigabyte, nine hundred megabytes of it free for whoever signs in. The
 # kernel sizes this one at half the machine's memory -- about 105 MiB here,
-# against some 85 the demo media and its thumbnails take -- and nobody can
+# of which the demo media and its thumbnails take some 20 -- and nobody can
 # make it bigger by uploading, since the server answers 507 once it is full.
 #
 # What that costs is that it goes with the machine: a stop, a restart, or Fly
