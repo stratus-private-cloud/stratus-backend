@@ -24,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
@@ -110,7 +111,21 @@ func (w *Watcher) Pass(ctx context.Context) (int, error) {
 
 	var imported int
 	var failure error
-	walkErr := filepath.WalkDir(w.dir, func(name string, d fs.DirEntry, err error) error {
+
+	// Everything below goes through a Root, the walk as well as the open and
+	// the remove: the walk sees a regular file, but by the time it is opened a
+	// folder above it can have become a symlink to anywhere, and a path read
+	// and then deleted through it would import a file from outside and remove
+	// the original. A Root refuses to leave the directory however the path
+	// got there.
+	root, err := os.OpenRoot(w.dir)
+	if err != nil {
+		w.record(after, 0, err)
+		return 0, err
+	}
+	defer func() { _ = root.Close() }()
+
+	walkErr := fs.WalkDir(root.FS(), ".", func(rel string, d fs.DirEntry, err error) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -118,18 +133,11 @@ func (w *Watcher) Pass(ctx context.Context) (int, error) {
 		case err != nil:
 			// A directory that cannot be read is one branch of the sweep, not
 			// the sweep. Recorded and stepped over.
-			failure = cmp(failure, fmt.Errorf("read %q: %w", name, err))
+			failure = cmp(failure, fmt.Errorf("read %q: %w", filepath.Join(w.dir, rel), err))
 			return nil
-		case name == w.dir:
-			return nil
-		}
-
-		rel, relErr := filepath.Rel(w.dir, name)
-		if relErr != nil {
-			failure = cmp(failure, relErr)
+		case rel == ".":
 			return nil
 		}
-		rel = filepath.ToSlash(rel)
 
 		// Hidden names are skipped whole, directories included: a half-written
 		// download is .part or .crdownload, a Mac leaves .DS_Store beside
@@ -166,7 +174,7 @@ func (w *Watcher) Pass(ctx context.Context) (int, error) {
 			return nil
 		}
 
-		switch err := w.importFile(ctx, name, rel, info.Size()); {
+		switch err := w.importFile(ctx, root, rel); {
 		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 			return err
 		case err != nil:
@@ -194,7 +202,7 @@ func (w *Watcher) Pass(ctx context.Context) (int, error) {
 // a file nobody has. A write that succeeds and a delete that fails leaves the
 // file to be imported again next pass, which arrives beside the first as a
 // copy -- the one direction of this that costs a duplicate rather than a loss.
-func (w *Watcher) importFile(ctx context.Context, name, rel string, size int64) error {
+func (w *Watcher) importFile(ctx context.Context, root *os.Root, rel string) error {
 	target := rel
 	if err := db.ValidatePath(target); err != nil {
 		return fmt.Errorf("%q is not a path this server can store: %w", rel, err)
@@ -207,18 +215,29 @@ func (w *Watcher) importFile(ctx context.Context, name, rel string, size int64) 
 		return err
 	}
 
-	body, err := os.Open(name) //nolint:gosec // G304: the path comes from walking the configured directory.
+	// Non-blocking, because what is there now need not be what the walk saw:
+	// a FIFO put in its place would hold the pass on the open for ever.
+	body, err := root.OpenFile(rel, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = body.Close() }()
+	// And asked again of what was opened, for the same reason.
+	info, err := body.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%q is no longer a regular file", rel)
+	}
+	size := info.Size()
 
 	// No MIME type: the one thing this knows about the file is less than what
 	// internal/files works out from its first bytes.
 	if _, err := w.files.Write(ctx, w.owner, target, body, size, ""); err != nil {
 		return fmt.Errorf("import %q: %w", rel, err)
 	}
-	if err := os.Remove(name); err != nil {
+	if err := root.Remove(rel); err != nil {
 		return fmt.Errorf("imported %q and could not remove it: %w", rel, err)
 	}
 	return nil

@@ -409,3 +409,73 @@ func TestANameThatCannotBeFreedLeavesTheFile(t *testing.T) {
 		t.Errorf("the file was removed although it was never stored: %v", err)
 	}
 }
+
+// TestASymlinkIsNotFollowedOut: a link in the folder, to a file or to a folder
+// outside it, is neither imported nor removed. The folder is often a share
+// other machines write to, so what is in it is not trusted to stay inside it.
+func TestASymlinkIsNotFollowedOut(t *testing.T) {
+	t.Parallel()
+	w, s, dir := watcher(t)
+	outside := t.TempDir()
+	secret := drop(t, outside, "secret.txt", "classified")
+	if err := os.Symlink(secret, filepath.Join(dir, "file-link.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "folder-link")); err != nil {
+		t.Fatal(err)
+	}
+
+	pass(t, w)
+	if imported := pass(t, w); imported != 0 {
+		t.Errorf("imported %d through a symlink", imported)
+	}
+	for _, name := range []string{"file-link.txt", "folder-link/secret.txt"} {
+		if _, err := s.Stat(t.Context(), owner, name); !errors.Is(err, db.ErrNotFound) {
+			t.Errorf("%q was imported", name)
+		}
+	}
+	if _, err := os.Stat(secret); err != nil {
+		t.Errorf("the file outside: %v", err)
+	}
+}
+
+// swapping is a file layer that, on the step before the file is opened, turns
+// the folder it is in into a symlink to somewhere else -- the race between the
+// walk seeing a regular file and the import reading and removing it.
+type swapping struct {
+	incoming.Store
+	folder, to string
+}
+
+func (s swapping) MkdirAll(ctx context.Context, owner, dir string) error {
+	if err := os.Rename(s.folder, s.folder+".moved"); err != nil {
+		return err
+	}
+	if err := os.Symlink(s.to, s.folder); err != nil {
+		return err
+	}
+	return s.Store.MkdirAll(ctx, owner, dir)
+}
+
+func TestAFolderSwappedForASymlinkIsNotFollowedOut(t *testing.T) {
+	t.Parallel()
+	_, s, dir := watcher(t)
+	outside := t.TempDir()
+	secret := drop(t, outside, "notes.txt", "classified")
+	drop(t, dir, "scans/notes.txt", "a real one")
+
+	w := incoming.New(dir, owner, swapping{Store: s, folder: filepath.Join(dir, "scans"), to: outside})
+	if _, err := w.Pass(t.Context()); err != nil {
+		t.Fatalf("first pass: %v", err)
+	}
+	if imported, err := w.Pass(t.Context()); imported != 0 || err == nil {
+		t.Errorf("Pass = %d, %v; want nothing imported and an error", imported, err)
+	}
+
+	if body, err := os.ReadFile(secret); err != nil || string(body) != "classified" {
+		t.Errorf("the file outside = %q, %v; want it untouched", body, err)
+	}
+	if f, err := s.Stat(t.Context(), owner, "scans/notes.txt"); err == nil {
+		t.Errorf("imported %+v through the symlink", f)
+	}
+}
