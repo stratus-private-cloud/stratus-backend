@@ -39,7 +39,7 @@ func TestAListingDoesNotOfferAPictureNothingCanMake(t *testing.T) {
 	}
 	// Both rows still draw the mark, which is what the square shows either
 	// way: one is waiting for a picture and the other is never getting one.
-	if n := strings.Count(listing, glyphBox); n != 2 {
+	if n := strings.Count(listing, photoMark); n != 2 {
 		t.Errorf("the listing drew %d marks, want one per photograph", n)
 	}
 }

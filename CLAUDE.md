@@ -109,16 +109,22 @@ Hard constraints, in the same spirit as the rest of the project:
 
   **The listing's little box is the same thing a size down**, since it has the
   same three cases and had the same blank: a row that is a photograph or a
-  film draws the mark under its thumbnail, and every other row keeps the
-  transparent pixel that holds the box open. The glyph carries `width` and
+  film draws the mark under its thumbnail, and every other row draws an emoji
+  for its kind -- a folder, a PDF, an archive, a note -- inside an `<svg>` of
+  the same 32, since a `div` could only be held at that size by a style
+  attribute.
+  **A track's note is under its folder's cover**: the cover file's own row
+  thumbnail, found once per page by `folderCover` -- the whole folder is read,
+  because the cover need not be on the page, and only when the page holds a
+  track -- so a folder of tracks is one picture fetched once. A cover inside
+  the tags is the album pages' and not the listing's: it is a ranged read per
+  row. The glyph carries `width` and
   `height` attributes for it -- there is no `.ratio` there to take a size
   from, and `style-src 'self'` drops a style attribute -- and they are
   attributes rather than classes because `.ratio > *` has to win over them in
   the grids, which is the one contest a presentational attribute reliably
   loses. Which rows those are is `media.IsImage` and `media.IsVideo`, the
   name's answer and not the index's: a hundred rows cannot wait to be read.
-  **A mark for every kind of file is an icon set and a different feature**,
-  which is why a text file still shows nothing.
 
   **And a page stops offering what has been tried and refused** (#341). The
   mark is what the square draws either way, so the request that would answer
@@ -138,10 +144,12 @@ Hard constraints, in the same spirit as the rest of the project:
   one edit that would quietly bring the broken grid back and
   `TestThePictureOverTheMarkIsDecorative` is what fails when somebody does.
 
-  The shapes are the shortcut icons' own, from `brand/` in the workspace repo,
-  inline per tile rather than an asset: they are three paths, `currentColor`
-  makes one copy serve any theme, and a hundred identical copies of three
-  paths is nothing once the response is compressed (#178).
+  The photograph's shape is the shortcut icon's own, from `brand/` in the
+  workspace repo, inline per tile rather than an asset: three paths,
+  `currentColor` for any theme, and a hundred identical copies of them is
+  nothing once the response is compressed (#178). A film and a track are 🎬
+  and 🎵 in the same emoji `<svg>` the listing uses for every other kind, its
+  `viewBox` scaling it with a grid's square.
 - **One script of our own, and this is the conversation about it.** The share
   page hands back a URL to send somebody, and copying it by hand out of a text
   field is the kind of small misery that makes a feature feel unfinished. There

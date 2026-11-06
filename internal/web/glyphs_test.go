@@ -16,11 +16,8 @@ import (
 // the point, so a test that only counted them would pass with the wrong one.
 const (
 	photoMark = "M14 73l21-24"
-	filmMark  = "M26 14l54 34-54 34z"
-	coverMark = "rotate(-18 28 70)"
-	// The box they are all drawn in, for counting them: the brand in the bar
-	// is an <svg> too and is a different drawing in a different square.
-	glyphBox = `viewBox="0 0 96 96"`
+	filmMark  = ">🎬</text>"
+	coverMark = ">🎵</text>"
 )
 
 func TestAPhotoWithNoPictureShowsTheMarkInstead(t *testing.T) {
@@ -102,8 +99,8 @@ func TestAnAlbumWithNoCoverShowsTheCoverMark(t *testing.T) {
 
 // TestAListingMarksWhatIsAPicture: the same mark in the row's little box, for
 // the same reason -- the thumbnail may be refused or still on its way, and a
-// row that said nothing would be an empty square either way. What it does not
-// do is mark every kind of file, which would be an icon set.
+// row that said nothing would be an empty square either way. Every other file
+// draws an emoji for its kind in the same box.
 func TestAListingMarksWhatIsAPicture(t *testing.T) {
 	t.Parallel()
 	h, s, _ := browserOver(t)
@@ -119,13 +116,73 @@ func TestAListingMarksWhatIsAPicture(t *testing.T) {
 			t.Errorf("the listing draws no mark for one of its two media files:\n%s", listing)
 		}
 	}
-	// Three files and two marks: the text file keeps the empty box it has
-	// always had.
-	if n := strings.Count(listing, glyphBox); n != 2 {
+	if n := strings.Count(listing, photoMark) + strings.Count(listing, filmMark); n != 2 {
 		t.Errorf("the listing drew %d marks, want one each for the photograph and the film", n)
 	}
-	if !strings.Contains(listing, "data:image/gif;base64,") {
-		t.Error("the file that is not a picture lost the box that lines the rows up")
+	if !strings.Contains(listing, `width="32" height="32" class="d-block" aria-hidden="true" focusable="false">
+  <text x="16" y="16" text-anchor="middle" dominant-baseline="central" font-size="16">📄</text>`) {
+		t.Errorf("the text file is not drawn as a document in the 32 box:\n%s", listing)
+	}
+}
+
+// TestAListingMarksAFileByItsKind: the emoji a row without a picture gets.
+func TestAListingMarksAFileByItsKind(t *testing.T) {
+	t.Parallel()
+	h, s, _ := browserOver(t)
+	cookie := signIn(t, h)
+	mkdir(t, s, "papers")
+	mkdir(t, s, "papers/old")
+	write(t, s, "papers/lease.pdf", "%PDF")
+	write(t, s, "papers/backup.zip", "PK")
+
+	listing := get(t, h, "/files/papers/", cookie).Body.String()
+	for _, want := range []string{">📁</text>", ">📕</text>", ">📦</text>"} {
+		if !strings.Contains(listing, want) {
+			t.Errorf("the listing has no %s:\n%s", want, listing)
+		}
+	}
+}
+
+// TestATrackIsDrawnWithItsFolderCover: every track in the folder points at the
+// cover's own row thumbnail, so the browser fetches one picture -- found even
+// when the cover is on a page of the listing the tracks are not.
+func TestATrackIsDrawnWithItsFolderCover(t *testing.T) {
+	t.Parallel()
+	h, s, _ := browserOver(t)
+	cookie := signIn(t, h)
+	mkdir(t, s, "album")
+	for i := range 60 {
+		write(t, s, "album/"+string(rune('a'+i/26))+string(rune('a'+i%26))+".mp3", "not really a track")
+	}
+	write(t, s, "album/cover.jpg", "pixels")
+
+	listing := get(t, h, "/files/album/?rows=50", cookie).Body.String()
+	if strings.Contains(listing, ">cover.jpg<") {
+		t.Fatalf("the cover is on the first page, so this proves nothing:\n%s", listing)
+	}
+	if n := strings.Count(listing, `<img src="/thumb/album/cover.jpg?size=96`); n != 50 {
+		t.Errorf("%d tracks were drawn with the folder's cover, want all 50", n)
+	}
+	if n := strings.Count(listing, coverMark); n != 50 {
+		t.Errorf("%d tracks have the note under their cover, want all 50", n)
+	}
+}
+
+// TestATrackWithNoCoverIsTheNote: no picture in the folder is the mark alone,
+// and no per-track request for one.
+func TestATrackWithNoCoverIsTheNote(t *testing.T) {
+	t.Parallel()
+	h, s, _ := browserOver(t)
+	cookie := signIn(t, h)
+	mkdir(t, s, "album")
+	write(t, s, "album/01.mp3", "not really a track")
+
+	listing := get(t, h, "/files/album/", cookie).Body.String()
+	if !strings.Contains(listing, coverMark) {
+		t.Errorf("the track is not drawn as one:\n%s", listing)
+	}
+	if strings.Contains(listing, "/thumb/") {
+		t.Errorf("a picture was offered for a track with no cover:\n%s", listing)
 	}
 }
 

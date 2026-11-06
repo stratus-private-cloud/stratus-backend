@@ -128,7 +128,7 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request, user string) {
 	}
 
 	files, moreFiles := trim(found.Files)
-	v.Entries = entries(files, h.statesOf(r.Context(), r.URL.Path, files), "")
+	v.Entries = entries(files, h.statesOf(r.Context(), r.URL.Path, files), "", "")
 	if moreFiles {
 		v.NextPage = searchLink(term, inFiles, db.After(files[len(files)-1]))
 	}
