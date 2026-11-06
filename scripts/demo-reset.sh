@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
 #
-# Empties the demo instance and puts the demo media back: what every deploy and
-# the hourly reset do, in one place so the two cannot drift.
+# Empties the demo instance and puts the demo media back: what every deploy
+# does, and what somebody runs by hand to reset it now rather than on the hour.
+# The hourly reset is the machine's own (deploy/demo/entrypoint.sh).
 #
 #   FLY_API_TOKEN=... [DEMO_BASE=https://...] scripts/demo-reset.sh <app> [image]
 #
-# **The wipe is destroying the volume**, not the machine and not a deploy. The
-# data lives on a Fly volume (#238), which outlives the machine it is mounted
-# on -- that is what a volume is for, and what the demo needed after a cold
-# start threw away the machine's own disk in the middle of an hour. So both
-# go, and the deploy makes a new machine on a new, empty volume.
+# **The wipe is a restart.** The data lives in the machine's memory, on
+# /dev/shm (see deploy/demo/fly.toml), and the image seeds itself every time it
+# starts (deploy/demo/Dockerfile), so with no image this restarts the machine
+# and nothing else. With an image -- a deploy -- the machine is destroyed and a new
+# one built on that digest instead; so is it when there is no machine to
+# restart, which is what a reset that failed halfway leaves behind, and then it
+# builds on what CI last published.
 #
-# Then it checks the tree really is empty before seeding. A reset that kept
-# anything would seed on top of it and look fine, which is how a schema change
-# once landed on a database written by the build before it.
+# Then it checks the wipe really happened: a file written before is gone
+# after. A reset that kept anything would seed on top of it and look fine,
+# which is how a schema change once landed on a database written by the build
+# before it.
 #
-# Without an image it deploys what deploy/demo/fly.toml names, which is what
-# CI last published.
+# And it seeds again from outside. The instance has already seeded itself, so
+# this writes the same bytes over them; what it is for is the checks at the end
+# of seed-demo.sh, which fail this job where somebody sees it rather than in a
+# machine's log.
 
 set -euo pipefail
 
@@ -31,47 +37,71 @@ BASE="${DEMO_BASE:-https://$APP.fly.dev}"
 BASE="${BASE%/}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-for id in $(flyctl machine list --app "$APP" --json | jq -r '.[].id'); do
-	flyctl machine destroy "$id" --app "$APP" --force
-done
-
-# A volume is still attached for a moment after its machine is destroyed, and
-# refuses to go until it is not.
-for id in $(flyctl volumes list --app "$APP" --json | jq -r '.[].id'); do
-	for attempt in 1 2 3 4 5 6; do
-		flyctl volumes destroy "$id" --app "$APP" --yes && break
-		[ "$attempt" -lt 6 ] || exit 1
-		sleep 5
-	done
-done
-
-# A deploy will not make a volume for a new machine, only mount one that is
-# there: the name, region and size are the demo fly.toml's. No snapshots,
-# which are billed, of a volume that is thrown away within the hour.
 toml="$HERE/../deploy/demo/fly.toml"
 setting() { sed -n "s/^ *$1 *= *\"\(.*\)\"/\1/p" "$toml" | head -1; }
-size="$(setting initial_size)"
-flyctl volumes create "$(setting source)" --app "$APP" --region "$(setting primary_region)" \
-	--size "${size%gb}" --scheduled-snapshots=false --yes
-
-flyctl deploy --config "$toml" --app "$APP" ${IMAGE:+--image "$IMAGE"} --ha=false --yes --wait-timeout 5m
+user="$(setting STRATUS_USERNAME)"
 
 # The version is the password, and every OpenSubsonic answer carries it,
 # including the refusal for asking with no credentials.
-version="$(curl -fsS "$BASE/rest/ping.view" | sed -n 's/.*serverVersion="\([^"]*\)".*/\1/p')"
-[ -n "$version" ] || { echo "the instance did not say what it is running" >&2; exit 1; }
-user="$(setting STRATUS_USERNAME)"
+version() { curl -fsS "$BASE/rest/ping.view" 2>/dev/null | sed -n 's/.*serverVersion="\([^"]*\)".*/\1/p'; }
 
-# The writable tree, which is what a reseed would be writing into -- not the
-# origin, whose listing is the three collections and is never empty (#279).
-# The one thing allowed in it is the backup taken at startup, which is a file
-# in the tree since #436.
-listing="$(curl -fsS -u "$user:$version" -X PROPFIND -H "Depth: 1" "$BASE/files/")"
-hrefs="$(grep -o '<D:href>[^<]*' <<<"$listing" | grep -v "^<D:href>/files/$(setting STRATUS_BACKUP_DIR)/")"
-if [ "$(wc -l <<<"$hrefs")" -ne 1 ]; then
-	echo "the tree is not empty after the reset; not seeding on top of it:" >&2
-	echo "$hrefs" >&2
-	exit 1
+# Planted before the wipe, so that finding it afterwards means there was no
+# wipe. Skipped when there is nothing to write it to, or no room: a full demo
+# is one of the things a reset is for.
+canary="reset-canary-$(date -u +%Y%m%d%H%M%S).txt"
+old="$(version || true)"
+if [ -z "$old" ] || ! printf 'planted by demo-reset.sh\n' |
+	curl -fsS -o /dev/null -u "$user:$old" -T - "$BASE/files/$canary"; then
+	canary=""
+fi
+
+machines="$(flyctl machine list --app "$APP" --json | jq -r '.[].id')"
+if [ -z "$IMAGE" ] && [ -n "$machines" ]; then
+	for id in $machines; do
+		flyctl machine restart "$id" --app "$APP"
+	done
+else
+	for id in $machines; do
+		flyctl machine destroy "$id" --app "$APP" --force
+	done
+
+	# The demo had a volume until it moved to /dev/shm, and one left behind is
+	# still billed. A volume stays attached for a moment after its machine is
+	# destroyed, and refuses to go until it is not.
+	for id in $(flyctl volumes list --app "$APP" --json | jq -r '.[].id'); do
+		for attempt in 1 2 3 4 5 6; do
+			flyctl volumes destroy "$id" --app "$APP" --yes && break
+			[ "$attempt" -lt 6 ] || exit 1
+			sleep 5
+		done
+	done
+
+	flyctl deploy "$HERE/.." --config "$toml" --dockerfile "$HERE/../deploy/demo/Dockerfile" \
+		${IMAGE:+--build-arg "IMAGE=$IMAGE"} --app "$APP" --ha=false --yes --wait-timeout 5m
+fi
+
+version=""
+for _ in $(seq 60); do
+	version="$(version || true)"
+	[ -n "$version" ] && break
+	sleep 2
+done
+[ -n "$version" ] || { echo "the instance did not say what it is running" >&2; exit 1; }
+
+# The image seeds itself as it starts, and seeding from outside at the same
+# time would race it to the playlist and make two. The last thing it writes is
+# this event, so its being there means the inside is done writing.
+for _ in $(seq 150); do
+	curl -fsS -o /dev/null -u "$user:$version" "$BASE/calendars/$user/default/gnome.ics" 2>/dev/null && break
+	sleep 2
+done
+
+if [ -n "$canary" ]; then
+	code="$(curl -s -o /dev/null -w '%{http_code}' -u "$user:$version" "$BASE/files/$canary")"
+	if [ "$code" != 404 ]; then
+		echo "the reset kept what was there: /files/$canary answered $code" >&2
+		exit 1
+	fi
 fi
 
 echo "reseeding $APP: $version"
