@@ -72,6 +72,14 @@ jobs:
           docker run --rm -v "$PWD":/repo -w /repo \
             rhysd/actionlint:1.7.12 -color
 
+      # flyctl reads these only when it deploys, so a file that does not parse
+      # was found by a deploy that had already destroyed the demo's machine.
+      - name: fly.toml parses
+        run: |
+          for f in fly.toml deploy/*/fly.toml; do
+            python3 -c 'import sys, tomllib; tomllib.load(open(sys.argv[1], "rb"))' "$f" || exit 1
+          done
+
       - uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Dockerfile

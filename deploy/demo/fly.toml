@@ -8,8 +8,8 @@
 # deployed and therefore public.
 # Every merge to main is a fresh server with nothing in it but the demo media,
 # a new password, and every client logged out -- and every hour the machine
-empties itself again without changing what it runs. Do not put anything here
-that you would miss.
+# empties itself again without changing what it runs. Do not put anything here
+# that you would miss.
 #
 # **The data is in /dev/shm, a tmpfs**, and that is for its size rather than
 # its speed. The demo is open to anybody, and the smallest volume Fly sells is
