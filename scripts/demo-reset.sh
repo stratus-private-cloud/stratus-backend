@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 #
-# Empties the demo instance and puts the demo media back: what every deploy and
-# the hourly reset do, in one place so the two cannot drift.
+# Empties the demo instance and puts the demo media back: what every deploy
+# does, and what somebody runs by hand to reset it now rather than on the hour.
+# The hourly reset is the machine's own (deploy/demo/entrypoint.sh).
 #
 #   FLY_API_TOKEN=... [DEMO_BASE=https://...] scripts/demo-reset.sh <app> [image]
 #
 # **The wipe is a restart.** The data lives in the machine's memory, on
 # /dev/shm (see deploy/demo/fly.toml), and the image seeds itself every time it
-# starts (deploy/demo/Dockerfile), so the hourly reset restarts the machine and
-# nothing else. With an image -- a deploy -- the machine is destroyed and a new
+# starts (deploy/demo/Dockerfile), so with no image this restarts the machine
+# and nothing else. With an image -- a deploy -- the machine is destroyed and a new
 # one built on that digest instead; so is it when there is no machine to
 # restart, which is what a reset that failed halfway leaves behind, and then it
 # builds on what CI last published.

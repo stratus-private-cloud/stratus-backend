@@ -2,9 +2,10 @@
 # takes to seed itself every time it starts.
 #
 # Its data is in /dev/shm (see fly.toml), so a machine that restarts comes back
-# empty -- Fly restarting it, moving it to another host, or the hourly reset
-# doing it on purpose. Seeding from outside meant something outside noticing,
-# and GitHub's schedule runs when it likes; seeding from inside needs a shell,
+# empty -- Fly restarting it or moving it to another host -- and the hourly
+# reset is entrypoint.sh doing the same on purpose. Seeding from outside meant
+# something outside noticing, and GitHub's schedule runs when it likes;
+# seeding from inside needs a shell,
 # curl and GNU date, which is what scripts/seed-demo.sh is written in and what
 # the published image deliberately does not have. So they are laid over it
 # here, for this instance alone. The binary, ffmpeg, ffprobe and the user are

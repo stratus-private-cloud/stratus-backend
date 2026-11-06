@@ -1724,15 +1724,18 @@ is not part of it. Four things follow, and none of them is an accident:
   cost the same.
 - **It wipes itself every hour**, and on every deploy. That is what makes an open
   instance not worth abusing: whatever anybody leaves there — including you — is
-  gone within the hour, and the demo media is put back.
-  `scripts/demo-reset.sh`, which both the hourly reset and a deploy run,
-  restarts the machine — or, for a deploy, destroys it and builds a new one on
-  the digest just published — checks that a file it wrote beforehand is gone,
-  and seeds it again from outside, which is what runs the checks below where
-  a failure is seen. It seeds and checks through `DEMO_BASE` where a repository sets
-  one — the address people are actually given, so a certificate that expired or
-  a DNS record somebody moved is found within the hour rather than by whoever
-  clicks the link. Unset, it uses the app's own `.fly.dev` name, which is what
+  gone within the hour, and the demo media is put back. The hour is the
+  machine's own: its entrypoint
+  ([`deploy/demo/entrypoint.sh`](deploy/demo/entrypoint.sh)) stops the server,
+  empties its directory and starts it again, because GitHub's schedule runs
+  late when it runs at all. A deploy runs `scripts/demo-reset.sh`, which
+  destroys the machine and builds a new one on the digest just published —
+  without a digest it restarts the machine, which is a reset by hand — checks
+  that a file it wrote beforehand is gone, and seeds it again from outside,
+  which is what runs the checks below where a failure is seen. It seeds and
+  checks through `DEMO_BASE` where a repository sets one — the address people
+  are actually given, so a certificate that expired or a DNS record somebody
+  moved is found on the next deploy rather than by whoever clicks the link. Unset, it uses the app's own `.fly.dev` name, which is what
   a fork and an instance with no domain of its own get.
 
   That the file is gone is the point rather than an implementation detail. A

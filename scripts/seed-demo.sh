@@ -3,7 +3,8 @@
 # Puts the demo media into an instance, over the same WebDAV any client speaks.
 #
 # The test instance is emptied on every deploy and every hour -- its data is in
-# memory and the machine is restarted (scripts/demo-reset.sh) -- so it starts
+# memory, and the machine's entrypoint starts the server again on an empty
+# directory (deploy/demo/entrypoint.sh) -- so it starts
 # with an empty tree, an indexer with nothing to read and a music library with no
 # artists in it. This fills it in again: five photographs with their EXIF, two tagged tracks with a cover, and
 # fifteen seconds of video in eight containers and codecs, each there for a

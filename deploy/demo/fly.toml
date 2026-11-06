@@ -7,9 +7,9 @@
 # is the version in the page footer, which is the short sha of the commit
 # deployed and therefore public.
 # Every merge to main is a fresh server with nothing in it but the demo media,
-# a new password, and every client logged out -- and on the hour, every hour,
-# .github/workflows/demo-reset.yml empties it again without changing what it
-# runs. Do not put anything here that you would miss.
+# a new password, and every client logged out -- and every hour the machine
+empties itself again without changing what it runs. Do not put anything here
+that you would miss.
 #
 # **The data is in /dev/shm, a tmpfs**, and that is for its size rather than
 # its speed. The demo is open to anybody, and the smallest volume Fly sells is
@@ -22,9 +22,11 @@
 # moving it to another host is an empty server. So the image seeds itself
 # every time it starts -- the published one with the demo media and a shell
 # laid over it, deploy/demo/Dockerfile -- which makes a restart nobody asked
-# for cost about a minute rather than the rest of the hour, and makes the
-# hourly reset in scripts/demo-reset.sh a restart and nothing more. A deploy
-# destroys the machine and builds a new one. It is still never stopped for
+# for cost about a minute rather than the rest of the hour. The hourly reset
+# is the same thing done on purpose, from inside: deploy/demo/entrypoint.sh
+# stops the server, empties the directory and starts it again, so it keeps
+# time by the machine's clock and not by GitHub's schedule, which runs when it
+# likes. A deploy destroys the machine and builds a new one. It is still never stopped for
 # being idle, since waking it would be that minute of an empty demo.
 #
 #   scripts/demo-reset.sh <app>            # restart: empty it and reseed
@@ -39,6 +41,11 @@ primary_region = "cdg"
 # indexer reads the same files: the kernel killed the server mid-request and the
 # proxy answered 502. Swap takes the spike more slowly instead.
 swap_size_mb = 512
+
+# The entrypoint exits when the server dies, and the machine has to come back
+# whatever the status was.
+[[restart]]
+  policy = "always"
 
 [build]
   # The published image with the seeding laid over it. scripts/demo-reset.sh
