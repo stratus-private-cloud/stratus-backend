@@ -205,6 +205,12 @@ because what the note cannot know is whether the build that wrote it is still
 the build running: an upgrade that can read the format starts making those
 pictures on its own, with nothing to run and nothing already made thrown away.
 
+In a folder's listing a track is drawn with that folder's cover — a
+`cover.jpg` or one of its usual names beside it, the one picture for every
+track — and with a 🎵 alone when there is none; the cover inside a
+track's tags is the album pages' and not the listing's. Every other file that
+is not a picture is an emoji for its kind: a folder, a PDF, an archive.
+
 **The listing says which files have a preview and how much room is left.** A
 client drawing a grid of a few hundred files would otherwise ask for every
 thumbnail and count the ones that come back missing; it can read the answer out

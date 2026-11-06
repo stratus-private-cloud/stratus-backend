@@ -207,12 +207,12 @@ func TestFolderCover(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, ok := folderCover(entries)
+	got, ok := FolderCover(entries)
 	if !ok {
-		t.Fatal("folderCover found nothing")
+		t.Fatal("FolderCover found nothing")
 	}
 	if got.Path != want.Path {
-		t.Errorf("folderCover = %q, want the conventional name", got.Path)
+		t.Errorf("FolderCover = %q, want the conventional name", got.Path)
 	}
 
 }
@@ -229,12 +229,12 @@ func TestFolderCoverIgnoresCase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, ok := folderCover(entries)
+	got, ok := FolderCover(entries)
 	if !ok {
-		t.Fatal("folderCover found nothing")
+		t.Fatal("FolderCover found nothing")
 	}
 	if got.Path != want.Path {
-		t.Errorf("folderCover = %q", got.Path)
+		t.Errorf("FolderCover = %q", got.Path)
 	}
 }
 
@@ -252,8 +252,8 @@ func TestFolderCoverWithNoPicture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, ok := folderCover(entries); ok {
-		t.Errorf("folderCover found %q in a directory with no picture", got.Path)
+	if got, ok := FolderCover(entries); ok {
+		t.Errorf("FolderCover found %q in a directory with no picture", got.Path)
 	}
 	// And a directory that is not there has no cover either, which is not a
 	// failure worth its own error: a listing of nothing is a listing.

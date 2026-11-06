@@ -185,7 +185,7 @@ func (t *Service) Cover(ctx context.Context, owner, dir string, px int) (io.Read
 		return nil, 0, fmt.Errorf("look for cover art in %q: %w", dir, err)
 	}
 
-	if picture, ok := folderCover(entries); ok {
+	if picture, ok := FolderCover(entries); ok {
 		return t.open(ctx, picture, px)
 	}
 	if track, ok := firstTrack(entries); ok {
@@ -206,7 +206,7 @@ func (t *Service) CoverOf(ctx context.Context, owner string, f db.File, px int) 
 	if err != nil {
 		return nil, 0, fmt.Errorf("look for cover art in %q: %w", dir, err)
 	}
-	if picture, ok := folderCover(entries); ok {
+	if picture, ok := FolderCover(entries); ok {
 		return t.open(ctx, picture, px)
 	}
 	return t.trackCover(ctx, f, px)
@@ -712,11 +712,11 @@ var coverNames = []string{
 // without help. A cover.webp exists in the wild and waits for that decoder.
 var coverExtensions = []string{".jpg", ".jpeg", ".png"}
 
-// folderCover picks the artwork out of a directory listing.
+// FolderCover picks the artwork out of a directory listing.
 //
 // This is where an album's cover lives for most libraries: ripped or downloaded
 // as a folder, with the picture next to the tracks.
-func folderCover(entries []db.File) (db.File, bool) {
+func FolderCover(entries []db.File) (db.File, bool) {
 	// By preference and not by directory order, so the same folder answers the
 	// same picture on every backend: the storage port does not promise an order
 	// and neither does a listing.

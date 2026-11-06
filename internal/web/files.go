@@ -1,10 +1,13 @@
 package web
 
 import (
+	"context"
+	"log/slog"
 	"mime"
 	"net/http"
 	"net/url"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -102,7 +105,7 @@ func (h *handler) browse(w http.ResponseWriter, r *http.Request, user string) {
 		Shared:  token,
 		Notice:  uploaded(r.URL.Query().Get("added")),
 		Crumbs:  crumbs(p, token, root),
-		Entries: entries(children, h.statesOf(r.Context(), r.URL.Path, children), token),
+		Entries: entries(children, h.statesOf(r.Context(), r.URL.Path, children), token, h.folderCover(r.Context(), user, p, children, token)),
 		Columns: columns(href(p), state, token),
 		Rows:    rowChoices(href(p), state, token),
 		// Where this page's two forms post: into the directory being listed.
@@ -173,14 +176,18 @@ type entry struct {
 	// year: a new write takes a new blob key and therefore a new ETag.
 	Thumb string
 	// Picture says the box beside this row is a picture's -- a photograph or a
-	// film, which are the two kinds that have one -- and Film says which mark
-	// is drawn in it. Both are the name's answer and not the index's: a
+	// film, which are the two kinds that have one of their own -- and Film says
+	// which mark is drawn in it. Both are the name's answer and not the index's: a
 	// listing is a hundred rows and the mark cannot wait for them to be read.
 	//
 	// They are not "has no thumbnail": the mark is drawn under the picture,
 	// so a row whose thumbnail is refused or still arriving shows it too.
 	Picture bool
 	Film    bool
+	// Mark is what the box draws for every other row: an emoji by the name,
+	// so a folder, a PDF and an archive are told apart at a glance. A track's
+	// is drawn under its folder's cover, when Thumb has one.
+	Mark string
 	// Indexing is what the extractor has made of this file, and empty when it
 	// has been read -- which is the ordinary case, and a mark on every row
 	// would be noise. It says something during a first pass over a library, a
@@ -202,7 +209,11 @@ type entry struct {
 // and it is the query's job rather than this function's: regrouping a page
 // afterwards would only group that page, so a listing scrolled through would
 // show folders, then files, then folders again.
-func entries(children []db.File, states map[int64]rowState, token string) []entry {
+//
+// cover is the thumbnail every track in the rows is drawn with, and empty when
+// there is none: the folder's own artwork, found once for the page rather than
+// asked for by each row.
+func entries(children []db.File, states map[int64]rowState, token, cover string) []entry {
 	out := make([]entry, 0, len(children))
 	for _, c := range children {
 		target := href(c.Path)
@@ -226,6 +237,9 @@ func entries(children []db.File, states map[int64]rowState, token string) []entr
 			e.Info = link(infoPrefix, c.Path)
 			e.Film = media.IsVideo(c.Path)
 			e.Picture = e.Film || media.IsImage(c.Path)
+			if media.IsAudio(c.Path) {
+				e.Thumb = cover
+			}
 			// A row that has been tried and refused keeps its mark and is
 			// offered no picture: the request would be a 404, and the mark is
 			// what the square draws either way (#341).
@@ -233,13 +247,78 @@ func entries(children []db.File, states map[int64]rowState, token string) []entr
 				// The thumbnail carries the signature too. Without it a shared
 				// listing is a grid of broken images, which is the half of this
 				// that fails quietly.
-				e.Thumb = shared(link(thumbPrefix, c.Path)+"?size="+strconv.Itoa(listThumb)+
-					"&v="+url.QueryEscape(c.ETag), token)
+				e.Thumb = rowThumb(c, token)
 			}
+		}
+		if !e.Picture {
+			e.Mark = markOf(c.Path, c.IsDir)
 		}
 		out = append(out, e)
 	}
 	return out
+}
+
+// rowThumb is where a row's picture of f is asked for. The ETag is in it so the
+// answer can be cached for a year, and the signature so a shared listing is not
+// a column of broken images.
+func rowThumb(f db.File, token string) string {
+	return shared(link(thumbPrefix, f.Path)+"?size="+strconv.Itoa(listThumb)+
+		"&v="+url.QueryEscape(f.ETag), token)
+}
+
+// folderCover is the thumbnail of dir's artwork for the tracks in a page of it,
+// and empty when the page holds no track or the folder no artwork.
+//
+// The URL is the cover file's own row thumbnail, so a folder of twelve tracks
+// is one picture the browser fetches once, and nothing the server makes per
+// track. It reads the whole folder because the cover need not be on this page:
+// a listing is paged and ordered, and cover.jpg sorts after "01 Intro.mp3".
+// Only when there is a track to draw it for, which keeps a folder of ten
+// thousand photographs from being read whole on every page. A track with no
+// cover beside it is the note alone: one picked out of its tag is a ranged
+// read per row, which is what this was written to avoid.
+func (h *handler) folderCover(ctx context.Context, owner, dir string, children []db.File, token string) string {
+	if !slices.ContainsFunc(children, func(f db.File) bool { return !f.IsDir && media.IsAudio(f.Path) }) {
+		return ""
+	}
+	all, err := h.files.List(ctx, owner, dir)
+	if err != nil {
+		// A cover is decoration: the rows still draw the note, and the
+		// listing that failed is the next page's to report.
+		slog.WarnContext(ctx, "look for a folder's cover", "dir", dir, "err", err)
+		return ""
+	}
+	cover, ok := thumb.FolderCover(all)
+	if !ok || !thumb.CanThumbnail(cover.Path, cover.Size) {
+		return ""
+	}
+	return rowThumb(cover, token)
+}
+
+// markOf is the emoji a row without a picture is drawn with, by its name. A
+// handful of kinds and a page for everything else: it is there to tell a
+// folder from a document from an archive, and an icon per format is a theme.
+func markOf(name string, isDir bool) string {
+	if isDir {
+		return "📁"
+	}
+	if media.IsAudio(name) {
+		return "🎵"
+	}
+	switch strings.ToLower(path.Ext(name)) {
+	case ".pdf":
+		return "📕"
+	case ".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".zst", ".7z", ".rar":
+		return "📦"
+	case ".xls", ".xlsx", ".ods", ".csv", ".tsv":
+		return "📊"
+	case ".ics":
+		return "📅"
+	case ".vcf":
+		return "👤"
+	default:
+		return "📄"
+	}
 }
 
 // filePolicy is the content security policy a file is opened under, and the
