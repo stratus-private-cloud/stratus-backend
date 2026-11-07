@@ -31,7 +31,7 @@ of this file.
 | CalDAV | calendar events, tasks, journal entries | DAVx5, Thunderbird, iOS/macOS | **works** ¶ |
 | CardDAV | contacts | DAVx5, Thunderbird, iOS/macOS | **works** ¶ |
 | OpenSubsonic | music | Symfonium, Substreamer, DSub, Feishin | **works** † |
-| Web UI | sign in, browse, search, upload, download, rename, delete, the trash, what is known about a file, a photo gallery, a music library, a month of a calendar and its events to write, an address book to read and write, library status | any browser | **partly** |
+| Web UI | sign in, browse, search, upload, download, rename, delete, the trash, what is known about a file, a photo gallery, a music library, a month of a calendar and its events to write, an address book to read and write, a page that sets a phone up for both, library status | any browser | **partly** |
 | DLNA / UPnP-AV | TVs, set-top players | | planned |
 
 § Two ways, and the player chooses between them by the codecs each declares.
@@ -754,6 +754,16 @@ they are set. Give a client the server's address and nothing else:
 the Apple clients look first, and the answer asks for no password since it
 says only where to look.
 
+**Or let the web UI do it**: *Connect a device* in the user menu, also linked
+from the calendar and the address book, sets a phone up for both at once. On
+an iPhone, iPad or Mac it downloads a configuration profile with a CalDAV and a
+CardDAV account in it; on Android it opens [DAVx5](https://www.davx5.com) with
+the server and the user filled in. Neither carries the password — iOS asks for
+it as the profile installs, DAVx5 on its login screen — and iOS calls the
+profile unverified, because it is not signed. Both are built from the address
+the page was opened at, so behind a proxy that does not pass the host on they
+point somewhere wrong, and the page shows where.
+
 | address | what is there |
 |---|---|
 | `/calendars/` | whoever is signed in, as CalDAV's principal |
@@ -802,8 +812,8 @@ What to expect from it:
 ## CardDAV
 
 Contacts, at `/contacts/`, and the calendars' twin in every way that matters:
-the same credentials, `/.well-known/carddav` to start from, and the same four
-levels.
+the same credentials, `/.well-known/carddav` to start from, the same four
+levels, and the same *Connect a device* page to set a phone up from.
 
 | address | what is there |
 |---|---|

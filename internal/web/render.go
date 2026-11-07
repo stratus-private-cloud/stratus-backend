@@ -72,6 +72,7 @@ const (
 	pageEvent     = "event.html"
 	pageUnevent   = "event-delete.html"
 	pageSettings  = "settings.html"
+	pageConnect   = "connect.html"
 )
 
 // Each page is parsed with the layout into a set of its own. One set for all of
@@ -107,6 +108,7 @@ var pages = map[string]*template.Template{
 	pageEvent:     parse(pageEvent),
 	pageUnevent:   parse(pageUnevent),
 	pageSettings:  parse(pageSettings),
+	pageConnect:   parse(pageConnect),
 }
 
 // parse builds one page's template set: the layout, the page, and whatever
@@ -293,6 +295,8 @@ type view struct {
 	Event *eventForm
 	// Settings are the settings page's headings and fields (#397).
 	Settings []settingsSection
+	// Connect is the page that sets a phone up (#485).
+	Connect *connectView
 }
 
 // Shows reports whether a result page is showing one of its buckets: all of

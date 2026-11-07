@@ -14,6 +14,7 @@
     <div class="small text-body-secondary">{{.Name}} · times in {{.Zone}}</div>
   </div>
   <div class="d-flex gap-2">
+    <a class="btn btn-sm btn-outline-secondary" href="/connect">Sync with a phone</a>
     {{with .New}}<a class="btn btn-sm btn-primary" href="{{.}}">New event</a>{{end}}
     <div class="btn-group btn-group-sm" role="group" aria-label="Month">
       <a class="btn btn-outline-secondary" href="{{.Prev}}" aria-label="Previous month">‹</a>
