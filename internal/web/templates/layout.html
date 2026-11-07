@@ -95,8 +95,11 @@
 <link rel="stylesheet" href="{{.Assets}}/bootstrap.min.css">
 {{/* Every place htmx evaluates a string checks this first, so turning it off
      is what keeps 'unsafe-eval' out of the content security policy. A meta
-     element rather than a line of script, which that policy also forbids. */}}
-<meta name="htmx-config" content='{"allowEval":false}'>
+     element rather than a line of script, which that policy also forbids.
+     includeIndicatorStyles is off for the same policy: htmx would insert a
+     <style> for its indicators, which style-src 'self' refuses with an error
+     in the console, and nothing here uses them. */}}
+<meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false}'>
 </head>
 <body class="bg-body-tertiary d-flex flex-column min-vh-100">
 <nav class="navbar bg-body border-bottom">
