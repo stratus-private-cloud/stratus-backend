@@ -334,7 +334,7 @@ func (a *App) Handler(deps Deps) http.Handler {
 	// The log is outside the compression so that the bytes it counts are the
 	// bytes that went out rather than the ones the handler wrote, and the
 	// recover outside both so that a panic in either is caught too.
-	return recoverPanics(logRequests(compress(mux)))
+	return recoverPanics(logRequests(compress(identify(a.version, mux))))
 }
 
 // Server applies the timeout policy. Separate from Run so the policy itself can

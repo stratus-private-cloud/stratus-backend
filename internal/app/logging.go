@@ -106,3 +106,13 @@ func (r *recorder) Write(b []byte) (int, error) {
 // what a streaming response needs to flush and what a future upgrade would need
 // to hijack.
 func (r *recorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
+// identify names the server on every response, outside the compression and
+// every surface's own handler so that no route can answer without it.
+func identify(version string, h http.Handler) http.Handler {
+	name := "Stratus/" + version
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Server", name)
+		h.ServeHTTP(w, r)
+	})
+}
