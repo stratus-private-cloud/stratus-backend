@@ -74,6 +74,9 @@ backup, which is the one thing no existing client does for free on iOS — and i
 is held to the same rule: it speaks WebDAV and tus and works against any server
 that does.
 
+Every response says `Server: Stratus/<version>`, the same version the page
+footer shows, so a client can tell which server it is talking to.
+
 ## WebDAV
 
 **The whole server is one WebDAV namespace.** Mount the origin and you get a
