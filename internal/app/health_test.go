@@ -223,8 +223,12 @@ func TestEveryResponseNamesTheServer(t *testing.T) {
 	h := app.New(testConfig(t), "1.2.3", "2026-01-01T09:30:00Z").Handler(d)
 
 	for _, path := range []string{"/readyz", "/nowhere", "/files/"} {
-		if got := get(t, h, path).Header().Get("Server"); got != "Stratus/1.2.3" {
+		head := get(t, h, path).Header()
+		if got := head.Get("Server"); got != "Stratus/1.2.3" {
 			t.Errorf("GET %s: Server = %q, want %q", path, got, "Stratus/1.2.3")
+		}
+		if got := head.Get("Stratus-Version"); got != "1.2.3" {
+			t.Errorf("GET %s: Stratus-Version = %q, want %q", path, got, "1.2.3")
 		}
 	}
 }

@@ -74,8 +74,11 @@ backup, which is the one thing no existing client does for free on iOS — and i
 is held to the same rule: it speaks WebDAV and tus and works against any server
 that does.
 
-Every response says `Server: Stratus/<version>`, the same version the page
-footer shows, so a client can tell which server it is talking to.
+Every response says `Server: Stratus/<version>` and `Stratus-Version:
+<version>`, the same version the page footer shows, so a client can tell
+which server it is talking to. The second is there because the first rarely
+survives a reverse proxy: Fly's writes its own and nginx hides the upstream's
+by default.
 
 ## WebDAV
 

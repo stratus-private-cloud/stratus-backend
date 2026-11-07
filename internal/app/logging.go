@@ -109,10 +109,16 @@ func (r *recorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
 
 // identify names the server on every response, outside the compression and
 // every surface's own handler so that no route can answer without it.
+//
+// Twice, because Server is the header a reverse proxy most often rewrites:
+// Fly's puts its own there and nginx hides the upstream's by default, so a
+// client behind either would never see it. A header of our own passes
+// through both untouched.
 func identify(version string, h http.Handler) http.Handler {
 	name := "Stratus/" + version
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Server", name)
+		w.Header().Set("Stratus-Version", version)
 		h.ServeHTTP(w, r)
 	})
 }
