@@ -365,3 +365,26 @@ func TestAnEmptyFolderSaysSomethingUseful(t *testing.T) {
 		t.Errorf("a visitor is told to upload into it or to mount it:\n%s", shared)
 	}
 }
+
+// TestARowsActionsAreAMenu: one gear per row and the actions in a menu behind
+// it, labelled, with the buttons kept for a browser with no script.
+func TestARowsActionsAreAMenu(t *testing.T) {
+	t.Parallel()
+	h, s, _ := browserOver(t)
+	cookie := signIn(t, h)
+	write(t, s, "notes.txt", "hello")
+
+	listing := get(t, h, "/files/", cookie).Body.String()
+	if !strings.Contains(listing, `data-bs-toggle="dropdown"`) || !strings.Contains(listing, `aria-label="Actions on notes.txt">⚙️</button>`) {
+		t.Errorf("the row has no menu:\n%s", listing)
+	}
+	for _, want := range []string{"</span> Details</a>", "</span> Share</a>", "</span> Rename</a>", "</span> Delete</a>"} {
+		if !strings.Contains(listing, want) {
+			t.Errorf("the menu has no %q", want)
+		}
+	}
+	noscript := listing[strings.Index(listing, "<noscript>\n      <div class=\"btn-group"):]
+	if !strings.Contains(noscript, `href="/rename/notes.txt"`) {
+		t.Errorf("with no script the row has no way to rename:\n%s", listing)
+	}
+}

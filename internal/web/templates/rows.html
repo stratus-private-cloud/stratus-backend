@@ -41,22 +41,43 @@
   {{if $.Shared}}
   <td></td>
   {{else}}
-  {{/* An emoji is read aloud by its Unicode name, "link" or "wastebasket", so
-       the label a screen reader gets is the aria-label and not the glyph.
+  {{/* The actions are a menu behind one button, so the row gives its width to
+     the name. Bootstrap's dropdown, already in the bundle for the bar's menus;
+     the fixed strategy is what lets it out of .table-responsive, whose
+     overflow would otherwise clip the menu of the last rows. With no
+     JavaScript the menu cannot open, so <noscript> keeps the buttons it
+     replaced.
 
-       Details open in a modal over the listing rather than on a page of their
-       own, because looking at one file's is looking at several. The link is the
-       whole of it with no script: the same URL answers with a page. With htmx
-       the click fetches the dialog into the one holder at the end of this page,
-       and dialog.js is what opens it. */}}
+     The emoji is aria-hidden in the menu, where the label beside it is the
+     name; in the buttons it is all there is, so the aria-label carries it.
+
+     Details open in a modal over the listing rather than on a page of their
+     own, because looking at one file's is looking at several. The link is the
+     whole of it with no script: the same URL answers with a page. With htmx
+     the click fetches the dialog into the one holder at the end of this page,
+     and dialog.js is what opens it. */}}
   <td class="text-end text-nowrap">
-    <div class="btn-group btn-group-sm" role="group" aria-label="Actions on {{.Name}}">
-      {{if .Info}}<a class="btn btn-outline-secondary" href="{{.Info}}" title="Details" aria-label="Details"
-        hx-get="{{.Info}}" hx-target="#file-dialog" hx-swap="innerHTML">ℹ️</a>{{end}}
-      <a class="btn btn-outline-secondary" href="{{.Share}}" title="Share" aria-label="Share">🔗</a>
-      <a class="btn btn-outline-secondary" href="{{.Rename}}" title="Rename" aria-label="Rename">✏️</a>
-      <a class="btn btn-outline-danger" href="{{.Delete}}" title="Delete" aria-label="Delete">🗑️</a>
+    <div class="dropdown">
+      <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown"
+        data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false"
+        title="Actions" aria-label="Actions on {{.Name}}">⚙️</button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        {{if .Info}}<li><a class="dropdown-item" href="{{.Info}}"
+          hx-get="{{.Info}}" hx-target="#file-dialog" hx-swap="innerHTML"><span aria-hidden="true">ℹ️</span> Details</a></li>{{end}}
+        <li><a class="dropdown-item" href="{{.Share}}"><span aria-hidden="true">🔗</span> Share</a></li>
+        <li><a class="dropdown-item" href="{{.Rename}}"><span aria-hidden="true">✏️</span> Rename</a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item text-danger" href="{{.Delete}}"><span aria-hidden="true">🗑️</span> Delete</a></li>
+      </ul>
     </div>
+    <noscript>
+      <div class="btn-group btn-group-sm" role="group" aria-label="Actions on {{.Name}}">
+        {{if .Info}}<a class="btn btn-outline-secondary" href="{{.Info}}" title="Details" aria-label="Details">ℹ️</a>{{end}}
+        <a class="btn btn-outline-secondary" href="{{.Share}}" title="Share" aria-label="Share">🔗</a>
+        <a class="btn btn-outline-secondary" href="{{.Rename}}" title="Rename" aria-label="Rename">✏️</a>
+        <a class="btn btn-outline-danger" href="{{.Delete}}" title="Delete" aria-label="Delete">🗑️</a>
+      </div>
+    </noscript>
   </td>
   {{end}}
 </tr>
