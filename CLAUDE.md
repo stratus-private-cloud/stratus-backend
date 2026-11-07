@@ -84,6 +84,18 @@ reaching for rclone or DAVx5 is overkill, not the primary way to use Stratus.
   with no script grows by posting itself back: the "add another" buttons
   re-render with one more row and save nothing, and a hidden save button
   comes first so that Enter saves.
+- **A phone is set up from `/connect`, by handing it to what already syncs**
+  (#485): a `.mobileconfig` with a CalDAV and a CardDAV account for iOS and
+  macOS, and a `davx5://<user>@<host>/` link for Android -- DAVx5 registers
+  that scheme as browsable and opens its login on it, `caldav://` for a
+  server over plain http. Neither is a client of ours, so principle 2 is
+  shortened rather than bent. **No password in either**: iOS asks as the
+  profile installs, and a link or a file holding it would be a credential in
+  the page or in Downloads. The profile is unsigned, so iOS calls it
+  unverified, and its identifiers are derived from the host and the user so
+  installing it again replaces the accounts. Both are built from the request,
+  as a share link is. The link is a `template.URL` because html/template
+  turns a scheme it does not know into `#ZgotmplZ`.
 
 Hard constraints, in the same spirit as the rest of the project:
 

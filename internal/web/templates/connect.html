@@ -1,0 +1,49 @@
+{{/* Sets a phone up for the calendars and the contacts (#485) by handing
+     it to what already syncs them: the system's own accounts on iOS and
+     macOS, DAVx5 on Android. No password anywhere on this page. */}}
+{{define "content" -}}
+{{with .Connect}}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-8 col-lg-6">
+    <h1 class="h4">Connect a device</h1>
+    <p class="text-body-secondary">
+      Your {{if and .Calendars .Contacts}}calendars and contacts{{else if .Calendars}}calendars{{else}}contacts{{end}}
+      on your phone, kept in sync both ways. Only the password is typed.
+    </p>
+
+    <div class="card card-body mb-3">
+      <h2 class="h6">iPhone, iPad and Mac</h2>
+      <p class="mb-2">
+        Download the profile, then open <strong>Settings</strong> and tap
+        <strong>Profile Downloaded</strong> to install it. iOS asks for the
+        password as it installs, and calls the profile unverified because it
+        is not signed.
+      </p>
+      <div><a class="btn btn-primary" href="{{.Profile}}">Download the profile</a></div>
+    </div>
+
+    <div class="card card-body mb-3">
+      <h2 class="h6">Android</h2>
+      <p class="mb-2">
+        Install <a href="https://www.davx5.com/download">DAVx⁵</a>, then open
+        this page on the phone and tap the button: DAVx⁵ opens with this
+        server and your user already filled in.
+      </p>
+      <div><a class="btn btn-primary" href="{{.DAVx5}}">Open in DAVx⁵</a></div>
+    </div>
+
+    <div class="card card-body">
+      <h2 class="h6">Anything else</h2>
+      <p class="mb-2">
+        Thunderbird and other CalDAV and CardDAV clients find both from the
+        server's address.
+      </p>
+      <dl class="row mb-0">
+        <dt class="col-sm-4">Server</dt><dd class="col-sm-8"><code>{{.Server}}</code></dd>
+        <dt class="col-sm-4">User</dt><dd class="col-sm-8 mb-0"><code>{{.User}}</code></dd>
+      </dl>
+    </div>
+  </div>
+</div>
+{{end}}
+{{- end}}

@@ -323,6 +323,10 @@ func Handler(d Deps) http.Handler {
 		mux.HandleFunc("GET "+contactDeletePrefix+"{book}/{name}", h.signedIn(h.deleteContactForm))
 		mux.HandleFunc("POST "+contactDeletePrefix+"{book}/{name}", h.signedIn(h.deleteContact))
 	}
+	if h.calendars != nil || h.contacts != nil {
+		mux.HandleFunc("GET "+connectPath, h.signedIn(h.connect))
+		mux.HandleFunc("GET "+profilePath, h.signedIn(h.profile))
+	}
 	mux.HandleFunc("POST /files/{path...}", h.signedIn(h.upload))
 	// The share sheet's door, which is the upload's twin with the destination
 	// decided here rather than given. See share_target.go.
