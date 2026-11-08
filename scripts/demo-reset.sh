@@ -40,9 +40,10 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 toml="$HERE/../deploy/demo/fly.toml"
 setting() { sed -n "s/^ *$1 *= *\"\(.*\)\"/\1/p" "$toml" | head -1; }
 user="$(setting STRATUS_USERNAME)"
+pass="$(setting STRATUS_PASSWORD)"
 
-# The version is the password, and every OpenSubsonic answer carries it,
-# including the refusal for asking with no credentials.
+# Every OpenSubsonic answer carries the version, including the refusal for
+# asking with no credentials, so it says the server is up before signing in.
 version() { curl -fsS "$BASE/rest/ping.view" 2>/dev/null | sed -n 's/.*serverVersion="\([^"]*\)".*/\1/p'; }
 
 # Planted before the wipe, so that finding it afterwards means there was no
@@ -51,7 +52,7 @@ version() { curl -fsS "$BASE/rest/ping.view" 2>/dev/null | sed -n 's/.*serverVer
 canary="reset-canary-$(date -u +%Y%m%d%H%M%S).txt"
 old="$(version || true)"
 if [ -z "$old" ] || ! printf 'planted by demo-reset.sh\n' |
-	curl -fsS -o /dev/null -u "$user:$old" -T - "$BASE/files/$canary"; then
+	curl -fsS -o /dev/null -u "$user:$pass" -T - "$BASE/files/$canary"; then
 	canary=""
 fi
 
@@ -92,12 +93,12 @@ done
 # time would race it to the playlist and make two. The last thing it writes is
 # this event, so its being there means the inside is done writing.
 for _ in $(seq 150); do
-	curl -fsS -o /dev/null -u "$user:$version" "$BASE/calendars/$user/default/gnome.ics" 2>/dev/null && break
+	curl -fsS -o /dev/null -u "$user:$pass" "$BASE/calendars/$user/default/gnome.ics" 2>/dev/null && break
 	sleep 2
 done
 
 if [ -n "$canary" ]; then
-	code="$(curl -s -o /dev/null -w '%{http_code}' -u "$user:$version" "$BASE/files/$canary")"
+	code="$(curl -s -o /dev/null -w '%{http_code}' -u "$user:$pass" "$BASE/files/$canary")"
 	if [ "$code" != 404 ]; then
 		echo "the reset kept what was there: /files/$canary answered $code" >&2
 		exit 1
@@ -105,4 +106,4 @@ if [ -n "$canary" ]; then
 fi
 
 echo "reseeding $APP: $version"
-STRATUS_USERNAME="$user" STRATUS_PASSWORD="$version" "$HERE/seed-demo.sh" "$BASE"
+STRATUS_USERNAME="$user" STRATUS_PASSWORD="$pass" "$HERE/seed-demo.sh" "$BASE"

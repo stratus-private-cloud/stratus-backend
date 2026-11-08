@@ -14,8 +14,8 @@ protocols your existing apps already understand.
 > intended — if a row says **works**, it works.
 
 **There is one running at <https://stratus-demo.dropdatabase.es>**, on the last
-commit that went green on `main`. Sign in as `demo`, with the version string in
-the page footer as the password. It empties itself every hour and on every
+commit that went green on `main`. Sign in as `demo`, password
+`stratus-private-cloud`. It empties itself every hour and on every
 merge, and anybody can sign into it — so it is somewhere to look, never
 somewhere to put anything of yours. What it is and why it is open is at the end
 of this file.
@@ -1727,10 +1727,9 @@ has not been through all of them. Anywhere `FLY_APP` is unset, including every
 fork, the job does not run.
 
 That instance is deliberately disposable, and deliberately open: the smallest
-machine Fly sells, a disk of about 100 MB made of its memory, and **the password is the version string in
-the page footer** — the short sha of the commit it is running, which anybody can
-read off this repository. It is the version alone: the build timestamp beside it
-is not part of it. Four things follow, and none of them is an accident:
+machine Fly sells, a disk of about 100 MB made of its memory, and **the password is
+`stratus-private-cloud`**, written in [`deploy/demo/fly.toml`](deploy/demo/fly.toml)
+in the clear. Four things follow, and none of them is an accident:
 
 - **Anyone can sign in and upload to it, but not much.** It is a demo, it
   holds nothing but the demo, and it is not a place to put anything of yours.
@@ -1738,9 +1737,12 @@ is not part of it. Four things follow, and none of them is an accident:
   memory: once the demo media is in there are some 85 MB left, and an upload
   past that is refused with `507`. The smallest volume Fly sells would have
   left nine hundred megabytes to anybody with the password.
-- **Every deploy changes the password**, so every client and every browser
-  session is logged out by the next merge to `main`. Reconfiguring a Subsonic
-  client after a merge is the cost of not having a secret to manage.
+- **The password does not change**, so a client set up against it keeps
+  working across merges, and so does a reviewer who was handed it days
+  earlier — which is what a store review needs. It used to be the version
+  string, rotating on every deploy, and that logged every client out for
+  nothing: the demo is open anyway, so the password never protected
+  anything.
 - **It seeds itself whenever it starts**, because its disk is memory and any
   restart empties it — Fly moving the machine as much as the reset. Its image
   is the published one with the demo media and a shell laid over it
