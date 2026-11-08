@@ -3,11 +3,10 @@
 # Test infrastructure, not a recommended way to run this: the fly.toml at the
 # root of the repository is the one meant to be launched, and it is kept apart
 # from this one so that `fly launch --from` finds that and not this. The
-# smallest machine there is, a disk made of its memory, and a password that
-# is the version in the page footer, which is the short sha of the commit
-# deployed and therefore public.
-# Every merge to main is a fresh server with nothing in it but the demo media,
-# a new password, and every client logged out -- and every hour the machine
+# smallest machine there is, a disk made of its memory, and a password
+# written below in the clear.
+# Every merge to main is a fresh server with nothing in it but the demo media
+# -- and every hour the machine
 # empties itself again without changing what it runs. Do not put anything here
 # that you would miss.
 #
@@ -56,10 +55,11 @@ swap_size_mb = 512
 [env]
   STRATUS_ADDR = ":8080"
   STRATUS_DATA_DIR = "/dev/shm/stratus"
-  # Not a secret, and the seeding step reads it from here so there is one place
-  # that says who the user is. Neither is the password: CI stages it on every
-  # deploy as the version string this build carries.
+  # Not secrets, and the seeding step reads both from here so there is one
+  # place that says how to sign in. The password is fixed so that a client, or
+  # a store reviewer, handed it days ago still gets in.
   STRATUS_USERNAME = "demo"
+  STRATUS_PASSWORD = "stratus-private-cloud"
   # The demo is seeded seconds after the machine starts, and a minute of waiting
   # for the indexer would make the music look missing. Nothing else about this
   # instance is tuned.

@@ -269,19 +269,17 @@ jobs:
       # deprecation warning sat here. 1.6 runs on node24.
       - uses: superfly/flyctl-actions/setup-flyctl@1.6
 
-      # The password is the version in the footer, which is the short sha of the
-      # commit being deployed. There is no secret to keep and it rotates by
-      # itself; what it costs is said in the README, out loud: this repository is
-      # public, so that instance is too, and every deploy logs every client out.
-      #
-      # --stage does not restart anything: the secret is applied by the deploy
-      # below, which was going to restart the machine anyway.
-      - name: stage the instance's password
+      # The password is in deploy/demo/fly.toml now. It used to be a secret set
+      # here to the version on every deploy, and a secret would win over the
+      # file, so the one left behind is dropped. --stage restarts nothing: the
+      # deploy below applies it.
+      - name: drop the password secret the demo used to carry
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          flyctl secrets set --stage --app "${{ vars.FLY_APP }}" \
-            STRATUS_PASSWORD="${{ needs.publish.outputs.version }}"
+          if flyctl secrets list --app "${{ vars.FLY_APP }}" --json | jq -e '.[] | select(.name == "STRATUS_PASSWORD")' >/dev/null; then
+            flyctl secrets unset --stage --app "${{ vars.FLY_APP }}" STRATUS_PASSWORD
+          fi
 
       # Destroying the machine first, because a deploy replaces the image and
       # not the machine under it: without this the new binary starts
