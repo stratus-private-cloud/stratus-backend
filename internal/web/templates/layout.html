@@ -42,9 +42,9 @@
       </div>
       <div class="col-auto order-sm-last">
         {{if .Prev}}<button class="btn btn-sm btn-link link-secondary text-decoration-none" type="button" aria-label="Previous"
-          hx-get="{{.Prev}}" hx-target="#player" hx-swap="outerHTML">⏮</button>{{end}}
+          hx-get="{{.Prev}}" hx-target="#player" hx-swap="outerHTML">⏮&#xFE0E;</button>{{end}}
         {{if .Skip}}<button class="btn btn-sm btn-link link-secondary text-decoration-none" type="button" aria-label="Next"
-          hx-get="{{.Skip}}" hx-target="#player" hx-swap="outerHTML">⏭</button>{{end}}
+          hx-get="{{.Skip}}" hx-target="#player" hx-swap="outerHTML">⏭&#xFE0E;</button>{{end}}
       </div>
       <div class="col-12 col-sm-7 col-lg-8">
         {{/* No id, and that is the bug it had: when a swap brings in an
