@@ -616,7 +616,11 @@ Four things worth knowing before pointing anything at it:
   `/status` says how many are waiting and what the last failure was.
 
 Hidden names are skipped, directories included — `.part`, `.crdownload`,
-`.DS_Store` — and so is anything that is not a regular file. The directory may
+`.DS_Store` — and so is anything that is not a regular file. **A symlink is
+never followed out of the directory**, including one that replaces a folder
+between the sweep seeing a file and taking it: a share other machines write to
+could otherwise hand the server any file it can read, and then have it deleted.
+The directory may
 not be inside `STRATUS_DATA_DIR`: that is where the blobs are, and a server
 importing its own blob store would do it for ever. It refuses to start instead.
 
