@@ -706,7 +706,7 @@ func TestDeleteSelected(t *testing.T) {
 	if asked.Code != http.StatusOK {
 		t.Fatalf("asking = %d, want 200", asked.Code)
 	}
-	has(t, asked.Body.String(), "Delete 2 items", "<code>a.jpg</code>", `name="confirm"`, `value="b.jpg"`)
+	has(t, asked.Body.String(), "Delete 2 items", "They will be moved to the", `name="confirm"`, `value="b.jpg"`)
 	if _, err := s.Stat(t.Context(), username, "album/a.jpg"); err != nil {
 		t.Fatalf("asking deleted a file: %v", err)
 	}
