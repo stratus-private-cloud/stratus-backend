@@ -1481,7 +1481,7 @@ make down      # stop, keeping your data
 WebDAV is only mounted once there are credentials, so set `STRATUS_USERNAME` and
 `STRATUS_PASSWORD` in `.env` before mounting anything.
 
-### Hosted, on Render, Fly or Coolify
+### Hosted, on Render, Fly, Coolify or Google Cloud
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/stratus-private-cloud/stratus-backend)
 
@@ -1510,6 +1510,14 @@ with the compose location set to
 [`deploy/coolify/compose.yaml`](deploy/coolify/compose.yaml): a named volume, a
 username to fill in and a password Coolify generates.
 [doc/deploy/coolify.md](doc/deploy/coolify.md) has the steps.
+
+On Google Cloud's free tier, an e2-micro running Container-Optimized OS with
+[`deploy/gce/cloud-init.yaml`](deploy/gce/cloud-init.yaml) as its user-data:
+the image on the boot disk with Caddy in front for TLS. The VM and the disk
+are free; **outbound traffic is not past 1 GB a month**, which a library
+that gets read uses up quickly. [doc/deploy/gce.md](doc/deploy/gce.md) has the
+commands and the bill. It has not been run on a real project yet. Cloud Run
+is not an option: it has no disk and scales to zero.
 
 ## Configuration
 

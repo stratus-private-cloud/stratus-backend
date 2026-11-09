@@ -1,0 +1,129 @@
+#cloud-config
+# Google Compute Engine: a Stratus of your own on the free tier's e2-micro,
+# running Container-Optimized OS. doc/deploy/gce.md is the page that explains
+# it and has the gcloud commands that pass this file as user-data.
+#
+# Not gcloud's create-with-container: the agent behind it was shut down on
+# 2026-07-31. COS runs cloud-init on every boot and keeps /etc on a tmpfs, so
+# these units are written again each time and nothing here is a one-off.
+#
+# Everything that differs between installs -- the credentials and the domain --
+# is instance metadata rather than text in this file, so the file is the same
+# for everybody and changing a value is `add-metadata` and a restart.
+
+write_files:
+  - path: /etc/systemd/system/stratus-setup.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Stratus: data directories, firewall and settings from metadata
+      Wants=network-online.target
+      After=network-online.target docker.service
+      Requires=docker.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=true
+      ExecStart=/bin/bash /etc/stratus/setup.sh
+
+  - path: /etc/stratus/setup.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      md() {
+        curl -sf -H 'Metadata-Flavor: Google' \
+          "http://metadata.google.internal/computeMetadata/v1/instance/attributes/$1"
+      }
+
+      # The stateful partition is the part of a COS boot disk that survives a
+      # reboot and an OS update; / is read-only and /etc is rebuilt every boot.
+      # 65532 is the image's user: it refuses to start on a /data it cannot write.
+      install -d -o 65532 -g 65532 /mnt/stateful_partition/stratus
+      install -d /mnt/stateful_partition/caddy
+
+      # COS drops every inbound connection but ssh at its own firewall, on top
+      # of the VPC's rules.
+      for port in 80 443; do
+        iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null ||
+          iptables -A INPUT -p tcp --dport "$port" -j ACCEPT
+      done
+      iptables -C INPUT -p udp --dport 443 -j ACCEPT 2>/dev/null ||
+        iptables -A INPUT -p udp --dport 443 -j ACCEPT
+
+      docker network inspect stratus >/dev/null 2>&1 || docker network create stratus
+
+      # docker's --env-file takes the rest of the line literally, so a password
+      # with quotes or spaces in it arrives as typed.
+      install -d -m 0700 /run/stratus
+      umask 077
+      {
+        echo "STRATUS_USERNAME=$(md stratus-username)"
+        echo "STRATUS_PASSWORD=$(md stratus-password)"
+      } > /run/stratus/stratus.env
+      echo "STRATUS_DOMAIN=$(md stratus-domain)" > /run/stratus/caddy.env
+
+  - path: /etc/systemd/system/stratus.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Stratus
+      Requires=stratus-setup.service docker.service
+      After=stratus-setup.service docker.service
+
+      [Service]
+      # A restart pulls :main again, which is what upgrading is.
+      ExecStartPre=-/usr/bin/docker rm -f stratus
+      ExecStartPre=/usr/bin/docker pull ghcr.io/stratus-private-cloud/stratus-backend:main
+      ExecStart=/usr/bin/docker run --rm --name stratus --network stratus \
+        --env-file /run/stratus/stratus.env \
+        -v /mnt/stateful_partition/stratus:/data \
+        --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges \
+        ghcr.io/stratus-private-cloud/stratus-backend:main
+      ExecStop=/usr/bin/docker stop stratus
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # TLS without a load balancer, which on Google Cloud costs more a month than
+  # everything else here put together. Caddy streams request bodies, so it puts
+  # no ceiling on an upload, and it sets X-Forwarded-Proto for the cookie.
+  - path: /etc/stratus/Caddyfile
+    permissions: "0644"
+    content: |
+      {$STRATUS_DOMAIN} {
+        reverse_proxy stratus:8080
+      }
+
+  - path: /etc/systemd/system/caddy.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Caddy in front of Stratus
+      Requires=stratus-setup.service docker.service
+      After=stratus-setup.service docker.service stratus.service
+
+      [Service]
+      ExecStartPre=-/usr/bin/docker rm -f caddy
+      ExecStartPre=/usr/bin/docker pull caddy:2
+      # The certificates live on the stateful partition: issued again on every
+      # boot they would run into Let's Encrypt's weekly limit.
+      ExecStart=/usr/bin/docker run --rm --name caddy --network stratus \
+        -p 80:80 -p 443:443 -p 443:443/udp \
+        --env-file /run/stratus/caddy.env \
+        -v /etc/stratus/Caddyfile:/etc/caddy/Caddyfile:ro \
+        -v /mnt/stateful_partition/caddy:/data \
+        caddy:2
+      ExecStop=/usr/bin/docker stop caddy
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - systemctl daemon-reload
+  - systemctl start stratus.service caddy.service
