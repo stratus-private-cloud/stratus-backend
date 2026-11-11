@@ -50,7 +50,7 @@ const (
 )
 
 // manifestIcon is one icon in it. Both of ours are declared "any maskable"
-// because the source is drawn for it: brand/app-icon.svg is full bleed, with
+// because the source is drawn for it: brand/app-icon-web.svg is full bleed, with
 // the mark inside Android's 66% safe circle, so a launcher that masks it and
 // one that does not are both served by the same picture rather than by two.
 type manifestIcon struct {
@@ -76,8 +76,8 @@ type manifestShot struct {
 // the icon offers on Android and a right click on it on a desktop.
 //
 // **Each has a glyph of its own**, drawn for it in `brand/`: the app icon's
-// square and gradient, the mark behind at low opacity, and a folder, a
-// photograph, a play triangle or a note in white in front. One size, 192,
+// pale square, the mark behind at low opacity, and a folder, a photograph,
+// a play triangle or a note in the mark's blue in front. One size, 192,
 // because everything that draws these draws them smaller -- and that is also
 // the known cost of the composition, since at the forty pixels a launcher menu
 // actually gives them the mark behind the glyph is closer to texture than to a
