@@ -349,10 +349,13 @@ Hard constraints, in the same spirit as the rest of the project:
   anything this server controls. What iOS does is not this: Safari supports no
   share target at all, and that door is `stratus-app`'s (stratus-app#128).
 
-  **The icons are one picture.** `brand/app-icon.svg` is full bleed with the
-  mark inside Android's 66% safe circle, so both sizes are declared
+  **The icons are one picture, and not the app's.** `brand/app-icon-web.svg`
+  is `stratus-app`'s icon inverted -- the favicon's blue on a pale square
+  rather than white on the gradient -- because both installed on one phone
+  were two identical icons on one launcher. It is full bleed with the mark
+  inside Android's 66% safe circle, so both sizes are declared
   `any maskable` rather than carrying a second, padded drawing for launchers
-  that mask.
+  that mask. The apple-touch-icon is the same picture at 180.
 
   **The rest of what it declares is what an installer reads**: the language and
   its direction, an orientation of `any` because a file browser reads both ways
@@ -379,8 +382,8 @@ Hard constraints, in the same spirit as the rest of the project:
   shortcut to an address that moved is the failure nobody sees.
 
   **Each carries a glyph of its own**, drawn in `brand/` beside the app icon
-  and rasterised the same way: the same square and gradient, the mark behind at
-  18% and a folder, a photograph, a play triangle or a note in white in front.
+  and rasterised the same way: the same pale square, the mark behind at 12%
+  and a folder, a photograph, a play triangle or a note in its blue in front.
   One size, 192, since everything draws them smaller -- which is also the
   known cost of putting the mark behind the glyph, because at the forty pixels
   a launcher menu gives them it reads as texture rather than as a mark. That
