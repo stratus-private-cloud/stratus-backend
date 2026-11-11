@@ -3114,7 +3114,7 @@ Restraint here is principle 3, not laziness:
   vendored assets and 50 KB of that htmx -- which is the whole reason
   `scripts/smoke.sh` carries a size budget: the number moved because a decision
   moved it.
-- **Three deploy manifests: Render's, Fly's and Coolify's** (#13, #177). `render.yaml` is
+- **Four deploy manifests: Render's, Fly's, Coolify's and Compute Engine's** (#13, #177). `render.yaml` is
   the one with a button: a web service on the
   published image and a disk at `/data`. The three platforms a Go binary is
   usually pushed to are excluded on purpose -- Vercel, Netlify and Cloud Run are
@@ -3129,11 +3129,19 @@ Restraint here is principle 3, not laziness:
   Coolify's is `deploy/coolify/compose.yaml`, apart from the root
   `compose.yaml` because that one builds the image and binds `./data` for
   development, while this one runs what CI publishes on a named volume.
+  Google Cloud gets Compute Engine rather than Cloud Run, for the free tier's
+  e2-micro: `deploy/gce/cloud-init.yaml` is user-data for Container-Optimized
+  OS, two systemd units running the image and Caddy -- TLS on the VM, since
+  Google's load balancer costs more than the rest of the bill -- with the
+  credentials and the domain in instance metadata so the file is the same for
+  everybody. Not `create-with-container`, whose agent was shut down in July
+  2026. The free tier's catch is 1 GB of egress a month, and `gce.md` leads
+  with it.
 
   **The deploy pages live in `doc/deploy/` and the README links them**, because
   the quickstart is read in the first five minutes and a platform's cost,
-  region and upgrade story are not what somebody is reading it for. Two of the
-  four are per-platform (`render.md`, `fly.md`) and two are per-seam
+  region and upgrade story are not what somebody is reading it for. Four are
+  per-platform (`render.md`, `fly.md`, `coolify.md`, `gce.md`) and two per-seam
   (`s3.md`, `database.md`), which is the same split the code has: who sells a
   bucket is not a property of who runs the container, and a page per platform
   listing every provider would be the same list three times.
