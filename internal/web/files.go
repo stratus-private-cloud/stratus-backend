@@ -184,7 +184,7 @@ type entry struct {
 	// so a row whose thumbnail is refused or still arriving shows it too.
 	Picture bool
 	Film    bool
-	// Mark is what the box draws for every other row: an emoji by the name,
+	// Mark is what the box draws for every other row: a symbol by the name,
 	// so a folder, a PDF and an archive are told apart at a glance. A track's
 	// is drawn under its folder's cover, when Thumb has one.
 	Mark string
@@ -295,31 +295,47 @@ func (h *handler) folderCover(ctx context.Context, owner, dir string, children [
 	return rowThumb(cover, token)
 }
 
-// markOf is the emoji a row without a picture is drawn with, by its name. A
-// handful of kinds and a page for everything else: it is there to tell a
-// folder from a document from an archive, and an icon per format is a theme.
+// markOf is the mark a row without a picture is drawn with, by its name: a
+// codepoint of the Material Symbols subset stratus-app draws its own rows with,
+// and the same kinds it tells apart in markOf there. A handful of kinds and a
+// page for everything else: it is there to tell a folder from a document from
+// an archive, and an icon per format is a theme.
 func markOf(name string, isDir bool) string {
 	if isDir {
-		return "📁"
+		return symFolder
 	}
 	if media.IsAudio(name) {
-		return "🎵"
+		return symTrack
 	}
 	switch strings.ToLower(path.Ext(name)) {
 	case ".pdf":
-		return "📕"
+		return symPDF
 	case ".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".zst", ".7z", ".rar":
-		return "📦"
+		return symArchive
 	case ".xls", ".xlsx", ".ods", ".csv", ".tsv":
-		return "📊"
+		return symSheet
 	case ".ics":
-		return "📅"
+		return symEvent
 	case ".vcf":
-		return "👤"
+		return symContact
 	default:
-		return "📄"
+		return symDocument
 	}
 }
+
+// The codepoints are stratus-app's Glyph.kt, and a name outside its
+// ui/symbols/names.txt is not in the font.
+const (
+	symFolder   = "\ue2c7"
+	symFilm     = "\ue404"
+	symTrack    = "\ue405"
+	symPDF      = "\ue415"
+	symArchive  = "\ueb2c"
+	symSheet    = "\ue265"
+	symEvent    = "\ue878"
+	symContact  = "\uf22e"
+	symDocument = "\ue873"
+)
 
 // filePolicy is the content security policy a file is opened under, and the
 // reason every file can be opened at all.

@@ -21,9 +21,10 @@
      written, where half a library has no cover and the square is simply empty.
 
      The photograph is the shortcut icon's own shape (`brand/` in the
-     workspace repo), in currentColor; a film and a track are emoji, like the
-     listing's marks for every other kind. All of them sit at half the box so
-     they read as a mark rather than as a picture.
+     workspace repo); a film and a track are characters of stratus-app's
+     Material Symbols, like the listing's marks for every other kind, so the
+     two clients draw a kind the same way. All of them are currentColor and sit
+     at half the box so they read as a mark rather than as a picture.
 
      The 32 is the listing's box, where there is no `.ratio` to take the size
      from and a style attribute is dropped by the policy. It is an attribute
@@ -40,15 +41,16 @@
 </svg>
 {{- end}}
 
-{{define "filmGlyph"}}{{template "markGlyph" "🎬"}}{{end}}
+{{/* symFilm and symTrack in files.go. */}}
+{{define "filmGlyph"}}{{template "markGlyph" "\ue404"}}{{end}}
 
-{{define "coverGlyph"}}{{template "markGlyph" "🎵"}}{{end}}
+{{define "coverGlyph"}}{{template "markGlyph" "\ue405"}}{{end}}
 
-{{/* A kind drawn as an emoji, centred in the same 32 box the photograph
+{{/* A kind drawn as a symbol, centred in the same 32 box the photograph
      takes. The viewBox is what lets it scale with a grid's square, where the
      width and height attributes lose to `.ratio > *`. */}}
 {{define "markGlyph" -}}
-<svg viewBox="0 0 32 32" width="32" height="32" class="d-block" aria-hidden="true" focusable="false">
-  <text x="16" y="16" text-anchor="middle" dominant-baseline="central" font-size="16">{{.}}</text>
+<svg viewBox="0 0 32 32" width="32" height="32" class="d-block text-body-tertiary" aria-hidden="true" focusable="false">
+  <text x="16" y="16" text-anchor="middle" dominant-baseline="central" font-size="16" fill="currentColor" class="sym">{{.}}</text>
 </svg>
 {{- end}}

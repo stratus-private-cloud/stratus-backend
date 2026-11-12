@@ -36,6 +36,10 @@ const (
 	// the URL still changes when the bytes do and the immutable header stays
 	// true.
 	ownPrefix = "/static/stratus"
+	// symbolsFont is stratus-app's ui/symbols/MaterialSymbols.ttf, copied
+	// byte for byte and named by its hash, which is what stratus.css asks
+	// for.
+	symbolsFont = "symbols-6dcc2093.ttf"
 )
 
 // contentSecurityPolicy is as narrow as it is because nothing is loaded from
@@ -55,7 +59,11 @@ const (
 // before anything reads it, and a page with no manifest looks exactly like a
 // page whose manifest was not wanted. scripts/smoke.sh asserts it, the way it
 // asserts connect-src.
-const contentSecurityPolicy = "default-src 'none'; style-src 'self'; script-src 'self'; " +
+//
+// font-src is the fourth: the marks are characters of a Material Symbols
+// subset, and without it a listing draws a box for every file that is not a
+// picture.
+const contentSecurityPolicy = "default-src 'none'; style-src 'self'; font-src 'self'; script-src 'self'; " +
 	"connect-src 'self'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; " +
 	"form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
 

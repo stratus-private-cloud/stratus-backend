@@ -143,6 +143,9 @@ type view struct {
 	// manifest does not reach: iOS takes a home screen icon from this link and
 	// from nothing else.
 	AppleIcon string
+	// Stylesheet is this project's own, beside Bootstrap's: the font the
+	// marks are drawn in, and nothing else.
+	Stylesheet string
 	// Scripts are this project's own, with the build on the end so a new one is
 	// a new URL. Four of them, on every page: copy.js, dialog.js, select.js
 	// and the one that registers the service worker.
@@ -325,6 +328,7 @@ func (h *handler) renderTemplate(w http.ResponseWriter, status int, page, name s
 		ownPrefix + "/register.js" + build,
 		ownPrefix + "/select.js" + build,
 	}
+	v.Stylesheet = ownPrefix + "/stratus.css" + build
 	v.Favicon = ownPrefix + "/favicon.svg" + build
 	v.AppleIcon = ownPrefix + "/apple-touch-icon.png" + build
 

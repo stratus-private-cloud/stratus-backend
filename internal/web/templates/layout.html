@@ -93,6 +93,7 @@
 <link rel="apple-touch-icon" href="{{.AppleIcon}}">
 <meta name="theme-color" content="#ffffff">
 <link rel="stylesheet" href="{{.Assets}}/bootstrap.min.css">
+<link rel="stylesheet" href="{{.Stylesheet}}">
 {{/* Every place htmx evaluates a string checks this first, so turning it off
      is what keeps 'unsafe-eval' out of the content security policy. A meta
      element rather than a line of script, which that policy also forbids.
@@ -146,7 +147,7 @@
            seventh thing on it; everywhere else it says Gallery.
 
            Bootstrap's own dropdown, which is already in the bundle this page
-           loads: nothing here is worth a stylesheet or a script of our own.
+           loads: nothing here is worth a script of our own.
            What it costs is that a browser with JavaScript off opens neither,
            and signing out is inside one of them. */}}
       <div class="dropdown">

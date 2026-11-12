@@ -1872,6 +1872,11 @@ TRACK
     *"connect-src 'self'"*) ok "the policy lets the listing ask for its next page" ;;
     *)                      bad "the policy lets the listing ask for its next page" "got '$csp'" ;;
   esac
+  # Without font-src every mark that is not a photograph is a box.
+  case "$csp" in
+    *"font-src 'self'"*) ok "the policy lets the marks load their font" ;;
+    *)                   bad "the policy lets the marks load their font" "got '$csp'" ;;
+  esac
   # The same shape of failure one directive along: without this the manifest is
   # refused before anything reads it, and a page with no manifest looks exactly
   # like a page that never asked for one.

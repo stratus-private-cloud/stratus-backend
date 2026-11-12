@@ -105,9 +105,23 @@ Hard constraints, in the same spirit as the rest of the project:
 - **Bootstrap for CSS, vendored and embedded** -- never from a CDN. A self-hosted
   cloud must work with no outbound network, and an embedded asset also keeps the
   CSP tight.
-- **No hand-written stylesheet.** Bootstrap's utility classes cover the layout we
-  need. If something genuinely cannot be expressed with them, that is a
-  conversation, not a new `.css` file that grows forever.
+- **No hand-written stylesheet beyond one font.** Bootstrap's utility classes
+  cover the layout we need. If something genuinely cannot be expressed with
+  them, that is a conversation, not a new `.css` file that grows forever.
+
+  **That conversation has been had once, for the marks**:
+  `static/stratus/stratus.css` is an `@font-face` and a `.sym` class and
+  nothing else, because the marks are characters of `stratus-app`'s Material
+  Symbols subset -- its `ui/symbols/MaterialSymbols.ttf` copied byte for byte
+  -- so a kind looks the same in the app and in a browser, takes the theme's
+  colour, and does not change with whoever drew the platform's emoji, which is
+  why the app dropped them too (stratus-app#195). Codepoints rather than
+  ligatures, because the subset carries no layout tables. The font is named by
+  the first eight hex of its SHA-256, since the stylesheet cannot put the
+  build's query on the URL it asks for and the cache header says immutable;
+  `TestTheSymbolsFontIsNamedByItsBytes` fails on a copy that kept the old
+  name, and `TestEveryMarkIsInTheFont` on a codepoint the app's subset does
+  not have. `font-src 'self'` is the directive it costs.
 - **A square with no picture in it draws a mark, and the mark is a layer
   rather than an alternative** (#324). Nothing in markup can say "if this
   image fails", and the only thing that can is a script -- so the glyph is the
@@ -121,7 +135,7 @@ Hard constraints, in the same spirit as the rest of the project:
 
   **The listing's little box is the same thing a size down**, since it has the
   same three cases and had the same blank: a row that is a photograph or a
-  film draws the mark under its thumbnail, and every other row draws an emoji
+  film draws the mark under its thumbnail, and every other row draws a symbol
   for its kind -- a folder, a PDF, an archive, a note -- inside an `<svg>` of
   the same 32, since a `div` could only be held at that size by a style
   attribute.
@@ -159,9 +173,9 @@ Hard constraints, in the same spirit as the rest of the project:
   The photograph's shape is the shortcut icon's own, from `brand/` in the
   workspace repo, inline per tile rather than an asset: three paths,
   `currentColor` for any theme, and a hundred identical copies of them is
-  nothing once the response is compressed (#178). A film and a track are 🎬
-  and 🎵 in the same emoji `<svg>` the listing uses for every other kind, its
-  `viewBox` scaling it with a grid's square.
+  nothing once the response is compressed (#178). A film and a track are
+  `movie` and `music_note` in the same symbol `<svg>` the listing uses for
+  every other kind, its `viewBox` scaling it with a grid's square.
 - **One script of our own, and this is the conversation about it.** The share
   page hands back a URL to send somebody, and copying it by hand out of a text
   field is the kind of small misery that makes a feature feel unfinished. There

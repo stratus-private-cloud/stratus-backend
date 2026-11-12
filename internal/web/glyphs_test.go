@@ -16,8 +16,8 @@ import (
 // the point, so a test that only counted them would pass with the wrong one.
 const (
 	photoMark = "M14 73l21-24"
-	filmMark  = ">🎬</text>"
-	coverMark = ">🎵</text>"
+	filmMark  = "class=\"sym\">\ue404</text>"
+	coverMark = "class=\"sym\">\ue405</text>"
 )
 
 func TestAPhotoWithNoPictureShowsTheMarkInstead(t *testing.T) {
@@ -100,7 +100,7 @@ func TestAnAlbumWithNoCoverShowsTheCoverMark(t *testing.T) {
 // TestAListingMarksWhatIsAPicture: the same mark in the row's little box, for
 // the same reason -- the thumbnail may be refused or still on its way, and a
 // row that said nothing would be an empty square either way. Every other file
-// draws an emoji for its kind in the same box.
+// draws a symbol for its kind in the same box.
 func TestAListingMarksWhatIsAPicture(t *testing.T) {
 	t.Parallel()
 	h, s, _ := browserOver(t)
@@ -119,13 +119,14 @@ func TestAListingMarksWhatIsAPicture(t *testing.T) {
 	if n := strings.Count(listing, photoMark) + strings.Count(listing, filmMark); n != 2 {
 		t.Errorf("the listing drew %d marks, want one each for the photograph and the film", n)
 	}
-	if !strings.Contains(listing, `width="32" height="32" class="d-block" aria-hidden="true" focusable="false">
-  <text x="16" y="16" text-anchor="middle" dominant-baseline="central" font-size="16">📄</text>`) {
+	if !strings.Contains(listing, "width=\"32\" height=\"32\" class=\"d-block text-body-tertiary\" aria-hidden=\"true\" focusable=\"false\">\n"+
+		"  <text x=\"16\" y=\"16\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"16\" fill=\"currentColor\" class=\"sym\">\ue873</text>") {
 		t.Errorf("the text file is not drawn as a document in the 32 box:\n%s", listing)
 	}
 }
 
-// TestAListingMarksAFileByItsKind: the emoji a row without a picture gets.
+// TestAListingMarksAFileByItsKind: the symbol a row without a picture gets --
+// folder, picture_as_pdf and folder_zip.
 func TestAListingMarksAFileByItsKind(t *testing.T) {
 	t.Parallel()
 	h, s, _ := browserOver(t)
@@ -136,7 +137,7 @@ func TestAListingMarksAFileByItsKind(t *testing.T) {
 	write(t, s, "papers/backup.zip", "PK")
 
 	listing := get(t, h, "/files/papers/", cookie).Body.String()
-	for _, want := range []string{">📁</text>", ">📕</text>", ">📦</text>"} {
+	for _, want := range []string{">\ue2c7</text>", ">\ue415</text>", ">\ueb2c</text>"} {
 		if !strings.Contains(listing, want) {
 			t.Errorf("the listing has no %s:\n%s", want, listing)
 		}

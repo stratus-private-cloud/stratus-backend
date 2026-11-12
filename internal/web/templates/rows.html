@@ -23,10 +23,9 @@
          arrived or was refused says what it is (#324). A track is a note under
          its folder's cover, the one URL for every track in it.
 
-         Everything else is an emoji for its kind, inside an svg of the same 32
+         Everything else is a symbol for its kind, inside an svg of the same 32
          rather than a div: a div could only be held at that size by a style
-         attribute, which the policy drops, and an emoji's own box is the
-         font's and varies by platform. */}}
+         attribute, which the policy drops. */}}
     <span class="position-relative d-inline-block align-middle me-2">
       {{if .Film}}{{template "filmGlyph"}}{{else if .Picture}}{{template "photoGlyph"}}{{else}}{{template "markGlyph" .Mark}}{{end}}
       {{if .Thumb}}<img src="{{.Thumb}}" alt="" width="32" height="32" loading="lazy"
