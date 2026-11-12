@@ -1,6 +1,7 @@
 /* The one stylesheet of our own (CLAUDE.md, "No hand-written stylesheet"):
    Bootstrap has no way to load a font, and a mark that is a character of
-   stratus-app's Material Symbols has to be drawn in it. Nothing else goes here.
+   stratus-app's Material Symbols has to be drawn in it -- and sized. Nothing
+   else goes here.
 
    The font's name carries the first eight hex of its SHA-256 because this file
    cannot carry the build's query on the URL it asks for, and the immutable
@@ -14,4 +15,13 @@
 
 .sym {
   font-family: "Material Symbols";
+}
+
+/* An action's symbol beside text. The glyph fills two thirds of its em, so at
+   the text's size it is smaller than the emoji it replaced; line-height 1
+   keeps the larger em from making the button taller. Not the svg marks, whose
+   size is their font-size attribute, which a stylesheet would override. */
+span.sym {
+  font-size: 1.5em;
+  line-height: 1;
 }
