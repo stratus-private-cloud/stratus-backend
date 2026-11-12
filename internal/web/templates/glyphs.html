@@ -54,3 +54,12 @@
   <text x="16" y="16" text-anchor="middle" dominant-baseline="central" font-size="16" fill="currentColor" class="sym">{{.}}</text>
 </svg>
 {{- end}}
+
+{{/* An action's symbol inside a line of text or a button, by the codepoint
+     stratus-app's Glyph.kt gives the same action: search \uef7a, share
+     \ue80d, rename \uf097, delete \ue92e, the row's menu \ue5d4.
+     align-middle because the font's em box sits higher than the text's
+     x-height, and aria-hidden because what it is on already has a name. */}}
+{{define "sym" -}}
+<span class="sym align-middle" aria-hidden="true">{{.}}</span>
+{{- end}}

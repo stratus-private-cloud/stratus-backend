@@ -55,8 +55,8 @@ func TestTheBoxHasSomethingToPress(t *testing.T) {
 
 	body := get(t, h, "/files/", cookie).Body.String()
 	has(t, body, `class="input-group input-group-sm"`, `type="submit" aria-label="Search"`,
-		// The emoji rather than an icon set: see the template.
-		"🔍")
+		// The app's search symbol.
+		"class=\"sym align-middle\" aria-hidden=\"true\">\uef7a</span>")
 }
 
 // TestAnEmptyBoxIsAPageAndNotAnError.

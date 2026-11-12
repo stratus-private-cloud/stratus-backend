@@ -375,7 +375,7 @@ func TestARowsActionsAreAMenu(t *testing.T) {
 	write(t, s, "notes.txt", "hello")
 
 	listing := get(t, h, "/files/", cookie).Body.String()
-	if !strings.Contains(listing, `data-bs-toggle="dropdown"`) || !strings.Contains(listing, `aria-label="Actions on notes.txt">⋮</button>`) {
+	if !strings.Contains(listing, `data-bs-toggle="dropdown"`) || !strings.Contains(listing, "aria-label=\"Actions on notes.txt\"><span class=\"sym align-middle\" aria-hidden=\"true\">\ue5d4</span></button>") {
 		t.Errorf("the row has no menu:\n%s", listing)
 	}
 	for _, want := range []string{"</span> Details</a>", "</span> Share</a>", "</span> Rename</a>", "</span> Delete</a>"} {

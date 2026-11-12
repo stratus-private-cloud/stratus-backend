@@ -111,7 +111,8 @@ Hard constraints, in the same spirit as the rest of the project:
 
   **That conversation has been had once, for the marks**:
   `static/stratus/stratus.css` is an `@font-face` and a `.sym` class and
-  nothing else, because the marks are characters of `stratus-app`'s Material
+  nothing else, because the marks -- a file's kind, and the actions on it and
+  the search button -- are characters of `stratus-app`'s Material
   Symbols subset -- its `ui/symbols/MaterialSymbols.ttf` copied byte for byte
   -- so a kind looks the same in the app and in a browser, takes the theme's
   colour, and does not change with whoever drew the platform's emoji, which is

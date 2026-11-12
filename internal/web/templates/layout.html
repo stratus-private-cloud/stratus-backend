@@ -116,10 +116,8 @@
          It is its own form and not part of the one below, because a form does
          not nest -- which is why the links moved out of the sign-out form they
          used to sit inside.
-         The glyph is the emoji, which is a character the font already has:
-         an icon set would be a third asset vendored for one picture, and a
-         drawn one would be markup to maintain for the same thing. It is
-         aria-hidden because the button around it already has the name.
+         The glyph is the app's search symbol, from the font the marks are
+         drawn in.
 
          Where the bar is narrow it takes a row of its own, which is w-100 and
          order-last. Above that the bar is one row, and what makes it one is
@@ -135,7 +133,7 @@
         <input class="form-control" type="search" name="q" value="{{.Query}}"
                placeholder="Search" aria-label="Search the library">
         <button class="btn btn-outline-secondary" type="submit" aria-label="Search">
-          <span aria-hidden="true">🔍</span>
+          {{template "sym" "\uef7a"}}
         </button>
       </div>
     </form>

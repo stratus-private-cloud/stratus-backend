@@ -59,22 +59,22 @@
     <div class="dropdown">
       <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown"
         data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false"
-        title="Actions" aria-label="Actions on {{.Name}}">⋮</button>
+        title="Actions" aria-label="Actions on {{.Name}}">{{template "sym" "\ue5d4"}}</button>
       <ul class="dropdown-menu dropdown-menu-end">
         {{if .Info}}<li><a class="dropdown-item" href="{{.Info}}"
           hx-get="{{.Info}}" hx-target="#file-dialog" hx-swap="innerHTML"><span aria-hidden="true">ℹ️</span> Details</a></li>{{end}}
-        <li><a class="dropdown-item" href="{{.Share}}"><span aria-hidden="true">🔗</span> Share</a></li>
-        <li><a class="dropdown-item" href="{{.Rename}}"><span aria-hidden="true">✏️</span> Rename</a></li>
+        <li><a class="dropdown-item" href="{{.Share}}">{{template "sym" "\ue80d"}} Share</a></li>
+        <li><a class="dropdown-item" href="{{.Rename}}">{{template "sym" "\uf097"}} Rename</a></li>
         <li><hr class="dropdown-divider"></li>
-        <li><a class="dropdown-item text-danger" href="{{.Delete}}"><span aria-hidden="true">🗑️</span> Delete</a></li>
+        <li><a class="dropdown-item text-danger" href="{{.Delete}}">{{template "sym" "\ue92e"}} Delete</a></li>
       </ul>
     </div>
     <noscript>
       <div class="btn-group btn-group-sm" role="group" aria-label="Actions on {{.Name}}">
         {{if .Info}}<a class="btn btn-outline-secondary" href="{{.Info}}" title="Details" aria-label="Details">ℹ️</a>{{end}}
-        <a class="btn btn-outline-secondary" href="{{.Share}}" title="Share" aria-label="Share">🔗</a>
-        <a class="btn btn-outline-secondary" href="{{.Rename}}" title="Rename" aria-label="Rename">✏️</a>
-        <a class="btn btn-outline-danger" href="{{.Delete}}" title="Delete" aria-label="Delete">🗑️</a>
+        <a class="btn btn-outline-secondary" href="{{.Share}}" title="Share" aria-label="Share">{{template "sym" "\ue80d"}}</a>
+        <a class="btn btn-outline-secondary" href="{{.Rename}}" title="Rename" aria-label="Rename">{{template "sym" "\uf097"}}</a>
+        <a class="btn btn-outline-danger" href="{{.Delete}}" title="Delete" aria-label="Delete">{{template "sym" "\ue92e"}}</a>
       </div>
     </noscript>
   </td>
