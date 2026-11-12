@@ -45,8 +45,8 @@ func TestEveryMarkIsInTheFont(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The templates' own: search, share, rename, delete, a row's menu.
-	actions := []string{"\uef7a", "\ue80d", "\uf097", "\ue92e", "\ue5d4"}
+	// The templates' own: search, share, rename, delete, details, a row's menu.
+	actions := []string{"\uef7a", "\ue80d", "\uf097", "\ue92e", "\ue88e", "\ue5d4"}
 	var buf sfnt.Buffer
 	for _, mark := range append([]string{
 		symFolder, symFilm, symTrack, symPDF, symArchive,

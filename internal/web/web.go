@@ -39,7 +39,7 @@ const (
 	// symbolsFont is stratus-app's ui/symbols/MaterialSymbols.ttf, copied
 	// byte for byte and named by its hash, which is what stratus.css asks
 	// for.
-	symbolsFont = "symbols-6dcc2093.ttf"
+	symbolsFont = "symbols-ed06e81a.ttf"
 )
 
 // contentSecurityPolicy is as narrow as it is because nothing is loaded from
