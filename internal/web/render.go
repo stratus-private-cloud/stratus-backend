@@ -42,8 +42,9 @@ const (
 	// cell of a grid of photographs, each of them shown by two pages.
 	pageRows = "rows.html"
 	pageTile = "tile.html"
-	// pageGlyphs is the mark a square shows when it has no picture in it,
-	// which is three pages' worth of squares and one file of shapes.
+	// pageGlyphs is the mark a square shows when it has no picture in it, and
+	// the symbol an action wears -- which the layout's search button is one
+	// of, so every page is parsed with it.
 	pageGlyphs    = "glyphs.html"
 	pageRename    = "rename.html"
 	pageInfo      = "info.html"
@@ -80,8 +81,8 @@ const (
 // what lets the layout call it.
 var pages = map[string]*template.Template{
 	pageLogin:     parse(pageLogin),
-	pageFiles:     parse(pageFiles, pageRows, pageCrumbs, pageGlyphs),
-	pageSearch:    parse(pageSearch, pageRows, pageTile, pageGlyphs),
+	pageFiles:     parse(pageFiles, pageRows, pageCrumbs),
+	pageSearch:    parse(pageSearch, pageRows, pageTile),
 	pageRename:    parse(pageRename),
 	pageInfo:      parse(pageInfo),
 	pageDelete:    parse(pageDelete),
@@ -92,13 +93,13 @@ var pages = map[string]*template.Template{
 	pageShared:    parse(pageShared),
 	pageError:     parse(pageError),
 	pageOffline:   parse(pageOffline),
-	pagePhotos:    parse(pagePhotos, pageTile, pageCrumbs, pageGlyphs),
+	pagePhotos:    parse(pagePhotos, pageTile, pageCrumbs),
 	pagePhoto:     parse(pagePhoto),
 	pageMonths:    parse(pageMonths, pageCrumbs),
 	pagePlay:      parse(pagePlay),
 	pageArtists:   parse(pageArtists),
-	pageArtist:    parse(pageArtist, pageGlyphs),
-	pageAlbum:     parse(pageAlbum, pageGlyphs),
+	pageArtist:    parse(pageArtist),
+	pageAlbum:     parse(pageAlbum),
 	pagePlaylists: parse(pagePlaylists),
 	pagePlaylist:  parse(pagePlaylist),
 	pageCalendar:  parse(pageCalendar),
@@ -115,8 +116,8 @@ var pages = map[string]*template.Template{
 // partials it shares with another page. A set per page because every page
 // defines "content", so one set for all of them would keep the last.
 func parse(page string, partials ...string) *template.Template {
-	files := make([]string, 0, 2+len(partials))
-	files = append(files, "templates/layout.html", "templates/"+page)
+	files := make([]string, 0, 3+len(partials))
+	files = append(files, "templates/layout.html", "templates/"+page, "templates/"+pageGlyphs)
 	for _, p := range partials {
 		files = append(files, "templates/"+p)
 	}
@@ -143,6 +144,9 @@ type view struct {
 	// manifest does not reach: iOS takes a home screen icon from this link and
 	// from nothing else.
 	AppleIcon string
+	// Stylesheet is this project's own, beside Bootstrap's: the font the
+	// marks are drawn in, and nothing else.
+	Stylesheet string
 	// Scripts are this project's own, with the build on the end so a new one is
 	// a new URL. Four of them, on every page: copy.js, dialog.js, select.js
 	// and the one that registers the service worker.
@@ -325,6 +329,7 @@ func (h *handler) renderTemplate(w http.ResponseWriter, status int, page, name s
 		ownPrefix + "/register.js" + build,
 		ownPrefix + "/select.js" + build,
 	}
+	v.Stylesheet = ownPrefix + "/stratus.css" + build
 	v.Favicon = ownPrefix + "/favicon.svg" + build
 	v.AppleIcon = ownPrefix + "/apple-touch-icon.png" + build
 

@@ -69,6 +69,8 @@ func (h *handler) shell() []string {
 		ownPrefix + "/register.js" + build,
 		ownPrefix + "/select.js" + build,
 		ownPrefix + "/favicon.svg" + build,
+		ownPrefix + "/stratus.css" + build,
+		ownPrefix + "/" + symbolsFont,
 	}
 }
 

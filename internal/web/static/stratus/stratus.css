@@ -1,0 +1,17 @@
+/* The one stylesheet of our own (CLAUDE.md, "No hand-written stylesheet"):
+   Bootstrap has no way to load a font, and a mark that is a character of
+   stratus-app's Material Symbols has to be drawn in it. Nothing else goes here.
+
+   The font's name carries the first eight hex of its SHA-256 because this file
+   cannot carry the build's query on the URL it asks for, and the immutable
+   cache header would otherwise keep an old subset for a year. block rather
+   than swap: a private-use codepoint in a fallback font is a box. */
+@font-face {
+  font-family: "Material Symbols";
+  src: url(symbols-ed06e81a.ttf) format("truetype");
+  font-display: block;
+}
+
+.sym {
+  font-family: "Material Symbols";
+}

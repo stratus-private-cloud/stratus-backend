@@ -23,10 +23,9 @@
          arrived or was refused says what it is (#324). A track is a note under
          its folder's cover, the one URL for every track in it.
 
-         Everything else is an emoji for its kind, inside an svg of the same 32
+         Everything else is a symbol for its kind, inside an svg of the same 32
          rather than a div: a div could only be held at that size by a style
-         attribute, which the policy drops, and an emoji's own box is the
-         font's and varies by platform. */}}
+         attribute, which the policy drops. */}}
     <span class="position-relative d-inline-block align-middle me-2">
       {{if .Film}}{{template "filmGlyph"}}{{else if .Picture}}{{template "photoGlyph"}}{{else}}{{template "markGlyph" .Mark}}{{end}}
       {{if .Thumb}}<img src="{{.Thumb}}" alt="" width="32" height="32" loading="lazy"
@@ -60,22 +59,22 @@
     <div class="dropdown">
       <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown"
         data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false"
-        title="Actions" aria-label="Actions on {{.Name}}">⋮</button>
+        title="Actions" aria-label="Actions on {{.Name}}">{{template "sym" "\ue5d4"}}</button>
       <ul class="dropdown-menu dropdown-menu-end">
         {{if .Info}}<li><a class="dropdown-item" href="{{.Info}}"
-          hx-get="{{.Info}}" hx-target="#file-dialog" hx-swap="innerHTML"><span aria-hidden="true">ℹ️</span> Details</a></li>{{end}}
-        <li><a class="dropdown-item" href="{{.Share}}"><span aria-hidden="true">🔗</span> Share</a></li>
-        <li><a class="dropdown-item" href="{{.Rename}}"><span aria-hidden="true">✏️</span> Rename</a></li>
+          hx-get="{{.Info}}" hx-target="#file-dialog" hx-swap="innerHTML">{{template "sym" "\ue88e"}} Details</a></li>{{end}}
+        <li><a class="dropdown-item" href="{{.Share}}">{{template "sym" "\ue80d"}} Share</a></li>
+        <li><a class="dropdown-item" href="{{.Rename}}">{{template "sym" "\uf097"}} Rename</a></li>
         <li><hr class="dropdown-divider"></li>
-        <li><a class="dropdown-item text-danger" href="{{.Delete}}"><span aria-hidden="true">🗑️</span> Delete</a></li>
+        <li><a class="dropdown-item text-danger" href="{{.Delete}}">{{template "sym" "\ue92e"}} Delete</a></li>
       </ul>
     </div>
     <noscript>
       <div class="btn-group btn-group-sm" role="group" aria-label="Actions on {{.Name}}">
-        {{if .Info}}<a class="btn btn-outline-secondary" href="{{.Info}}" title="Details" aria-label="Details">ℹ️</a>{{end}}
-        <a class="btn btn-outline-secondary" href="{{.Share}}" title="Share" aria-label="Share">🔗</a>
-        <a class="btn btn-outline-secondary" href="{{.Rename}}" title="Rename" aria-label="Rename">✏️</a>
-        <a class="btn btn-outline-danger" href="{{.Delete}}" title="Delete" aria-label="Delete">🗑️</a>
+        {{if .Info}}<a class="btn btn-outline-secondary" href="{{.Info}}" title="Details" aria-label="Details">{{template "sym" "\ue88e"}}</a>{{end}}
+        <a class="btn btn-outline-secondary" href="{{.Share}}" title="Share" aria-label="Share">{{template "sym" "\ue80d"}}</a>
+        <a class="btn btn-outline-secondary" href="{{.Rename}}" title="Rename" aria-label="Rename">{{template "sym" "\uf097"}}</a>
+        <a class="btn btn-outline-danger" href="{{.Delete}}" title="Delete" aria-label="Delete">{{template "sym" "\ue92e"}}</a>
       </div>
     </noscript>
   </td>

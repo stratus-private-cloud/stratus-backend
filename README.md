@@ -213,9 +213,10 @@ pictures on its own, with nothing to run and nothing already made thrown away.
 
 In a folder's listing a track is drawn with that folder's cover — a
 `cover.jpg` or one of its usual names beside it, the one picture for every
-track — and with a 🎵 alone when there is none; the cover inside a
+track — and with a note alone when there is none; the cover inside a
 track's tags is the album pages' and not the listing's. Every other file that
-is not a picture is an emoji for its kind: a folder, a PDF, an archive.
+is not a picture is a symbol for its kind — a folder, a PDF, an archive — the
+same Material Symbols the app draws its rows with.
 
 **The listing says which files have a preview and how much room is left.** A
 client drawing a grid of a few hundred files would otherwise ask for every
