@@ -409,7 +409,10 @@ Hard constraints, in the same spirit as the rest of the project:
   PNG and 151 KB here, and six of them as PNG would have moved the budget in
   `scripts/smoke.sh` on their own. They are taken against a seeded demo
   instance, so the photographs in them are the demo bundle's and CC0
-  (`scripts/demo/CREDITS.md`).
+  (`scripts/demo/CREDITS.md`) -- five photographs in five months are a column
+  rather than a gallery, so the grid is twenty quarters of them with the EXIF
+  stripped, uploaded to `Photos/Details/` so they share this month. Each is
+  the viewport alone at 1280x800 and 412x915, scale 1, JPEG at 80.
 
 - **The fourth script is the one that registers the worker, and this is its
   paragraph** (#129). Twelve lines in
