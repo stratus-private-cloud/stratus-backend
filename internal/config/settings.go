@@ -55,7 +55,7 @@ type Values struct {
 	// (#398). Zero disables it.
 	BackupInterval time.Duration
 	// BackupDir is the folder of the tree the backups are filed in, which is
-	// /files/backups for "backups".
+	// /files/stratus-db-backups for "stratus-db-backups".
 	BackupDir string
 }
 
@@ -212,7 +212,7 @@ var Settings = []Setting{
 		},
 	},
 	{
-		Key: "STRATUS_BACKUP_DIR", Section: "Backup", Default: "backups", Under: "/files/",
+		Key: "STRATUS_BACKUP_DIR", Section: "Backup", Default: "stratus-db-backups", Under: "/files/",
 		Help: "The folder the backups are filed in, where they can be fetched like any other file.",
 		apply: func(v *Values, raw string) (err error) {
 			v.BackupDir, err = folder(raw)
@@ -267,7 +267,7 @@ func folder(raw string) (string, error) {
 	dir := strings.Trim(raw, "/")
 	for seg := range strings.SplitSeq(dir, "/") {
 		if seg == "" || seg == "." || seg == ".." {
-			return "", errors.New("not a folder, try backups or admin/backups")
+			return "", errors.New("not a folder, try stratus-db-backups or admin/backups")
 		}
 	}
 	return dir, nil

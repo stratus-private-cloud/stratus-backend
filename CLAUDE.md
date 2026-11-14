@@ -1032,7 +1032,9 @@ The sweep still skips the prefix, because a database put back from a backup
 has no row for the ones taken after it, and `AdoptBackups` files every
 unclaimed one at the next start -- what is in the trash counts as claimed, so
 a backup somebody deleted is not brought back. A store holding only backups is
-a fresh install, not the empty-index case.
+a fresh install, not the empty-index case. The folder a backup makes gets
+`files.BackupReadme` beside it, an ordinary file written once, at that
+moment, so one somebody deleted is not written back every day.
 
 **Most settings can also be stored, and the environment still wins** (#397).
 `config.Settings` is the list of the ones that can change while the server

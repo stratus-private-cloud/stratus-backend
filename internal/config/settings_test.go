@@ -89,7 +89,7 @@ func TestAWeekThatStartsOnAnotherDayIsRefused(t *testing.T) {
 
 func TestTheBackupFolderIsAFolderInTheTree(t *testing.T) {
 	t.Parallel()
-	for raw, want := range map[string]string{"": "backups", "/admin/backups/": "admin/backups"} {
+	for raw, want := range map[string]string{"": "stratus-db-backups", "/admin/backups/": "admin/backups"} {
 		cfg, err := config.Load(func(key string) string {
 			return map[string]string{"STRATUS_BACKUP_DIR": raw}[key]
 		})
