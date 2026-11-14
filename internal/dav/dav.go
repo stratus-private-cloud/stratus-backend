@@ -48,6 +48,10 @@ type Index interface {
 	// MediaStates is the batch half of db.MediaIndex, and the only half this
 	// surface has any business with.
 	MediaStates(ctx context.Context, fileIDs []int64) (map[int64]db.MediaState, error)
+
+	// MediaByFile is one file's metadata, for the properties a client has to
+	// ask for by name (see info.go).
+	MediaByFile(ctx context.Context, fileID int64) (db.Media, error)
 }
 
 // Handler serves WebDAV under prefix, for whoever the request was
@@ -89,7 +93,7 @@ func Handler(prefix string, service *files.Service, index Index) http.Handler {
 			// stripped path would cost the hrefs their /dav.
 			restored := r.Clone(r.Context())
 			restored.URL.Path = prefix + r.URL.Path
-			fs.propfindHandler(r.Context(), owner).ServeHTTP(w, restored)
+			fs.propfindHandler(r.Context(), owner, asksForInfo(restored)).ServeHTTP(w, restored)
 			return
 		}
 

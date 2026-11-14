@@ -229,6 +229,16 @@ says — `quota-available-bytes` and `quota-used-bytes` — which is what a moun
 volume draws its bar from, so Finder and `rclone about` understand it without
 being told anything.
 
+**And a file says what was read out of it, to a client that asks.** The web's
+Details are properties too, in the server's namespace
+(`https://github.com/C0piIot/stratus`), under `/files/` and in `/photos/` and
+`/videos/`: `taken` — the camera's clock, with no zone, since it records none
+— `width`, `height`, `camera`, `location` as latitude and longitude in
+degrees, and `duration` in milliseconds. A fact the file does not carry is a
+`404` in the propstat. They come only when named in the `PROPFIND`, never in
+an `allprop`, because answering them is a lookup per file and a client that
+did not ask would be paying for it on every listing.
+
 **A `PROPFIND` for the whole tree at once is refused**, with the `403` and the
 `DAV:propfind-finite-depth` precondition RFC 4918 has for saying so. Listing a
 directory at a time is what almost every client does anyway, and it costs an

@@ -82,6 +82,12 @@ type entry interface {
 	File() db.File
 }
 
+// mediaEntry is an entry whose tree read the file's metadata along with it,
+// as the timeline does, so the properties of info.go cost nothing more.
+type mediaEntry interface {
+	Media() db.Media
+}
+
 // tree is a generated tree for the length of one request, which is the shape
 // internal/timeline, internal/music and internal/trash each already have.
 type tree[N any] interface {
@@ -126,7 +132,10 @@ func (m mount[N]) handler(prefix string) http.Handler {
 			return
 		}
 
-		gfs := &generatedFS[N]{ctx: r.Context(), tree: m.open(r.Context(), owner), entry: m.entry, files: m.files}
+		gfs := &generatedFS[N]{
+			ctx: r.Context(), tree: m.open(r.Context(), owner), entry: m.entry, files: m.files,
+			info: r.Method == "PROPFIND" && asksForInfo(r),
+		}
 		n, err := gfs.tree.Resolve(r.Context(), strings.TrimPrefix(r.URL.Path, prefix))
 		if err == nil && m.entry(n).IsDir() && r.Header.Get("Depth") == "1" {
 			_, err = gfs.tree.Children(r.Context(), n)
@@ -156,6 +165,8 @@ type generatedFS[N any] struct {
 	tree  tree[N]
 	entry func(N) entry
 	files string
+	// info is whether the request named a property of info.go.
+	info bool
 }
 
 func (g *generatedFS[N]) Stat(ctx context.Context, name string) (os.FileInfo, error) {
@@ -215,16 +226,22 @@ func (f *generatedFile[N]) Stat() (os.FileInfo, error) { return entryInfo{e: f.f
 // to present that address and could not otherwise find it (#431).
 func (f *generatedFile[N]) DeadProps() (map[xml.Name]xnet.Property, error) {
 	e := f.fs.entry(f.node)
-	if f.fs.files == "" || e.IsDir() {
+	if e.IsDir() {
 		return nil, nil
+	}
+	props := map[xml.Name]xnet.Property{}
+	if withMedia, ok := e.(mediaEntry); ok && f.fs.info {
+		props = infoProps(withMedia.Media())
+	}
+	if f.fs.files == "" {
+		return props, nil
 	}
 	var href bytes.Buffer
 	if err := xml.EscapeText(&href, []byte(hrefOf(f.fs.files+e.File().Path))); err != nil {
 		return nil, err
 	}
-	return map[xml.Name]xnet.Property{
-		sourceName: property(sourceName, `<D:href xmlns:D="DAV:">`+href.String()+`</D:href>`),
-	}, nil
+	props[sourceName] = property(sourceName, `<D:href xmlns:D="DAV:">`+href.String()+`</D:href>`)
+	return props, nil
 }
 
 // Patch refuses every write, as the rest of the mount does.

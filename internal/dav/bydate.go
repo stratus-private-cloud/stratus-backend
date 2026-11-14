@@ -43,6 +43,7 @@ func ByDate(prefix, filesPrefix string, source timeline.Source, kind db.Kind) ht
 // dateEntry is a node of the tree by date as the mount reads it.
 type dateEntry struct{ n timeline.Node }
 
-func (e dateEntry) Base() string  { return e.n.Base() }
-func (e dateEntry) IsDir() bool   { return e.n.Dir }
-func (e dateEntry) File() db.File { return e.n.Capture.File }
+func (e dateEntry) Base() string    { return e.n.Base() }
+func (e dateEntry) IsDir() bool     { return e.n.Dir }
+func (e dateEntry) File() db.File   { return e.n.Capture.File }
+func (e dateEntry) Media() db.Media { return e.n.Capture.Media }
