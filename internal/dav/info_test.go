@@ -12,7 +12,7 @@ import (
 
 const askForInfo = `<?xml version="1.0" encoding="utf-8"?>
 <D:propfind xmlns:D="DAV:" xmlns:S="https://github.com/C0piIot/stratus"><D:prop>
-<D:getetag/><S:taken/><S:width/><S:height/><S:camera/><S:location/><S:duration/>
+<D:getetag/><S:taken/><S:width/><S:height/><S:camera/><S:location/><S:place/><S:duration/>
 </D:prop></D:propfind>`
 
 var holiday = db.Media{
@@ -24,12 +24,12 @@ var holiday = db.Media{
 
 var holidayInfo = map[string]string{
 	"taken": "2024-06-15T18:30:05", "width": "4032", "height": "3024",
-	"camera": "Apple iPhone 15 & Co", "location": "41.38506 2.17340",
+	"camera": "Apple iPhone 15 & Co", "location": "41.38506 2.17340", "place": "Barcelona, Spain",
 }
 
 func wantInfo(t *testing.T, got map[string]string, want map[string]string) {
 	t.Helper()
-	for _, name := range []string{"taken", "width", "height", "camera", "location", "duration"} {
+	for _, name := range []string{"taken", "width", "height", "camera", "location", "place", "duration"} {
 		if got[name] != want[name] {
 			t.Errorf("%s = %q, want %q", name, got[name], want[name])
 		}

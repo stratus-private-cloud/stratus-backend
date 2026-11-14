@@ -12,6 +12,7 @@ import (
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media"
+	"github.com/stratus-private-cloud/stratus-backend/internal/places"
 )
 
 // infoPrefix is where what is known about one file is asked for. Unlike the
@@ -114,6 +115,9 @@ func unreadable(m db.Media) string {
 type fact struct {
 	Label string
 	Value string
+	// Href makes the value a link, which only a place has: to a map
+	// somewhere else, opened only by whoever clicks it.
+	Href string
 }
 
 // facts collects them. add drops what is not known, which is the whole of
@@ -153,7 +157,12 @@ func mediaFacts(m db.Media) []fact {
 		out.add("Taken", when(m.TakenAt))
 		out.add("Dimensions", dimensions(m.Width, m.Height))
 		out.add("Camera", m.Camera)
-		out.add("Location", coordinates(m.GPS))
+		if m.GPS != nil {
+			if p, ok := places.Nearest(m.GPS.Latitude, m.GPS.Longitude); ok {
+				out.add("Place", p.String())
+			}
+			out = append(out, fact{Label: "Location", Value: coordinates(m.GPS), Href: mapOf(m.GPS)})
+		}
 	case db.KindAudio:
 		out.add("Duration", duration(m.DurationMS))
 		out.add("Codec", codec(m.Codec, m.CodecProfile, 0))
@@ -319,6 +328,12 @@ func otherName(name, same string) string {
 		return ""
 	}
 	return name
+}
+
+// mapOf is the position on OpenStreetMap, with a pin, at a street's zoom.
+func mapOf(g *db.GPS) string {
+	lat, lon := fmt.Sprintf("%.5f", g.Latitude), fmt.Sprintf("%.5f", g.Longitude)
+	return "https://www.openstreetmap.org/?mlat=" + lat + "&mlon=" + lon + "#map=16/" + lat + "/" + lon
 }
 
 // coordinates are five decimal places, which is about a metre -- enough to say
