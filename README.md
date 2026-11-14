@@ -1844,13 +1844,14 @@ build rather than a note in a document.
 
 ## Container
 
-Multi-stage build, `distroless/static:nonroot` runtime, 46 MB unpacked and an
-18 MB download, measured on amd64. The Go binary is most of it at 27 MB, beside
+Multi-stage build, `distroless/static:nonroot` runtime, about 48 MB unpacked
+and a 19 MB download on amd64. The Go binary is most of it at 29 MB, beside
 2.4 MB of `ffprobe` (2.2 MB on arm64), 13.2 MB of `ffmpeg` (11.1 MB on arm64)
 and a base under one megabyte. It grew 4 MB with the web UI: `html/template`
 costs about three of those and the embedded Bootstrap a third of one, with htmx
 a further 50 KB, which is what a page rendered by the standard library and
-served from the binary costs.
+served from the binary costs. The names of places are another 750 KB: GeoNames'
+towns, built in so that naming where a photograph was taken asks nobody.
 
 **Both FFmpeg tools are built here rather than taken off the shelf**, in
 `build/ffprobe/Dockerfile` and `build/ffmpeg/Dockerfile`. A general-purpose

@@ -59,7 +59,12 @@ fi
 # carddav package and a repository are 284 KB on amd64, and main was 28 KB
 # under the line before them -- 29,331,616 bytes against 29,360,128, measured
 # the same way.
-BIN_SIZE_FAIL=$((29 * 1024 * 1024))
+# Raised from 29 MB with the names of places (stratus-app#215): GeoNames'
+# towns are a 743 KB gzip inside the binary, 752 KB on amd64 with the code
+# that reads them, and main was 352 KB under the line before them --
+# 30,056,608 bytes against 30,408,704, measured the same way. A network
+# lookup would have cost nothing here and sent every position somewhere.
+BIN_SIZE_FAIL=$((30 * 1024 * 1024))
 # ffprobe and ffmpeg together, which are trimmed builds of our own: 2.4 MB and
 # 13.2 MB on amd64 today against the 128 MB one general-purpose static FFmpeg costs.
 # Raised from 10 MB when ffmpeg learned audio and HTTPS (#50): the encoders and
