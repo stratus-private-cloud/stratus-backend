@@ -20,9 +20,7 @@ func newFolder(t *testing.T, h http.Handler, in string, cookie *http.Cookie, nam
 	if cookie != nil {
 		req.AddCookie(cookie)
 	}
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	return rec
+	return submit(t, h, req)
 }
 
 func TestNewFolder(t *testing.T) {

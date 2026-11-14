@@ -53,9 +53,7 @@ func shared(t *testing.T, h http.Handler, cookie *http.Cookie, filename, content
 	if cookie != nil {
 		req.AddCookie(cookie)
 	}
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	return rec
+	return submit(t, h, req)
 }
 
 // month is where a share lands today, which is the folder the handler makes.

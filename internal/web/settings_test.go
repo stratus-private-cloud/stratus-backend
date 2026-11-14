@@ -171,8 +171,7 @@ func TestASettingThatCannotBeStored(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Sec-Fetch-Mode", "navigate")
 	req.AddCookie(cookie)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
+	rec := submit(t, h, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("a form that does not parse = %d, want 400", rec.Code)
 	}
