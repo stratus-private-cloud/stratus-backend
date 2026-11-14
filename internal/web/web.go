@@ -260,7 +260,9 @@ type handler struct {
 	settings func() config.Values
 	// editor is the settings page's, and nil when there is no page.
 	editor SettingsEditor
-	zones  []string
+	// pages is what forms drew, kept for the GET they redirect to (prg.go).
+	pages *stash
+	zones []string
 	// started, database, storage and sweep are Deps' own, for the status page.
 	started           time.Time
 	database, storage string
@@ -278,6 +280,7 @@ type handler struct {
 // cookie -- and a caller that forgot it would lose the defence silently.
 func Handler(d Deps) http.Handler {
 	h := &handler{
+		pages:   newStash(),
 		version: d.Version, buildDate: d.BuildDate, verifier: d.Verifier, sessions: d.Sessions, shares: d.Shares,
 		files: d.Files, thumbs: d.Thumbs, captures: d.Index, library: d.Index, finder: d.Index, playlists: d.Playlists,
 		indexing: d.Indexing, imports: d.Imports, playback: d.Playback, kept: d.TrashRetention,
@@ -372,7 +375,7 @@ func Handler(d Deps) http.Handler {
 	mux.Handle("GET /static/", assets())
 	mux.HandleFunc("/", h.notFound)
 
-	return secureHeaders(http.NewCrossOriginProtection().Handler(mux))
+	return secureHeaders(http.NewCrossOriginProtection().Handler(h.postRedirectGet(mux)))
 }
 
 func (h *handler) notFound(w http.ResponseWriter, r *http.Request) {

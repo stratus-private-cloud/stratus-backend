@@ -12,6 +12,20 @@ code it describes.
 A small server-rendered UI, built up feature by feature: log in, browse and
 download files, the calendar and the contacts.
 
+- **Post/redirect/get is one middleware, not a rule every handler keeps**
+  (#501, `prg.go`). A handler answers a form as it always did -- redirect
+  when it worked, draw a page when it did not or when the page is the result,
+  as a share's link is -- and a form a browser submitted (`Sec-Fetch-Mode:
+  navigate`, behind a session, or the login) has a drawn answer held, kept
+  and replaced by a `303` to its own path with `?flash=<id>`, which the GET
+  answers from memory with the status it was drawn with. That is what let a
+  form with its problems marked survive the redirect without each form
+  learning to carry its values through one. Kept fifteen minutes, thirty-two
+  at most, per session; a restart forgets them, and the address then answers
+  as it would without the parameter. htmx and Basic clients are not
+  navigations and get the page itself, and tests follow the redirect through
+  `submit`, so a test of a form still reads the page the browser shows.
+
 - **The calendar is a month at the calendar's own address**
   (#111): `/calendars/<owner>/<calendar>/?month=YYYY-MM` is the page, and the
   same address is the CalDAV collection, split by method in the composition

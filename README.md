@@ -990,6 +990,14 @@ At the root, with the same credentials as everything else and, like the other
 surfaces, only when they are set: with none configured `/login` is a 404 rather
 than a form for a user who does not exist.
 
+**Back and reload never send a form again.** Every form a browser submits is
+answered with a redirect: where it went when it worked, and otherwise to the
+page it drew -- the link a share made, a form with its problems marked, an
+error -- at the same address with `?flash=`. That page is kept in the
+server's memory for fifteen minutes and shown only to the session that
+submitted it; after a restart the address answers as it would without the
+parameter.
+
 What it does today is sign you in, walk the tree, hand you a file, take one
 back, make a folder to put it in, and rename or delete what is there --
 several at once by ticking their rows, asked once for the lot and each still a

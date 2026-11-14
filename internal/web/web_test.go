@@ -323,8 +323,23 @@ func post(t *testing.T, h http.Handler, target string, form url.Values, cookies 
 	for _, c := range cookies {
 		req.AddCookie(c)
 	}
+	return submit(t, h, req)
+}
+
+// submit sends a form the way a browser does, following the redirect to the
+// page the form drew when it drew one (#501): what a test of the form means
+// is that page, which is what the browser shows.
+func submit(t *testing.T, h http.Handler, req *http.Request) *httptest.ResponseRecorder {
+	t.Helper()
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
+	if loc := rec.Header().Get("Location"); rec.Code == http.StatusSeeOther && strings.Contains(loc, "flash=") {
+		shown := get(t, h, loc, req.Cookies()...)
+		for _, c := range rec.Result().Cookies() {
+			http.SetCookie(shown, c)
+		}
+		return shown
+	}
 	return rec
 }
 
