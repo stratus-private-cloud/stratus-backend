@@ -1934,6 +1934,16 @@ Restraint here is principle 3, not laziness:
   trash does not carry it, because a deleted file's path is no address any
   more.
 
+  **The indexer's facts are properties too**, on the same terms: `taken`,
+  `width`, `height`, `camera`, `location` and `duration` in that namespace,
+  for the app's info panel, which is the web's Details read over WebDAV.
+  **They are answered only to a `PROPFIND` that names one** --
+  `asksForInfo` peeks at the body and puts it back -- because x/net merges
+  `DeadProps` into an allprop, and under `/files/` each is a `MediaByFile`:
+  a query per row in every listing Finder makes. Named, it is almost always
+  one file. The timeline's mounts read the metadata to file a photograph
+  under its month, so there they cost nothing more and come off the node.
+
   **A `PROPFIND` for the whole tree is refused before the library sees it**
   (#160), with the `403` and the `DAV:propfind-finite-depth` precondition
   RFC 4918 9.1 provides for exactly this. The library builds a multistatus as

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"path"
@@ -43,11 +44,11 @@ import (
 
 // propfindHandler answers one PROPFIND, over a filesystem built for that
 // request alone. See readOnlyFS for why it cannot be shared.
-func (f *fileSystem) propfindHandler(ctx context.Context, owner string) http.Handler {
+func (f *fileSystem) propfindHandler(ctx context.Context, owner string, info bool) http.Handler {
 	return &xnet.Handler{
 		Prefix: f.prefix,
 		FileSystem: &readOnlyFS{
-			files: f.files, index: f.index, owner: owner, ctx: ctx,
+			files: f.files, index: f.index, owner: owner, ctx: ctx, info: info,
 			listed: map[string]db.File{}, drawn: map[int64]db.MediaState{},
 		},
 		// The server's own rather than one built for this request (#174), bound
@@ -84,6 +85,9 @@ type readOnlyFS struct {
 	// the question behind it is a query. The same reason boundLocks holds one
 	// (#243), and safe for the same reason readOnlyFS is built per request.
 	ctx context.Context
+	// info is whether the request named a property of info.go, which is a
+	// query per file and so answered only to somebody who asked.
+	info bool
 }
 
 // errReadOnly is what the methods PROPFIND cannot reach return. They are on the
@@ -324,6 +328,15 @@ func (f *readOnlyFile) DeadProps() (map[xml.Name]xnet.Property, error) {
 		// client drawing a grid of a few hundred rows would otherwise answer by
 		// asking for each one and counting the 404s (#136).
 		props[hasPreviewName] = property(hasPreviewName, strconv.FormatBool(f.hasPreview()))
+		if f.fs.info {
+			m, err := f.fs.index.MediaByFile(f.fs.ctx, f.row.ID)
+			switch {
+			case err == nil:
+				maps.Copy(props, infoProps(m))
+			case !errors.Is(err, db.ErrNotFound):
+				return nil, err
+			}
+		}
 		return props, nil
 	}
 
