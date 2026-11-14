@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	_ "embed"
 	"errors"
 	"fmt"
 	"io"
@@ -35,6 +36,13 @@ const backupLayout = "20060102T150405Z"
 
 // backupType is what a backup is served as.
 const backupType = "application/vnd.sqlite3"
+
+// BackupReadme is the file BackUp leaves in the folder it makes, so whoever
+// comes across the folder in their tree knows what it is and how to move it.
+const BackupReadme = "README.txt"
+
+//go:embed backup-readme.txt
+var backupReadme string
 
 // ErrNoBackup is a database whose driver cannot write the backup format yet.
 var ErrNoBackup = errors.New("this database cannot be backed up yet")
@@ -86,9 +94,15 @@ func (s *Service) BackUp(ctx context.Context, owner, dir, scratch string, now ti
 		return Backup{}, err
 	}
 
+	_, err := s.meta.FileByPath(ctx, owner, dir)
+	madeDir := errors.Is(err, db.ErrNotFound)
+	if err != nil && !madeDir {
+		return Backup{}, fmt.Errorf("look for the backup folder: %w", err)
+	}
+
 	local := filepath.Join(scratch, "backup-"+rand.Text()+".db")
 	defer func() { _ = os.Remove(local) }()
-	if err := b.BackupTo(ctx, local); err != nil {
+	if err = b.BackupTo(ctx, local); err != nil {
 		return Backup{}, err
 	}
 	f, err := os.Open(local) //nolint:gosec // a name this function made up
@@ -127,6 +141,12 @@ func (s *Service) BackUp(ctx context.Context, owner, dir, scratch string, now ti
 	}
 	s.written(row)
 	done := Backup{Path: path, Key: key, At: at, Size: stored.Size}
+	if madeDir {
+		if _, werr := s.Write(ctx, owner, dir+"/"+BackupReadme, strings.NewReader(backupReadme),
+			int64(len(backupReadme)), "text/plain; charset=utf-8"); werr != nil {
+			return done, fmt.Errorf("explain the backup folder: %w", werr)
+		}
+	}
 
 	// The new one is in before any old one goes, so a failure here costs
 	// room and never a backup. They are destroyed rather than trashed: this is

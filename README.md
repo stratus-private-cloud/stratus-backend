@@ -1541,7 +1541,7 @@ make up STRATUS_PORT=9000 STRATUS_DATA_PATH=/srv/stratus
 | `STRATUS_PASSWORD` | unset | the single user's password |
 | `STRATUS_TRASH_RETENTION` ✎ | `720h` | how long a deletion stays in the trash; `never` keeps everything, see [the sweep](#orphaned-blobs) |
 | `STRATUS_BACKUP_INTERVAL` ✎ | `24h` | how often the database is copied into the blob store; `0` stops it, see [Backups](#backups) |
-| `STRATUS_BACKUP_DIR` ✎ | `backups` | the folder under `/files/` the backups are filed in |
+| `STRATUS_BACKUP_DIR` ✎ | `stratus-db-backups` | the folder under `/files/` the backups are filed in |
 | `TZ` ✎ | UTC | the zone the calendar page draws times in, e.g. `Europe/Madrid`; CalDAV clients are not affected |
 
 **✎ can also be set on the Settings page** (the menu under your name), and so
@@ -1626,9 +1626,11 @@ losing it leaves a store full of files nobody can find. The server therefore
 copies it into the blob store — usually the more durable of the two — every
 `STRATUS_BACKUP_INTERVAL`, a day by default, and once at startup when the
 newest copy is older than that. **Each one is a file in your tree**,
-`/files/backups/<UTC time>.db` by default, fetched like any other over WebDAV
-or the web UI; `STRATUS_BACKUP_DIR` moves the folder, and the backups already
-taken stay where they were, out of the rotation. The last seven are kept and
+`/files/stratus-db-backups/<UTC time>.db` by default, fetched like any other
+over WebDAV or the web UI; `STRATUS_BACKUP_DIR` moves the folder, and the
+backups already taken stay where they were, out of the rotation. A folder a
+backup has to make gets a `README.txt` saying what it is and how to move it or
+stop the backups; delete it and it stays deleted. The last seven are kept and
 the older ones destroyed rather than trashed, while one you delete yourself
 goes to the trash like anything else. `/status` says when the newest was
 taken and links the folder.

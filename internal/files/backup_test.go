@@ -47,6 +47,39 @@ func TestABackupIsTheDatabaseFiledInTheTree(t *testing.T) {
 	}
 }
 
+// The folder says what it is when a backup makes it, and only then: one
+// somebody deleted stays deleted.
+func TestTheFolderABackupMakesHasAReadme(t *testing.T) {
+	t.Parallel()
+	_, _, s := filestest.Stack(t)
+	readme := "stratus-db-backups/" + files.BackupReadme
+	if _, err := s.BackUp(t.Context(), backupOwner, "stratus-db-backups", t.TempDir(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	body, _, err := s.Open(t.Context(), backupOwner, readme)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text, _ := io.ReadAll(body)
+	_ = body.Close()
+	if !strings.Contains(string(text), "STRATUS_BACKUP_DIR") {
+		t.Errorf("the readme does not say how to move the folder:\n%s", text)
+	}
+
+	if err := s.Remove(t.Context(), backupOwner, readme); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.BackUp(t.Context(), backupOwner, "stratus-db-backups", t.TempDir(), time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.Open(t.Context(), backupOwner, readme); err == nil {
+		t.Error("a readme somebody deleted came back")
+	}
+	if all, err := s.Backups(t.Context(), backupOwner, "stratus-db-backups"); err != nil || len(all) != 2 {
+		t.Errorf("Backups = %v, %v, want the two", all, err)
+	}
+}
+
 func TestOnlyTheNewestBackupsAreKept(t *testing.T) {
 	t.Parallel()
 	blobs, _, s := filestest.Stack(t)
