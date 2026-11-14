@@ -10,6 +10,7 @@ import (
 	xnet "golang.org/x/net/webdav"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
+	"github.com/stratus-private-cloud/stratus-backend/internal/places"
 )
 
 // What the indexer read out of a photograph or a recording, as properties
@@ -29,12 +30,13 @@ var (
 	heightName   = xml.Name{Space: stratusNamespace, Local: "height"}
 	cameraName   = xml.Name{Space: stratusNamespace, Local: "camera"}
 	locationName = xml.Name{Space: stratusNamespace, Local: "location"}
+	placeName    = xml.Name{Space: stratusNamespace, Local: "place"}
 	durationName = xml.Name{Space: stratusNamespace, Local: "duration"}
 )
 
 var infoNames = map[xml.Name]bool{
 	takenName: true, widthName: true, heightName: true,
-	cameraName: true, locationName: true, durationName: true,
+	cameraName: true, locationName: true, placeName: true, durationName: true,
 }
 
 // asksForInfo reads whether a PROPFIND names any of them, and puts the body
@@ -93,6 +95,13 @@ func infoProps(m db.Media) map[xml.Name]xnet.Property {
 	if m.GPS != nil {
 		props[locationName] = property(locationName,
 			strconv.FormatFloat(m.GPS.Latitude, 'f', 5, 64)+" "+strconv.FormatFloat(m.GPS.Longitude, 'f', 5, 64))
+		// The nearest town, from the table built into the binary: a
+		// position named here and never sent anywhere to be named.
+		if p, ok := places.Nearest(m.GPS.Latitude, m.GPS.Longitude); ok {
+			var named bytes.Buffer
+			_ = xml.EscapeText(&named, []byte(p.String()))
+			props[placeName] = property(placeName, named.String())
+		}
 	}
 	if m.DurationMS > 0 {
 		props[durationName] = property(durationName, strconv.FormatInt(m.DurationMS, 10))

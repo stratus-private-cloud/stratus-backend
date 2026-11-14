@@ -88,7 +88,11 @@ func TestAPhotographSaysWhatTheCameraSaid(t *testing.T) {
 
 	body := details(t, h, "holiday.jpg", signIn(t, h))
 	has(t, body, "holiday.jpg", "image/jpeg", "6 B (6 bytes)", f.ETag,
-		"2 June 2024, 18:45", "4032 × 3024", "Canon EOS R6", "41.38790, 2.16990")
+		"2 June 2024, 18:45", "4032 × 3024", "Canon EOS R6", "41.38790, 2.16990",
+		// Named from the table in the binary, and mapped only by a link.
+		"Barcelona, Spain",
+		`href="https://www.openstreetmap.org/?mlat=41.38790&amp;mlon=2.16990#map=16/41.38790/2.16990"`,
+		`rel="noopener noreferrer"`)
 }
 
 func TestATrackSaysWhatTheTagsSaid(t *testing.T) {

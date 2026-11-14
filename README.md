@@ -234,7 +234,8 @@ Details are properties too, in the server's namespace
 (`https://github.com/C0piIot/stratus`), under `/files/` and in `/photos/` and
 `/videos/`: `taken` — the camera's clock, with no zone, since it records none
 — `width`, `height`, `camera`, `location` as latitude and longitude in
-degrees, and `duration` in milliseconds. A fact the file does not carry is a
+degrees, `place` as the nearest town and its country, and `duration` in
+milliseconds. A fact the file does not carry is a
 `404` in the propstat. They come only when named in the `PROPFIND`, never in
 an `allprop`, because answering them is a lookup per file and a client that
 did not ask would be paying for it on every listing.
@@ -1065,8 +1066,10 @@ download behave exactly as they do on the streaming surface.
 **Every file says what is known about it**: the button beside it opens a box
 over the listing, titled with the file's name, holding what the file row
 carries -- type, size, when it last changed, its validator -- and what the
-indexer extracted from it: a photograph's date, camera, dimensions and
-coordinates, a track's duration, codec, bitrate and tags, a film's resolution,
+indexer extracted from it: a photograph's date, camera, dimensions,
+coordinates and the town they are nearest -- named from a copy of GeoNames
+inside the binary, so a position is never sent anywhere to be named, and
+linked to OpenStreetMap only for whoever clicks -- a track's duration, codec, bitrate and tags, a film's resolution,
 codecs, frame rate and colour. It is read when the button is
 pressed and not before, because a folder is a hundred rows and this is almost
 never opened; the same URL, `/info/<path>`, is a whole page when it is followed
@@ -1841,13 +1844,14 @@ build rather than a note in a document.
 
 ## Container
 
-Multi-stage build, `distroless/static:nonroot` runtime, 46 MB unpacked and an
-18 MB download, measured on amd64. The Go binary is most of it at 27 MB, beside
+Multi-stage build, `distroless/static:nonroot` runtime, about 48 MB unpacked
+and a 19 MB download on amd64. The Go binary is most of it at 29 MB, beside
 2.4 MB of `ffprobe` (2.2 MB on arm64), 13.2 MB of `ffmpeg` (11.1 MB on arm64)
 and a base under one megabyte. It grew 4 MB with the web UI: `html/template`
 costs about three of those and the embedded Bootstrap a third of one, with htmx
 a further 50 KB, which is what a page rendered by the standard library and
-served from the binary costs.
+served from the binary costs. The names of places are another 750 KB: GeoNames'
+towns, built in so that naming where a photograph was taken asks nobody.
 
 **Both FFmpeg tools are built here rather than taken off the shelf**, in
 `build/ffprobe/Dockerfile` and `build/ffmpeg/Dockerfile`. A general-purpose
@@ -1951,6 +1955,11 @@ and the decisions behind it are tracked on the
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+The names of places come from [GeoNames](https://www.geonames.org), under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): every town of more
+than 5,000 people, cut down by `scripts/places.sh` and built into the binary
+(`internal/places`).
 
 The image also carries a static FFmpeg built with libx264, which makes that
 binary GPLv3; Stratus runs it as a separate program and is not a part of it.

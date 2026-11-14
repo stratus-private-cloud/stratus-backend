@@ -60,16 +60,18 @@
 {{end}}
 {{- end}}
 
+{{define "fact"}}{{if .Href}}<a href="{{.Href}}" target="_blank" rel="noopener noreferrer">{{.Value}}</a>{{else}}{{.Value}}{{end}}{{end}}
+
 {{define "facts" -}}
 {{if or .Facts .Media}}
 <dl class="row small mb-0">
   {{range .Facts}}
   <dt class="col-sm-3">{{.Label}}</dt>
-  <dd class="col-sm-9 text-break mb-1">{{.Value}}</dd>
+  <dd class="col-sm-9 text-break mb-1">{{template "fact" .}}</dd>
   {{end}}
   {{range .Media}}
   <dt class="col-sm-3">{{.Label}}</dt>
-  <dd class="col-sm-9 text-break mb-1">{{.Value}}</dd>
+  <dd class="col-sm-9 text-break mb-1">{{template "fact" .}}</dd>
   {{end}}
 </dl>
 {{end}}
