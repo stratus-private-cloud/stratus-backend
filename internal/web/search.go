@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
+	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media/thumb"
 )
 
@@ -371,14 +372,24 @@ func (h *handler) findContent(r *http.Request, user, term, only string, v *view)
 	if only == "" && len(hits) > contentAmong {
 		hits, v.MoreContent = hits[:contentAmong], searchResumed(term, inContent, "")
 	}
+	photos, err := h.filesOf(r, user, hits)
+	if err != nil {
+		slog.WarnContext(r.Context(), "reading photographs found by content", "err", err)
+		return
+	}
+	v.ContentTiles = shots(photos, h.statesOf(r.Context(), r.URL.Path, photos))
+}
+
+// filesOf turns what a search by content answered into the rows, in the
+// order it answered them, leaving out what has gone since.
+func (h *handler) filesOf(r *http.Request, user string, hits []embed.Hit) ([]db.File, error) {
 	ids := make([]int64, len(hits))
 	for i, hit := range hits {
 		ids[i] = hit.FileID
 	}
 	found, err := h.byID.FilesByID(r.Context(), user, ids)
 	if err != nil {
-		slog.WarnContext(r.Context(), "reading photographs found by content", "err", err)
-		return
+		return nil, err
 	}
 	byID := make(map[int64]db.File, len(found))
 	for _, f := range found {
@@ -390,5 +401,5 @@ func (h *handler) findContent(r *http.Request, user, term, only string, v *view)
 			photos = append(photos, f)
 		}
 	}
-	v.ContentTiles = shots(photos, h.statesOf(r.Context(), r.URL.Path, photos))
+	return photos, nil
 }

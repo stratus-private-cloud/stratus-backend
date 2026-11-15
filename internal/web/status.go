@@ -54,6 +54,8 @@ type Contents interface {
 	// once it is.
 	State() string
 	Search(ctx context.Context, query string, limit int) ([]embed.Hit, error)
+	// Similar is the photographs closest to one, itself left out (#514).
+	Similar(ctx context.Context, fileID int64, limit int) ([]embed.Hit, error)
 }
 
 // contentView is the status page's line about it. Missing is the setting on

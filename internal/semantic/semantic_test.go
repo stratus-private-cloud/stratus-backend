@@ -198,3 +198,32 @@ func TestAPassStandsAsideAndWritesNothing(t *testing.T) {
 		t.Errorf("Counts = %+v, want the photograph still waiting", counts)
 	}
 }
+
+func TestAPhotographsLikeOneAreTheClosestButItself(t *testing.T) {
+	fx := newFixture(t)
+	red := fx.photo(t, "red.jpg", color.RGBA{R: 255, A: 255})
+	redder := fx.photo(t, "redder.jpg", color.RGBA{R: 200, A: 255})
+	fx.photo(t, "blue.jpg", color.RGBA{B: 255, A: 255})
+	reddest := fx.photo(t, "reddest.jpg", color.RGBA{R: 255, A: 255})
+	if _, err := fx.service.Batch(t.Context(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, err := fx.service.Similar(t.Context(), red.ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := map[int64]bool{}
+	for _, h := range hits {
+		ids[h.FileID] = true
+	}
+	if ids[red.ID] || !ids[redder.ID] || !ids[reddest.ID] || len(hits) != 2 {
+		t.Errorf("Similar(red) = %+v, want the other reds and not itself or the blue", hits)
+	}
+	if hits, err := fx.service.Similar(t.Context(), 99999, 10); err != nil || len(hits) != 0 {
+		t.Errorf("Similar of a photograph with no vector = %+v, %v", hits, err)
+	}
+	if hits, err := fx.service.Similar(t.Context(), red.ID, 1); err != nil || len(hits) != 1 {
+		t.Errorf("Similar with a limit of one = %+v, %v", hits, err)
+	}
+}

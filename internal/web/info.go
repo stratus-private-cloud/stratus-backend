@@ -35,6 +35,9 @@ type infoView struct {
 	Facts []fact
 	Media []fact
 	Note  string
+	// Similar are the photographs most like this one (#514), and empty for
+	// anything else, or with the search by content off.
+	Similar []tile
 }
 
 // info is what the index and the file row say about one thing.
@@ -54,6 +57,7 @@ func (h *handler) info(w http.ResponseWriter, r *http.Request, user string) {
 		iv.Note = "A folder is a row and nothing else: there are no bytes here for the indexer to read."
 	} else {
 		iv.Media, iv.Note = h.extracted(r, f)
+		iv.Similar = h.similarTo(r, user, f)
 	}
 
 	v := view{Title: iv.Name, User: user, Info: &iv}
@@ -343,4 +347,28 @@ func coordinates(g *db.GPS) string {
 		return ""
 	}
 	return fmt.Sprintf("%.5f, %.5f", g.Latitude, g.Longitude)
+}
+
+// similarCount is how many photographs a photograph's details show as like it.
+const similarCount = 10
+
+// similarTo is the photographs most like f, closest first, when f is one and
+// there is a search by content to ask. A failure is logged and leaves the
+// details as they were: they are the page's point, and this is extra.
+func (h *handler) similarTo(r *http.Request, user string, f db.File) []tile {
+	ix := h.indexingNow()
+	if ix.Contents == nil || !ix.Semantic || !media.IsImage(f.Path) {
+		return nil
+	}
+	hits, err := ix.Contents.Similar(r.Context(), f.ID, similarCount)
+	if err != nil {
+		slog.WarnContext(r.Context(), "finding photographs like one", "path", f.Path, "err", err)
+		return nil
+	}
+	photos, err := h.filesOf(r, user, hits)
+	if err != nil {
+		slog.WarnContext(r.Context(), "reading photographs like one", "path", f.Path, "err", err)
+		return nil
+	}
+	return shots(photos, h.statesOf(r.Context(), r.URL.Path, photos))
 }

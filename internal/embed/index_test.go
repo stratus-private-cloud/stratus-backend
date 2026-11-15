@@ -109,3 +109,23 @@ func BenchmarkSearch50k(b *testing.B) {
 		x.Search(q, 0.05, 50)
 	}
 }
+
+func TestAVectorComesBackAsItWasStored(t *testing.T) {
+	x := embed.NewIndex(3)
+	if _, ok := x.Vector(1); ok {
+		t.Fatal("a vector for a file with none")
+	}
+	v := []float32{0.6, -0.8, 0}
+	if err := x.Put(1, embed.Quantize(v)); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := x.Vector(1)
+	if !ok {
+		t.Fatal("no vector for a file that has one")
+	}
+	for i := range v {
+		if math.Abs(float64(got[i]-v[i])) > 0.01 {
+			t.Errorf("dimension %d is %.3f, stored %.3f", i, got[i], v[i])
+		}
+	}
+}

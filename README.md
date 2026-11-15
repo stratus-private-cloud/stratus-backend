@@ -1202,6 +1202,12 @@ What turning it on costs, so nobody finds out the hard way:
   search holds the library's vectors, about 25 MB for 50,000 photographs, and
   lets them go after the same ten minutes. A 512 MB machine runs it.
 
+**With it on, a photograph's details show the ten most like it** — the same
+moment from another angle, a burst, the copy uploaded twice — closest first,
+in the dialog and on the page. Nothing runs for it: the photograph's own vector
+is the question, and the answer is milliseconds. A photograph with nothing
+close enough shows none rather than ten that are merely the least unlike it.
+
 How the matching is done is each database's business: a generated `tsvector`
 with a GIN index on PostgreSQL, a `FULLTEXT` index on MySQL, and FTS5 on
 SQLite. All three match whole words, which is the whole of what is promised --

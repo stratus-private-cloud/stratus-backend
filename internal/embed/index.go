@@ -103,6 +103,21 @@ func (x *Index) Remove(fileID int64) {
 	x.ids, x.scales, x.values = x.ids[:last], x.scales[:last], x.values[:last*x.dim]
 }
 
+// Vector is a file's stored vector as floats, and false when it has none.
+func (x *Index) Vector(fileID int64) ([]float32, bool) {
+	x.mu.RLock()
+	defer x.mu.RUnlock()
+	i, ok := x.pos[fileID]
+	if !ok {
+		return nil, false
+	}
+	v := make([]float32, x.dim)
+	for d, b := range x.values[i*x.dim : (i+1)*x.dim] {
+		v[d] = float32(b) * x.scales[i]
+	}
+	return v, true
+}
+
 // Len is how many vectors it holds.
 func (x *Index) Len() int {
 	x.mu.RLock()
