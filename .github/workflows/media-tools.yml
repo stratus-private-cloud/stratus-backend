@@ -10,6 +10,12 @@ name: media tools
 
 on:
   workflow_dispatch:
+    inputs:
+      tools:
+        # Which to build, as JSON, so that publishing one from a branch does
+        # not rebuild and repush the others' architecture tags.
+        description: 'the tools to build, as a JSON list'
+        default: '["ffprobe", "ffmpeg", "embed"]'
   push:
     branches: [main]
     paths: ['build/ffprobe/**', 'build/ffmpeg/**', 'build/embed/**', '.github/workflows/media-tools.yml']
@@ -28,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tool: [ffprobe, ffmpeg, embed]
+        tool: ${{ fromJSON(inputs.tools || '["ffprobe", "ffmpeg", "embed"]') }}
         arch: [amd64, arm64]
         # arch is a matrix key and not only an include value, so each of these
         # merges into the combinations whose arch matches. Naming the platform
@@ -117,7 +123,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        tool: [ffprobe, ffmpeg, embed]
+        tool: ${{ fromJSON(inputs.tools || '["ffprobe", "ffmpeg", "embed"]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

@@ -20,12 +20,11 @@ SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 RUN apk add --no-cache build-base cmake samurai python3 py3-flatbuffers curl patch linux-headers git
 
 # Alpine builds this same release on musl, and its patches are what make that
-# work; pinned by the digests its own APKBUILD carries.
-ARG APORTS=https://gitlab.alpinelinux.org/alpine/aports/-/raw/3.24-stable/community/onnxruntime
+# work. They are in patches/ rather than fetched: Alpine's GitLab answers a
+# GitHub runner with 418. The digests are the ones its own APKBUILD carries.
 WORKDIR /src
+COPY patches/ /src/
 RUN curl -fsSL -o ort.tar.gz "https://github.com/microsoft/onnxruntime/archive/refs/tags/v${ORT_VERSION}.tar.gz" \
- && curl -fsSL -O "$APORTS/no-execinfo.patch" -O "$APORTS/0001-Remove-MATH_NO_EXCEPT-macro.patch" \
-      -O "$APORTS/gcc-15.patch" \
  && sha512sum -c <<'SUMS'
 53b3aed02e085c83aa3c7e1faffeae7f70675d6770bc44d148085ded47940f29471eef76e0c4565bbb471f0f814610e0d1892ce9305c63d011fe851a22b1f7ab  ort.tar.gz
 976913be90b0a82ff1ba403f46306ef4e5939bb05296227c99d3c4a609dd00f5750f9b1c6c30d20791ff0724c1bcffc6aa498eac906257aefefc6f35df796fe0  no-execinfo.patch
