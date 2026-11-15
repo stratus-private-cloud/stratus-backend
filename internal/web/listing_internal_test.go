@@ -68,8 +68,8 @@ func TestAnArrangementSurvivesTheCookie(t *testing.T) {
 
 	for _, want := range []listing{
 		defaultListing,
-		{Key: "size", Desc: true, Rows: 50},
-		{Key: "modified", Rows: 500},
+		{Key: "size", Desc: true},
+		{Key: "modified"},
 	} {
 		saved, err := url.ParseQuery(want.query())
 		if err != nil {

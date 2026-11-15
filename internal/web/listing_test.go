@@ -96,19 +96,19 @@ func TestAnOrderingSurvivesThePageBoundary(t *testing.T) {
 	t.Parallel()
 	h, _, meta := browserOver(t)
 	cookie := signIn(t, h)
-	for i := range 60 {
+	for i := range 110 {
 		// Sizes descend as names ascend, so a page resumed by path would come
 		// back in a visibly different order.
 		row(t, meta, "f"+string(rune('a'+i/26))+string(rune('a'+i%26))+".txt", int64(1000-i), day(1))
 	}
 
-	first := get(t, h, "/files/?sort=size&rows=50", cookie).Body.String()
+	first := get(t, h, "/files/?sort=size", cookie).Body.String()
 	next := nextLink.FindStringSubmatch(first)
 	if next == nil {
-		t.Fatalf("a folder of 60 rows offered no next page:\n%s", first)
+		t.Fatalf("a folder of 110 rows offered no next page:\n%s", first)
 	}
-	if !strings.Contains(next[1], "sort=size") || !strings.Contains(next[1], "rows=50") {
-		t.Errorf("the next page is %q, want it to carry the ordering and the row count", next[1])
+	if !strings.Contains(next[1], "sort=size") {
+		t.Errorf("the next page is %q, want it to carry the ordering", next[1])
 	}
 
 	second := get(t, h, html(next[1]), cookie).Body.String()
@@ -124,19 +124,27 @@ func TestAnOrderingSurvivesThePageBoundary(t *testing.T) {
 	}
 }
 
+// TestHowManyRowsAPageHolds: a hundred, and a rows= from a link written when
+// the reader chose is passed over rather than refused.
 func TestHowManyRowsAPageHolds(t *testing.T) {
 	t.Parallel()
-	h, s := browser(t)
+	h, _, meta := browserOver(t)
 	cookie := signIn(t, h)
-	for i := range 60 {
-		write(t, s, "f"+string(rune('a'+i/26))+string(rune('a'+i%26))+".txt", "x")
+	for i := range 110 {
+		row(t, meta, "f"+string(rune('a'+i/26))+string(rune('a'+i%26))+".txt", 1, day(1))
 	}
 
-	if got := strings.Count(get(t, h, "/files/?rows=50", cookie).Body.String(), ".txt<"); got != 50 {
-		t.Errorf("a page of 50 held %d rows", got)
-	}
-	if got := strings.Count(get(t, h, "/files/", cookie).Body.String(), ".txt<"); got != 60 {
-		t.Errorf("a page with nothing asked for held %d rows, want all 60 of them", got)
+	for _, target := range []string{"/files/", "/files/?rows=50", "/files/?rows=500", "/files/?rows=three"} {
+		rec := get(t, h, target, cookie)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s = %d", target, rec.Code)
+		}
+		if got := strings.Count(rec.Body.String(), ".txt<"); got != 100 {
+			t.Errorf("%s held %d rows, want 100", target, got)
+		}
+		if strings.Contains(rec.Body.String(), "rows=") {
+			t.Errorf("%s still offers a row count", target)
+		}
 	}
 }
 
@@ -151,11 +159,11 @@ func TestTheHeadingsSayWhereTheyGo(t *testing.T) {
 	body := get(t, h, "/files/?sort=size&order=asc", cookie).Body.String()
 	has(t, body, `aria-sort="ascending"`, "Size ↑",
 		// Clicking the column in use turns it around.
-		"order=desc&amp;rows=100&amp;sort=size",
+		"order=desc&amp;sort=size",
 		// A date starts at the most recent, which is what somebody means by it.
-		"order=desc&amp;rows=100&amp;sort=modified",
+		"order=desc&amp;sort=modified",
 		// A name starts at A.
-		"order=asc&amp;rows=100&amp;sort=name")
+		"order=asc&amp;sort=name")
 	if strings.Count(body, `aria-sort="none"`) != 2 {
 		t.Errorf("the columns not in use are not marked unsorted:\n%s", body)
 	}
@@ -166,7 +174,7 @@ func TestAnArrangementThatIsNotOne(t *testing.T) {
 	h := newHandler(t, nil)
 	cookie := signIn(t, h)
 
-	for _, query := range []string{"?sort=colour", "?order=sideways", "?rows=100000", "?rows=three"} {
+	for _, query := range []string{"?sort=colour", "?order=sideways"} {
 		if code := get(t, h, "/files/"+query, cookie).Code; code != http.StatusBadRequest {
 			t.Errorf("/files/%s = %d, want 400", query, code)
 		}
@@ -200,7 +208,7 @@ func TestTheLastArrangementIsRemembered(t *testing.T) {
 	session := signIn(t, h)
 	threeFiles(t, meta)
 
-	rec := get(t, h, "/files/?sort=size&order=desc&rows=50", session)
+	rec := get(t, h, "/files/?sort=size&order=desc", session)
 	saved := namedCookie(rec, "stratus_list")
 	if saved == nil {
 		t.Fatalf("asking for an ordering saved nothing: %v", rec.Header())
@@ -245,13 +253,13 @@ func TestAVisitorsArrangementIsNotRemembered(t *testing.T) {
 	}
 	// Every link the page emits still carries the signature, or the second
 	// click is a login form.
-	for _, want := range []string{"sort=modified", "sort=size", "rows=500"} {
+	for _, want := range []string{"sort=modified", "sort=size"} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("a shared listing offers no %s", want)
 		}
 	}
-	if strings.Count(rec.Body.String(), "k=") < 6 {
-		t.Errorf("the headings and row counts do not carry the token:\n%s", rec.Body)
+	if strings.Count(rec.Body.String(), "k=") < 3 {
+		t.Errorf("the headings do not carry the token:\n%s", rec.Body)
 	}
 }
 
