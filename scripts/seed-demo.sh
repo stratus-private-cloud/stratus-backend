@@ -328,4 +328,25 @@ code="$(curl -s -o /dev/null -w '%{http_code}' -u "$USER:$PASS" -r 0-1023 \
 [ "$code" = "206" ] || die "a range request for the video answered $code"
 ok "the video answers a range request"
 
+# A search by content, where the instance has one on (#505): the pass reads
+# the photographs a few seconds after they land, and a bee is what one of them
+# is of. Waited for rather than asked once, since the pass goes after the
+# thumbnails; skipped where the page has no such section, which is any
+# instance that did not turn it on.
+found=""
+for _ in $(seq 1 60); do
+	page="$(dav "$BASE/search?q=$(encode "una abeja")&in=content" 2>/dev/null || true)"
+	case "$page" in
+	*"In the photos"*) ;;
+	*) found="off"; break ;;
+	esac
+	case "$page" in *"bee-on-flower.jpg"*) found="yes"; break ;; esac
+	sleep 3
+done
+case "$found" in
+yes) ok "searching \"una abeja\" finds the bee by what is in the picture" ;;
+off) ok "search by content is off here, so it was not asked" ;;
+*) die "searching \"una abeja\" by content did not find the bee in three minutes" ;;
+esac
+
 printf '\n  %s %s\n\n' "$(green ✓)" "seeded: $BASE"
