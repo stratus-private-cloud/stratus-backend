@@ -93,6 +93,13 @@ const (
 	MusicLookupOff = "off"
 )
 
+// The values STRATUS_SEMANTIC_SEARCH takes. Off is the default for the cost
+// rather than for privacy: the model runs here and nothing is sent anywhere.
+const (
+	SemanticSearchOn  = "on"
+	SemanticSearchOff = "off"
+)
+
 // Config is the fully resolved configuration for one process.
 type Config struct {
 	// Addr is the listen address, in host:port form.
@@ -108,6 +115,11 @@ type Config struct {
 	// feature switched off: there is no sensible default directory, and one
 	// that was guessed would be one somebody's files disappeared into.
 	IncomingDir string
+	// EmbedModel is a directory holding the model a search by content reads
+	// photographs with (#505), put there by whoever set it. Empty, the
+	// default, is the published model, fetched under the data directory the
+	// first time the setting is on.
+	EmbedModel string
 	// Values are the settings that can also be changed from the web UI
 	// (#397), as the environment set them at startup.
 	Values
@@ -172,6 +184,7 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	cfg.IncomingDir = getenv("STRATUS_INCOMING_DIR")
+	cfg.EmbedModel = getenv("STRATUS_EMBED_MODEL")
 	// Inside the data directory it would sweep the blob store into itself, one
 	// blob at a time, forever. Refused here rather than discovered there.
 	if cfg.IncomingDir != "" && within(cfg.IncomingDir, cfg.DataDir) {

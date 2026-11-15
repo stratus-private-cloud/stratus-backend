@@ -45,6 +45,11 @@ type Values struct {
 	// Cover Art Archive, lyrics from LRCLIB. Off by default, because on
 	// means tags leave the machine.
 	MusicLookup bool
+	// SemanticSearch is whether the indexer's third half reads each
+	// photograph's content, so that a search finds it by what is in it
+	// (#505). Off by default, because it needs stratus-embed and a model of
+	// some 390 MB, and a first pass over a library is hours of CPU.
+	SemanticSearch bool
 	// Zone is what the calendar page draws times in (#111). Unset is UTC: a
 	// page with no script cannot ask the browser for its own.
 	Zone *time.Location
@@ -166,6 +171,14 @@ var Settings = []Setting{
 				return nil
 			}
 			return errors.New("must be auto, on or off")
+		},
+	},
+	{
+		Key: "STRATUS_SEMANTIC_SEARCH", Section: "Indexing", Default: SemanticSearchOff, Choices: []string{SemanticSearchOn, SemanticSearchOff},
+		Help: "Whether photographs are read so a search finds them by what is in them; nothing leaves the machine.",
+		apply: func(v *Values, raw string) (err error) {
+			v.SemanticSearch, err = onOff(raw)
+			return err
 		},
 	},
 	{

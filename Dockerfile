@@ -13,12 +13,17 @@ ARG ALPINE_VERSION=3.24
 # name a version it published -- a tag that was never published fails the build
 # here, loudly, which is why nothing else guards it.
 ARG FFMPEG_VERSION=7.1
+# The helper that runs the model a search by content reads photographs with
+# (#505): ONNX Runtime built for its operators and nothing else, published by
+# the same workflow from build/embed. Its tag is EMBED_VERSION there.
+ARG EMBED_VERSION=1.24.4-1
 
 # --platform=$BUILDPLATFORM keeps the toolchain native and cross-compiles to the
 # target instead of emulating the whole build stage under QEMU. Go cross-compiles
 # for free, so a multi-arch build needs no binfmt setup at all.
 FROM ghcr.io/stratus-private-cloud/stratus-ffprobe:${FFMPEG_VERSION} AS ffprobe
 FROM ghcr.io/stratus-private-cloud/stratus-ffmpeg:${FFMPEG_VERSION} AS ffmpeg
+FROM ghcr.io/stratus-private-cloud/stratus-embed:${EMBED_VERSION} AS embed
 
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS build
 WORKDIR /src
@@ -64,6 +69,13 @@ COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
 # The notice GPLv3 asks for beside that binary -- it is built with libx264 --
 # and the licence texts it points at. See build/ffmpeg/NOTICE.
 COPY --from=ffmpeg /licenses /usr/local/share/licenses/ffmpeg
+
+# Optional where ffmpeg is not: without it a search answers names alone. It is
+# in the image because 9 MB is less than a second image would cost, and the
+# 348 MB model is not, because most installs will never turn it on -- it is
+# fetched into the data directory the first time somebody does.
+COPY --from=embed /stratus-embed /usr/local/bin/stratus-embed
+COPY --from=embed /licenses /usr/local/share/licenses/stratus-embed
 
 ENV STRATUS_ADDR=":8080" \
     STRATUS_DATA_DIR="/data"

@@ -84,6 +84,8 @@ type Index interface {
 	db.Captures
 	db.Finder
 	Library
+	// FilesByID is how a search by content, which answers ids, becomes rows.
+	FilesByID(ctx context.Context, owner string, ids []int64) ([]db.File, error)
 }
 
 // PlaylistReader is the pages' view of the playlists: reading, and nothing
@@ -244,6 +246,10 @@ type handler struct {
 	// finder is what the search box asks, which is neither of those two: it
 	// answers across the tree and the tags at once.
 	finder db.Finder
+	// byID turns the ids a search by content answers into rows.
+	byID interface {
+		FilesByID(ctx context.Context, owner string, ids []int64) ([]db.File, error)
+	}
 	// playlists is read for the pages at /playlists/, which write nothing.
 	playlists PlaylistReader
 	// video is the player and HLS, and a zero one means neither is offered.
@@ -282,7 +288,7 @@ func Handler(d Deps) http.Handler {
 	h := &handler{
 		pages:   newStash(),
 		version: d.Version, buildDate: d.BuildDate, verifier: d.Verifier, sessions: d.Sessions, shares: d.Shares,
-		files: d.Files, thumbs: d.Thumbs, captures: d.Index, library: d.Index, finder: d.Index, playlists: d.Playlists,
+		files: d.Files, thumbs: d.Thumbs, captures: d.Index, library: d.Index, finder: d.Index, byID: d.Index, playlists: d.Playlists,
 		indexing: d.Indexing, imports: d.Imports, playback: d.Playback, kept: d.TrashRetention,
 		calendars: d.Calendars, contacts: d.Contacts, settings: d.Settings, editor: d.Editor, zones: d.Zones,
 		started: d.Started, database: d.Database, storage: d.Storage, sweep: d.Sweep, system: d.System, backup: d.Backup,
@@ -430,6 +436,7 @@ func (h *handler) indexingNow() Indexing {
 	if h.settings != nil {
 		v := h.settings()
 		ix.Interval, ix.Ahead, ix.Lookup = v.IndexInterval, v.ThumbsAhead, v.MusicLookup
+		ix.Semantic = v.SemanticSearch
 	}
 	return ix
 }

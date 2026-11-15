@@ -12,6 +12,7 @@ import (
 	"github.com/emersion/go-ical"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
+	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
 	"github.com/stratus-private-cloud/stratus-backend/internal/files"
 	"github.com/stratus-private-cloud/stratus-backend/internal/incoming"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media"
@@ -39,6 +40,29 @@ type Indexing struct {
 	// the page says which of the two it is looking at.
 	Lookups db.Lookups
 	Lookup  bool
+	// Contents is the search by content (#505), nil when the helper or its
+	// model is missing, and Semantic whether its pass is on.
+	Contents Contents
+	Semantic bool
+}
+
+// Contents is the search by content as a page uses it: how far the pass has
+// got, and the photographs closest to a query.
+type Contents interface {
+	Counts(ctx context.Context) (db.EmbeddingCounts, error)
+	// State is why the model is not ready -- being fetched, say -- and empty
+	// once it is.
+	State() string
+	Search(ctx context.Context, query string, limit int) ([]embed.Hit, error)
+}
+
+// contentView is the status page's line about it. Missing is the setting on
+// with nothing to run it, which is the one state somebody has to be told.
+type contentView struct {
+	On      bool
+	Missing bool
+	State   string
+	db.EmbeddingCounts
 }
 
 // MediaReads is the half of the media index a page reads (#365): what is
@@ -95,6 +119,7 @@ func (h *handler) status(w http.ResponseWriter, r *http.Request, user string) {
 		IndexingOff:  h.indexingNow().Interval == 0,
 		PicturesOff:  !h.indexingNow().Ahead,
 		Lookup:       h.lookupOf(r),
+		Content:      h.contentOf(r),
 		Running:      h.runningOf(),
 		Sweep:        h.sweepOf(),
 		System:       h.systemOf(),
@@ -112,6 +137,31 @@ func (h *handler) status(w http.ResponseWriter, r *http.Request, user string) {
 		return
 	}
 	h.render(w, http.StatusOK, pageStatus, v)
+}
+
+// contentOf is what the page says about reading photographs' content, and nil
+// when there is nothing to say: off, and never run.
+func (h *handler) contentOf(r *http.Request) *contentView {
+	ix := h.indexingNow()
+	if ix.Contents == nil {
+		if ix.Semantic {
+			return &contentView{On: true, Missing: true}
+		}
+		return nil
+	}
+	counts, err := ix.Contents.Counts(r.Context())
+	if err != nil {
+		slog.WarnContext(r.Context(), "counting photographs read", "err", err)
+		return nil
+	}
+	if !ix.Semantic && counts.Made == 0 && counts.Refused == 0 {
+		return nil
+	}
+	view := &contentView{On: ix.Semantic, EmbeddingCounts: counts}
+	if ix.Semantic {
+		view.State = ix.Contents.State()
+	}
+	return view
 }
 
 // lookupOf is what the page says about music metadata from outside, and nil

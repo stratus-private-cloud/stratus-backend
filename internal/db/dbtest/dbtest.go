@@ -36,6 +36,11 @@ func Run(t *testing.T, newStore func(t *testing.T) db.Store) {
 		RunMedia(t, func(t *testing.T) db.Repo { return newStore(t) })
 	})
 
+	t.Run("embeddings", func(t *testing.T) {
+		t.Parallel()
+		RunEmbeddings(t, func(t *testing.T) db.Repo { return newStore(t) })
+	})
+
 	t.Run("music", func(t *testing.T) {
 		t.Parallel()
 		RunMusic(t, func(t *testing.T) db.Repo { return newStore(t) })

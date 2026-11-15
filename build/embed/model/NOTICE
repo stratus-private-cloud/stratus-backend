@@ -1,0 +1,11 @@
+SigLIP 2 (google/siglip2-base-patch16-224)
+Copyright 2025 Google LLC
+Licensed under the Apache License, Version 2.0 (LICENSE beside this file).
+https://huggingface.co/google/siglip2-base-patch16-224
+
+Modified by the Stratus project (https://github.com/stratus-private-cloud/stratus-backend):
+the image and text towers were exported to ONNX separately, quantised to 8-bit
+integers (the image tower calibrated on 64 COCO val2017 photographs, the text
+tower dynamically, its vocabulary table per row), and converted to the ONNX
+Runtime format. tokenizer.bin is the model's tokenizer.json rewritten in a
+compact binary form. The recipe is build/embed/model/bundle.py.

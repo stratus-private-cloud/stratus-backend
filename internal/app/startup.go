@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -23,12 +24,14 @@ import (
 	"github.com/stratus-private-cloud/stratus-backend/internal/db/mysql"
 	"github.com/stratus-private-cloud/stratus-backend/internal/db/postgres"
 	"github.com/stratus-private-cloud/stratus-backend/internal/db/sqlite"
+	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
 	"github.com/stratus-private-cloud/stratus-backend/internal/files"
 	"github.com/stratus-private-cloud/stratus-backend/internal/incoming"
 	"github.com/stratus-private-cloud/stratus-backend/internal/lookup"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media/stream"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media/thumb"
+	"github.com/stratus-private-cloud/stratus-backend/internal/semantic"
 	"github.com/stratus-private-cloud/stratus-backend/internal/settings"
 	"github.com/stratus-private-cloud/stratus-backend/internal/storage"
 	"github.com/stratus-private-cloud/stratus-backend/internal/storage/disk"
@@ -169,6 +172,13 @@ func (a *App) open(ctx context.Context) (deps Deps, err error) {
 	deps.Thumbs.WithLookups(deps.Database)
 	if credentials(a.cfg).Configured() {
 		deps.Lookup = lookup.New(deps.Database, deps.Thumbs, a.version)
+	}
+
+	// Built whenever the helper and the model are both here, and run only
+	// while STRATUS_SEMANTIC_SEARCH is on: the setting can change, the binary
+	// and a 390 MB directory cannot appear without a restart.
+	if credentials(a.cfg).Configured() {
+		deps.Model, deps.Semantic = openSemantic(a.cfg, deps)
 	}
 
 	if credentials(a.cfg).Configured() {
@@ -323,4 +333,34 @@ func videoEncoding(mode string, cpus int) (bool, string) {
 		return true, fmt.Sprintf("auto, and %d CPUs keep ahead of a film", cpus)
 	}
 	return false, fmt.Sprintf("auto, and %d CPUs would fall behind a film", cpus)
+}
+
+// openSemantic is the search by content, or nil and a line saying what it is
+// missing: none of it is required, and a server without it is a server whose
+// search answers names alone.
+//
+// The model is the published one, fetched into the data directory the first
+// time the pass or a search needs it, unless STRATUS_EMBED_MODEL names a
+// directory somebody filled themselves -- which is opened and never written.
+func openSemantic(cfg config.Config, deps Deps) (*embed.Lazy, *semantic.Service) {
+	helper := embed.LookupHelper()
+	if helper == "" {
+		slog.Info("search by content unavailable", "reason", "stratus-embed is not installed")
+		return nil, nil
+	}
+	if cfg.EmbedModel != "" {
+		model, err := embed.Open(cfg.EmbedModel, helper)
+		if err != nil {
+			slog.Info("search by content unavailable", "reason", err)
+			return nil, nil
+		}
+		slog.Info("search by content ready", "model", model.Name, "dir", cfg.EmbedModel)
+		lazy := embed.NewLazy(cfg.EmbedModel, helper, nil, nil)
+		return lazy, semantic.New(deps.Database, deps.Thumbs, lazy, model.Name)
+	}
+	bundle := embed.SigLIP2
+	dir := filepath.Join(cfg.DataDir, "models", bundle.Name)
+	lazy := embed.NewLazy(dir, helper, &bundle, &http.Client{Timeout: time.Hour})
+	slog.Info("search by content ready", "model", bundle.Name, "dir", dir)
+	return lazy, semantic.New(deps.Database, deps.Thumbs, lazy, bundle.Name)
 }

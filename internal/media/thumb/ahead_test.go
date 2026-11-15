@@ -313,3 +313,49 @@ func stillPending(t *testing.T, meta db.MediaIndex, kind db.Kind) []db.File {
 	}
 	return pending
 }
+
+// TestAPictureIsTheGridsAndMadeIfItIsNotThere is what a search by content
+// reads a photograph off (#505): the 300-pixel picture, made by the pass's
+// rules when nothing has made it yet.
+func TestAPictureIsTheGridsAndMadeIfItIsNotThere(t *testing.T) {
+	t.Parallel()
+	th, service, _, meta := thumbsOver(t)
+	f := writeImage(t, service, "photos/one.jpg", 400, 400)
+	indexAs(t, meta, f, db.KindImage)
+
+	picture, err := th.Picture(t.Context(), f)
+	if err != nil {
+		t.Fatalf("Picture: %v", err)
+	}
+	if cfg, _, derr := image.DecodeConfig(bytes.NewReader(picture)); derr != nil || cfg.Width != int(thumbMedium) {
+		t.Errorf("the picture is %v, %v; want the grid's", cfg, derr)
+	}
+
+	notes := writeImage(t, service, "notes.txt", 10, 10)
+	if _, err := th.Picture(t.Context(), notes); !errors.Is(err, ErrNoThumbnail) {
+		t.Errorf("Picture of what cannot be drawn = %v, want ErrNoThumbnail", err)
+	}
+}
+
+func TestAPictureStandsAsideAndSoDoesWhatRunsWhenIdle(t *testing.T) {
+	t.Parallel()
+	th, service, _, meta := thumbsOver(t)
+	f := writeImage(t, service, "photos/one.jpg", 400, 400)
+	indexAs(t, meta, f, db.KindImage)
+
+	ran := false
+	if err := th.WhenIdle(func() error { ran = true; return nil }); err != nil || !ran {
+		t.Fatalf("WhenIdle with nobody looking = %v, ran %v", err, ran)
+	}
+
+	th.decoding = make(chan struct{}, 1)
+	th.decoding <- struct{}{}
+	th.inQueue.Add(1)
+	if _, err := th.Picture(t.Context(), f); !errors.Is(err, media.ErrBusy) {
+		t.Errorf("Picture while a request is decoding = %v, want media.ErrBusy", err)
+	}
+	ran = false
+	if err := th.WhenIdle(func() error { ran = true; return nil }); !errors.Is(err, media.ErrBusy) || ran {
+		t.Errorf("WhenIdle while a request is decoding = %v, ran %v", err, ran)
+	}
+}
