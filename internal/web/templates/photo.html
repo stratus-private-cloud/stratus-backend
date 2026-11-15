@@ -23,5 +23,15 @@
   {{if .Camera}}<dt class="col-sm-3">Camera</dt><dd class="col-sm-9">{{.Camera}}</dd>{{end}}
   {{if .Dimensions}}<dt class="col-sm-3">Size</dt><dd class="col-sm-9">{{.Dimensions}}</dd>{{end}}
 </dl>
+
+{{/* The photographs most like this one (#514), as the gallery's tiles, and
+     nothing at all when there are none: an empty heading would read as a
+     search that failed. */}}
+{{with .Similar}}
+<h2 class="h6 text-body-secondary mt-4">Like this</h2>
+<div class="row g-1">
+  {{range .}}{{template "tile" .}}{{end}}
+</div>
+{{end}}
 {{end}}
 {{- end}}

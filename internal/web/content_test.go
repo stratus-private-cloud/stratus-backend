@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -164,10 +163,10 @@ func TestMoreThanARowOfContentIsALinkToTheRest(t *testing.T) {
 	has(t, get(t, h, "/search?q=perro&in=content", cookie).Body.String(), "IMG_0029.jpg")
 }
 
-// TestAPhotographsDetailsShowTheOnesLikeIt (#514): the tiles, closest first,
-// in the dialog and on the page; nothing for a file that is not a photograph,
-// with the search off, or when it fails.
-func TestAPhotographsDetailsShowTheOnesLikeIt(t *testing.T) {
+// TestThePhotoViewerShowsTheOnesLikeIt (#514): the tiles, closest first, under
+// the photograph in the gallery's viewer; nothing with the search off or when
+// it fails, and nothing in a file's details any more.
+func TestThePhotoViewerShowsTheOnesLikeIt(t *testing.T) {
 	t.Parallel()
 	c := &contents{}
 	h, cookie, photo := browserWithContents(t, c, true)
@@ -176,44 +175,35 @@ func TestAPhotographsDetailsShowTheOnesLikeIt(t *testing.T) {
 	far := photo("IMG_0003.jpg")
 	c.hits = []embed.Hit{{FileID: near.ID, Score: 0.95}, {FileID: far.ID, Score: 0.82}, {FileID: 99999, Score: 0.81}}
 
-	page := get(t, h, "/info/IMG_0001.jpg", cookie).Body.String()
+	page := get(t, h, "/photos/2024/08/IMG_0001.jpg?view", cookie).Body.String()
 	has(t, page, "Like this", "IMG_0002.jpg", "IMG_0003.jpg")
-	if strings.Index(page, "IMG_0002.jpg") > strings.Index(page, "IMG_0003.jpg") {
+	like := page[strings.Index(page, "Like this"):]
+	if strings.Index(like, "IMG_0002.jpg") > strings.Index(like, "IMG_0003.jpg") {
 		t.Error("the closest photograph is not first")
 	}
 	if len(c.likeOf) != 1 || c.likeOf[0] != me.ID {
 		t.Errorf("Similar was asked about %v, want the photograph itself", c.likeOf)
 	}
 
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/info/IMG_0001.jpg", nil)
-	req.AddCookie(cookie)
-	req.Header.Set("HX-Request", "true")
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, req)
-	has(t, rec.Body.String(), "<dialog", "Like this", "IMG_0002.jpg")
-
-	// Asked by the name, as every surface here asks what a file is.
-	photo("notes.txt")
-	c.likeOf = nil
-	if body := get(t, h, "/info/notes.txt", cookie).Body.String(); strings.Contains(body, "Like this") || len(c.likeOf) != 0 {
-		t.Error("a file that is not a photograph was asked about")
+	if body := get(t, h, "/info/IMG_0001.jpg", cookie).Body.String(); strings.Contains(body, "Like this") {
+		t.Error("a file's details still show the photographs like it")
 	}
 
 	c.fail = errors.New("the index will not load")
-	rec2 := get(t, h, "/info/IMG_0001.jpg", cookie)
-	if rec2.Code != http.StatusOK || strings.Contains(rec2.Body.String(), "Like this") {
-		t.Errorf("details whose likeness failed = %d, showing the section anyway", rec2.Code)
+	rec := get(t, h, "/photos/2024/08/IMG_0001.jpg?view", cookie)
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "Like this") {
+		t.Errorf("a viewer whose likeness failed = %d, showing the section anyway", rec.Code)
 	}
 
 	off, cookieOff, photoOff := browserWithContents(t, &contents{hits: c.hits}, false)
 	photoOff("IMG_0001.jpg")
-	if body := get(t, off, "/info/IMG_0001.jpg", cookieOff).Body.String(); strings.Contains(body, "Like this") {
-		t.Error("the details show likeness with the search by content off")
+	if body := get(t, off, "/photos/2024/08/IMG_0001.jpg?view", cookieOff).Body.String(); strings.Contains(body, "Like this") {
+		t.Error("the viewer shows likeness with the search by content off")
 	}
 }
 
 // TestPhotographsThatCannotBeReadBackAreLeftOut: the ids came back and the rows
-// did not, and both the search and the details are still pages.
+// did not, and both the search and the viewer are still pages.
 func TestPhotographsThatCannotBeReadBackAreLeftOut(t *testing.T) {
 	t.Parallel()
 	c := &contents{}
@@ -226,8 +216,8 @@ func TestPhotographsThatCannotBeReadBackAreLeftOut(t *testing.T) {
 	if search.Code != http.StatusOK || strings.Contains(search.Body.String(), "IMG_0002.jpg") {
 		t.Errorf("a search whose rows failed = %d", search.Code)
 	}
-	details := get(t, h, "/info/IMG_0001.jpg", cookie)
-	if details.Code != http.StatusOK || strings.Contains(details.Body.String(), "Like this") {
-		t.Errorf("details whose rows failed = %d", details.Code)
+	viewer := get(t, h, "/photos/2024/08/IMG_0001.jpg?view", cookie)
+	if viewer.Code != http.StatusOK || strings.Contains(viewer.Body.String(), "Like this") {
+		t.Errorf("a viewer whose rows failed = %d", viewer.Code)
 	}
 }

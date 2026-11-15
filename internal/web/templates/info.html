@@ -6,7 +6,6 @@
     <div class="card card-body">
       {{template "facts" .}}
     </div>
-    {{template "similar" .}}
     <div class="d-flex gap-2 mt-3">
       <a class="btn btn-outline-secondary" href="{{.Back}}">Back to the folder</a>
       <a class="btn btn-outline-secondary" href="{{.Href}}">Open the file</a>
@@ -49,7 +48,7 @@
               <button class="btn-close" type="submit" aria-label="Close"></button>
             </form>
           </div>
-          <div class="card-body">{{template "facts" .}}{{template "similar" .}}</div>
+          <div class="card-body">{{template "facts" .}}</div>
           <div class="card-footer">
             <a class="btn btn-sm btn-outline-secondary" href="{{.Href}}">Open the file</a>
           </div>
@@ -58,18 +57,6 @@
     </div>
   </div>
 </dialog>
-{{end}}
-{{- end}}
-
-{{/* The photographs most like this one (#514), the gallery's tiles, and
-     nothing at all when there are none: an empty heading would read as a
-     search that failed. */}}
-{{define "similar" -}}
-{{with .Similar}}
-<h2 class="h6 text-body-secondary mt-3">Like this</h2>
-<div class="row g-1">
-  {{range .}}{{template "tile" .}}{{end}}
-</div>
 {{end}}
 {{- end}}
 
