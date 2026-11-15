@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path"
@@ -33,6 +34,15 @@ const (
 	inAlbums   = "albums"
 	inEvents   = "events"
 	inContacts = "contacts"
+	inContent  = "content"
+)
+
+// How many photographs a search by content shows: a row's worth among the
+// other buckets, and more when the page is narrowed to it. No cursor, since
+// a ranking has no place to resume from that a second query would agree with.
+const (
+	contentAmong = 24
+	contentAlone = 200
 )
 
 // The fragments htmx asks for when it extends one of the buckets, as
@@ -51,7 +61,7 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request, user string) {
 
 	only := q.Get("in")
 	switch only {
-	case "", inFiles, inTracks, inPhotos, inArtists, inAlbums, inEvents, inContacts:
+	case "", inFiles, inTracks, inPhotos, inArtists, inAlbums, inEvents, inContacts, inContent:
 	default:
 		h.badRequest(w, user, "There is nothing here to search called that.")
 		return
@@ -116,7 +126,10 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request, user string) {
 			v.FoundContacts, v.MoreContacts = v.FoundContacts[:searchCollectionLimit], searchResumed(term, inContacts, "")
 		}
 	}
-	if only == inEvents || only == inContacts {
+	if only == "" || only == inContent {
+		h.findContent(r, user, term, only, &v)
+	}
+	if only == inEvents || only == inContacts || only == inContent {
 		h.render(w, http.StatusOK, pageSearch, v)
 		return
 	}
@@ -334,4 +347,48 @@ func by(m db.Media) string {
 		parts = append(parts, strconv.Itoa(m.Year))
 	}
 	return strings.Join(parts, " · ")
+}
+
+// findContent fills the photographs whose content is closest to term, when
+// there is a search by content to ask and its pass is on. A failure is logged
+// and the bucket left empty, as the calendar's is: the rest of the page is
+// still an answer.
+func (h *handler) findContent(r *http.Request, user, term, only string, v *view) {
+	ix := h.indexingNow()
+	if ix.Contents == nil || !ix.Semantic {
+		return
+	}
+	v.SearchesContent = true
+	limit := contentAlone
+	if only == "" {
+		limit = contentAmong + 1
+	}
+	hits, err := ix.Contents.Search(r.Context(), term, limit)
+	if err != nil {
+		slog.WarnContext(r.Context(), "searching photographs by content", "err", err)
+		return
+	}
+	if only == "" && len(hits) > contentAmong {
+		hits, v.MoreContent = hits[:contentAmong], searchResumed(term, inContent, "")
+	}
+	ids := make([]int64, len(hits))
+	for i, hit := range hits {
+		ids[i] = hit.FileID
+	}
+	found, err := h.byID.FilesByID(r.Context(), user, ids)
+	if err != nil {
+		slog.WarnContext(r.Context(), "reading photographs found by content", "err", err)
+		return
+	}
+	byID := make(map[int64]db.File, len(found))
+	for _, f := range found {
+		byID[f.ID] = f
+	}
+	photos := make([]db.File, 0, len(found))
+	for _, id := range ids {
+		if f, ok := byID[id]; ok {
+			photos = append(photos, f)
+		}
+	}
+	v.ContentTiles = shots(photos, h.statesOf(r.Context(), r.URL.Path, photos))
 }

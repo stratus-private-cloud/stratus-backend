@@ -18,9 +18,11 @@ import (
 	"github.com/stratus-private-cloud/stratus-backend/internal/config"
 	"github.com/stratus-private-cloud/stratus-backend/internal/contacts"
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
+	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
 	"github.com/stratus-private-cloud/stratus-backend/internal/files"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media/thumb"
+	"github.com/stratus-private-cloud/stratus-backend/internal/semantic"
 	"github.com/stratus-private-cloud/stratus-backend/internal/web"
 )
 
@@ -108,6 +110,12 @@ func (a *App) indexEvery(ctx context.Context, deps Deps, changed <-chan struct{}
 			// still in hand: the phone that uploaded it is the one about to
 			// open the grid, and this costs no query at all.
 			a.thumbFor(ctx, deps, f)
+			// Its content waits for the pass, a minute after the uploads
+			// stop coming rather than an hour: a vector is a second of CPU
+			// a phone backing up a roll should not be queued behind.
+			if again == nil && a.semanticOn(deps) {
+				again = time.After(thumbBusyPause)
+			}
 			continue
 
 		case <-deps.Indexer.LostTrack():
@@ -120,7 +128,14 @@ func (a *App) indexEvery(ctx context.Context, deps Deps, changed <-chan struct{}
 		if !a.indexUntilDry(ctx, deps) {
 			return false
 		}
-		again = after(a.thumbsAhead(ctx, deps))
+		wait := a.thumbsAhead(ctx, deps)
+		if wait == 0 {
+			// Pictures first, because the content is read off them and a
+			// grid is what somebody opens; the third half gets the CPU the
+			// second one has finished with.
+			wait = a.embedAhead(ctx, deps)
+		}
+		again = after(wait)
 	}
 }
 
@@ -173,6 +188,42 @@ func (a *App) thumbsAhead(ctx context.Context, deps Deps) time.Duration {
 	}
 
 	if made < thumb.Batch {
+		return 0
+	}
+	return thumbPause
+}
+
+// semanticOn is whether the third half runs: the setting, and a model to run.
+func (a *App) semanticOn(deps Deps) bool {
+	return a.values(deps).SemanticSearch && deps.Semantic != nil
+}
+
+// embedAhead reads one batch of photographs' content (#505), and answers how
+// long to wait before the next, on thumbsAhead's rules.
+func (a *App) embedAhead(ctx context.Context, deps Deps) time.Duration {
+	if !a.semanticOn(deps) {
+		return 0
+	}
+	done, err := deps.Semantic.Batch(ctx, time.Now())
+	switch {
+	case errors.Is(err, context.Canceled):
+		return 0
+	case errors.Is(err, media.ErrBusy), errors.Is(err, embed.ErrFetching):
+		// The model on its way is waited out like somebody looking: it is
+		// a minute's question, not an error.
+		return thumbBusyPause
+	case errors.Is(err, embed.ErrUnavailable):
+		// The helper would not run, which retrying in a second will not
+		// change; the hour's tick will try again.
+		slog.Error("reading photographs' content", "err", err)
+		return 0
+	case err != nil:
+		slog.Error("reading photographs' content", "err", err)
+		return 0
+	case done > 0:
+		slog.Info("read photographs' content", "files", done)
+	}
+	if done < semantic.Batch {
 		return 0
 	}
 	return thumbPause

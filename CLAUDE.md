@@ -2824,6 +2824,70 @@ Restraint here is principle 3, not laziness:
   re-index is not. Both are read by the Subsonic adapter (`getLyricsBySongId`
   as the `songLyrics` extension, `getAlbumInfo2` with the id and nothing
   else) and by the album page, and written by nothing but the pass.
+- **A photograph is found by what is in it, by a model that runs here**
+  (#505). Google's SigLIP 2 base, chosen on a spike over 500 COCO photographs
+  and thirty queries in Spanish and English -- 0.81 and 0.86 by average
+  precision, against M-CLIP's 0.57 in Spanish -- because what a personal cloud
+  is searched in is its owner's language, and the vectors have none: a photo is
+  read once and found in any.
+
+  **It runs in `stratus-embed`, a helper process, and not in this binary**,
+  which is principle 5 read the way ffmpeg already reads it: inference in Go is
+  either cgo or toys, and a binary beside ours keeps this one static.
+  `build/embed` is ONNX Runtime's minimal build, linked statically against the
+  operators the two towers use (`ops.config`) and nothing else, 9 MB, around a
+  `main.cc` that decides nothing: a tensor in on stdin, a vector out. One
+  process per tower, started by the first call and stopped ten minutes after
+  the last, so the text tower lives while somebody searches and the vision
+  tower while the pass runs.
+
+  **The model is mapped, never loaded**, and that is what put it within a 512
+  MB machine: the `.ort` format lets the session keep its weights where the
+  file lies (`use_ort_model_bytes_for_initializers`, prepacking off), so the
+  290 MB text tower costs 3 MB of anonymous memory and the pages it touches,
+  which the kernel can take back -- and a query touches only the rows of the
+  vocabulary it uses. Prepacking bought 7 % speed for 90 MB each.
+
+  **Everything around the towers is Go, and bit-exact**: the Gemma tokenizer
+  from a compact `tokenizer.bin` (the 33 MB JSON costs more to parse than the
+  tower it feeds), checked id for id against Hugging Face's, and PIL's bilinear
+  resize to the last fixed-point bit, because an int8 tower magnifies a level
+  of difference into a vector at 0.995 of the right one.
+
+  **What the int8 cost, and where it was paid.** Dynamic int8 took both towers
+  to 0.54. The vision tower is static int8 calibrated on 64 other photographs
+  (0.79, three times faster); the text tower is dynamic int8 except one matrix,
+  `layers.0/mlp/fc2`, without which Spanish fell to 0.73 while English did not
+  notice -- so that one stays fp32, and the 256k-token table is int8 per row.
+  `build/embed/model` is the recipe, and its two runs give equal vectors but
+  not equal bytes, which is why the asset is what is pinned.
+
+  **The model is a release asset fetched on first use, as the demo's media
+  are**: 347 MB nobody who leaves the setting off should download in every
+  image. `embed.Lazy` fetches it into `<data>/models/` once something asks,
+  verifies the SHA-256 the binary carries, unpacks only the names a bundle has,
+  and answers `ErrFetching` meanwhile, which the pass waits out like somebody
+  browsing. `STRATUS_EMBED_MODEL` is the door for an install with no route
+  out, and is opened and never written. The bundle is converted once, for arm
+  -- the conversion with nothing platform-specific in it -- and
+  `media-tools.yml` holds the amd64 helper to the same vectors before it
+  publishes it.
+
+  **Vectors are a table of their own, searched in Go.** `embeddings` hangs off
+  media's key rather than adding 772 bytes to rows the indexer and the gallery
+  walk; it carries the model and the blob key as the thumbnail columns do, so
+  another model or an overwrite puts a photograph back in the queue. pgvector
+  was weighed and is one engine of three behind a superuser, MySQL's `VECTOR`
+  has no distance outside HeatWave, and SQLite's extension is C: a library of
+  50,000 is 34 ms of brute force over int8, exact, from an index built on the
+  first search and dropped ten minutes after the last. It is the one ranked
+  part of the search page, so it has no cursor; `semantic.Floor` is 0.06, from
+  the spike's precision and recall.
+
+  **The pass is the indexer's third half**, after the thumbnails, reading the
+  300-pixel picture the grid already has -- HEIC included, since ffmpeg made it
+  -- and standing aside on the same "is anybody looking" the pictures ask
+  (`thumb.WhenIdle`). A refusal comes back in a week like theirs.
 - **A track is transcoded when a client asks, by one ffmpeg per playback**
   (#50). Three pieces, and each is where it is for a reason.
 

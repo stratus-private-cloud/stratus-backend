@@ -199,7 +199,13 @@ type view struct {
 	MoreContacts     string
 	SearchesEvents   bool
 	SearchesContacts bool
-	Only             string
+	// ContentTiles are the photographs a search by content found (#505),
+	// SearchesContent whether there is one to ask, and MoreContent the page
+	// narrowed to them.
+	ContentTiles    []tile
+	SearchesContent bool
+	MoreContent     string
+	Only            string
 	// Counts and the three fields under it are the status page: how much of the
 	// library has been looked at, and by which extractor.
 	Counts       db.MediaCounts
@@ -226,6 +232,9 @@ type view struct {
 	// Lookup is music metadata from outside (#217), and nil when the pass is
 	// off and nothing was ever fetched.
 	Lookup *lookupView
+	// Content is the search by content's line, and nil when it is off and
+	// never ran.
+	Content *contentView
 	// Shared is the signature this page was reached with, empty for a request
 	// that arrived with a session. Every link the page emits carries it, or the
 	// second click is a login form.

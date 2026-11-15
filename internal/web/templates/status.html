@@ -149,6 +149,22 @@
     <dd class="col-sm-8" data-count="lyrics">{{.Lyrics}} of {{.Tracks}}{{if .On}}<span class="text-body-secondary small"> · {{.TracksTried}} asked about</span>{{end}}</dd>
     {{end}}
 
+    {{/* Only when it is on or has run (#505). On with nothing to run it is
+         the one state that needs saying, since otherwise the pass would look
+         stuck at nothing. */}}
+    {{with .Content}}
+    <dt class="col-sm-4 fw-normal text-body-secondary">Content read</dt>
+    {{if .Missing}}
+    <dd class="col-sm-8" data-count="content-read"><span class="text-body-secondary small"><code>STRATUS_SEMANTIC_SEARCH</code> is on, but <code>stratus-embed</code> or its model is not installed</span></dd>
+    {{else}}
+    <dd class="col-sm-8" data-count="content-read">{{.Made}} of {{.Files}}{{if not .On}}<span class="text-body-secondary small"> · <code>STRATUS_SEMANTIC_SEARCH</code> is off</span>{{end}}{{with .State}}<span class="text-body-secondary small" data-content-state> · {{.}}</span>{{end}}</dd>
+    {{if .Refused}}
+    <dt class="col-sm-4 fw-normal text-body-secondary">Content unreadable</dt>
+    <dd class="col-sm-8" data-count="content-refused">{{.Refused}}</dd>
+    {{end}}
+    {{end}}
+    {{end}}
+
     {{/* Only when a folder is configured, which it is not by default: a row
          saying nothing is waiting in a folder nobody has is noise. It rides
          the same fragment as the counts, so a file dropped in appears here

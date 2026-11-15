@@ -57,6 +57,12 @@ type Files interface {
 	// has to be able to make one.
 	CreateDir(ctx context.Context, owner, path string) (File, error)
 
+	// FilesByID returns the owner's files among ids, in no order, leaving out
+	// the ones that are gone. It is for an answer kept as ids -- a search by
+	// content holds its vectors by file (#505) -- so the ids are one page of
+	// one and the caller is what bounds them.
+	FilesByID(ctx context.Context, owner string, ids []int64) ([]File, error)
+
 	// FileByPath returns the file at path, or ErrNotFound.
 	FileByPath(ctx context.Context, owner, path string) (File, error)
 
@@ -326,6 +332,7 @@ type ThumbVerdict struct {
 type Repo interface {
 	Files
 	MediaIndex
+	Embeddings
 	Music
 	Finder
 	Annotations

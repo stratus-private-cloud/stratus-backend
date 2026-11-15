@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"time"
 
@@ -223,4 +224,43 @@ func (t *Service) decodeIfIdle() (func(), bool) {
 		t.inQueue.Add(-1)
 		return nil, false
 	}
+}
+
+// Picture is the grid's picture of f, made by Prepare's rules if it is not in
+// the store yet, for a pass that reads pictures rather than files: a
+// photograph's vector is read off this (#505), since the model sees 224 pixels
+// and the original is twelve million of them, possibly HEIC.
+//
+// ErrNoThumbnail for a file this build cannot draw, and media.ErrBusy when
+// somebody is looking, as Prepare.
+func (t *Service) Picture(ctx context.Context, f db.File) ([]byte, error) {
+	switch state, err := t.Prepare(ctx, f); {
+	case err != nil:
+		return nil, err
+	case state == db.ThumbRefused:
+		return nil, fmt.Errorf("%w: %q", ErrNoThumbnail, f.Path)
+	}
+	key := thumbKey(f.BlobKey, thumbMedium)
+	body, _, err := t.blobs.Get(ctx, key, storage.All())
+	if err != nil {
+		return nil, fmt.Errorf("%w: read %q: %w", media.ErrUnreachable, key, err)
+	}
+	defer func() { _ = body.Close() }()
+	picture, err := io.ReadAll(body)
+	if err != nil {
+		return nil, fmt.Errorf("%w: read %q: %w", media.ErrUnreachable, key, err)
+	}
+	return picture, nil
+}
+
+// WhenIdle runs fn holding a decoder if nothing else wants one, and answers
+// media.ErrBusy otherwise: the same "is anybody looking" a pass of pictures
+// asks, for work that is not a decode but costs a CPU like one.
+func (t *Service) WhenIdle(fn func() error) error {
+	release, taken := t.decodeIfIdle()
+	if !taken {
+		return media.ErrBusy
+	}
+	defer release()
+	return fn()
 }

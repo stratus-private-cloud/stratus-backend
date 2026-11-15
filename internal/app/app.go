@@ -22,6 +22,7 @@ import (
 	"github.com/stratus-private-cloud/stratus-backend/internal/contacts"
 	"github.com/stratus-private-cloud/stratus-backend/internal/dav"
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
+	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
 	"github.com/stratus-private-cloud/stratus-backend/internal/files"
 	"github.com/stratus-private-cloud/stratus-backend/internal/incoming"
 	"github.com/stratus-private-cloud/stratus-backend/internal/lookup"
@@ -29,6 +30,7 @@ import (
 	"github.com/stratus-private-cloud/stratus-backend/internal/media/stream"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media/thumb"
 	"github.com/stratus-private-cloud/stratus-backend/internal/music"
+	"github.com/stratus-private-cloud/stratus-backend/internal/semantic"
 	"github.com/stratus-private-cloud/stratus-backend/internal/settings"
 	"github.com/stratus-private-cloud/stratus-backend/internal/storage"
 	"github.com/stratus-private-cloud/stratus-backend/internal/subsonic"
@@ -164,6 +166,12 @@ type Deps struct {
 	// with no credentials. Whether it asks is STRATUS_MUSIC_LOOKUP, read on
 	// every pass: nothing leaves the machine by default.
 	Lookup *lookup.Service
+	// Semantic reads photographs and searches them by content (#505), and is
+	// nil without stratus-embed, without its model or without credentials.
+	// Whether the pass runs is STRATUS_SEMANTIC_SEARCH; Model is what it runs
+	// on, held here to stop its processes on the way out.
+	Semantic *semantic.Service
+	Model    *embed.Lazy
 	// Settings are the settings in force (#397), and nil for Deps a test
 	// built by hand, which then run on the configuration.
 	Settings *settings.Service
@@ -182,6 +190,9 @@ func (d Deps) Close() error {
 	}
 	if d.Loopback != nil {
 		errs = append(errs, d.Loopback.Close())
+	}
+	if d.Model != nil {
+		d.Model.Close()
 	}
 	return errors.Join(errs...)
 }
@@ -245,6 +256,7 @@ func (a *App) Handler(deps Deps) http.Handler {
 			Indexing: web.Indexing{
 				Index: deps.Database, Interval: a.cfg.IndexInterval, Ahead: a.cfg.ThumbsAhead,
 				Lookups: deps.Database, Lookup: a.cfg.MusicLookup,
+				Contents: contents(deps), Semantic: a.cfg.SemanticSearch,
 			},
 			Imports: imports(deps), Playback: a.playback(deps), TrashRetention: a.cfg.TrashRetention,
 			Settings:  func() config.Values { return a.values(deps) },
@@ -518,4 +530,13 @@ func davOrBrowser(dav, browser http.Handler) http.Handler {
 			dav.ServeHTTP(w, r)
 		}
 	})
+}
+
+// contents is the search by content as the web UI takes it, and a nil
+// interface rather than a nil pointer in one when there is none.
+func contents(deps Deps) web.Contents {
+	if deps.Semantic == nil {
+		return nil
+	}
+	return deps.Semantic
 }

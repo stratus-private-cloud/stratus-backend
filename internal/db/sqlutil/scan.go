@@ -1,6 +1,8 @@
 package sqlutil
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -342,4 +344,30 @@ func ScanContact(s Scanner, t Times) (db.Contact, error) {
 		return db.Contact{}, err
 	}
 	return c, nil
+}
+
+// Vector is one row of EachEmbedding.
+type Vector struct {
+	FileID int64
+	Bytes  []byte
+}
+
+// ScanVector reads a file id and its vector.
+func ScanVector(s Scanner) (Vector, error) {
+	var v Vector
+	return v, s.Scan(&v.FileID, &v.Bytes)
+}
+
+// EachVector runs one EachEmbedding query through fn, which is the same loop in
+// every driver.
+func EachVector(ctx context.Context, q Querier, query string, model string, fn func(int64, []byte) error) error {
+	for v, err := range Seq(ctx, q, func(rows *sql.Rows) (Vector, error) { return ScanVector(rows) }, query, model) {
+		if err != nil {
+			return err
+		}
+		if err := fn(v.FileID, v.Bytes); err != nil {
+			return err
+		}
+	}
+	return nil
 }

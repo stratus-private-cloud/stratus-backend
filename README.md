@@ -1167,6 +1167,41 @@ its own: `/search?q=sunset&in=files`. What is not in it yet is a place: a
 photograph knows where it was taken as two numbers, and turning those into
 "Lisbon" means asking a service somewhere else.
 
+**A photograph can also be found by what is in it**, which is off by default:
+`STRATUS_SEMANTIC_SEARCH=on` (also on the Settings page). `perro en la playa`,
+`a dog on the beach` and `chien` all find the same photographs, because the
+words and the pictures are compared as vectors and not as text: the model is
+Google's [SigLIP 2](https://huggingface.co/google/siglip2-base-patch16-224),
+which was trained in many languages, and it runs here — no photograph and no
+query leaves the machine. Those answers come under their own heading, **ranked**
+by how close they are, which is the one part of the page that is: twenty-four
+beside the rest, and up to two hundred at `/search?q=…&in=content`. On 500
+COCO photographs with labels to check against, a Spanish query found 0.79 of
+what it should by average precision and an English one 0.81. It knows objects,
+scenes and activities; it does not know who anybody is or what a place is
+called.
+
+What turning it on costs, so nobody finds out the hard way:
+
+- **A 347 MB download, once.** The model is not in the image — most installs
+  will never turn this on — so the first time it is needed the server fetches
+  it from [this repository's releases](https://github.com/stratus-private-cloud/stratus-backend/releases/tag/model-siglip2-v1)
+  into `<data>/models/`, checks it against the SHA-256 the binary carries, and
+  says so on `/status` meanwhile. That is the only thing that goes out. With no
+  route out, download the tarball elsewhere, unpack it where the server can
+  read it and point `STRATUS_EMBED_MODEL` at the folder: nothing is fetched then.
+- **A CPU for a while.** Every photograph is read once, off the 300-pixel
+  thumbnail the grid already uses, by the same background pass as the
+  metadata and the thumbnails, after them and only while nobody is browsing:
+  about 0.4 s a photograph on one arm64 core, so a library of 50,000 is most of
+  a day the first time and a second per upload after that. `/status` counts it.
+- **Memory only while it is used.** The model runs in a helper process,
+  `stratus-embed`, one per half, started when it is needed and stopped after
+  ten minutes without: some 5 MB of its own each, plus the model's pages, which
+  are mapped from the file and so are memory the kernel can take back. A
+  search holds the library's vectors, about 25 MB for 50,000 photographs, and
+  lets them go after the same ten minutes. A 512 MB machine runs it.
+
 How the matching is done is each database's business: a generated `tsvector`
 with a GIN index on PostgreSQL, a `FULLTEXT` index on MySQL, and FTS5 on
 SQLite. All three match whole words, which is the whole of what is promised --
@@ -1567,8 +1602,9 @@ make up STRATUS_PORT=9000 STRATUS_DATA_PATH=/srv/stratus
 
 **✎ can also be set on the Settings page** (the menu under your name), and so
 can `STRATUS_GC_INTERVAL`, `STRATUS_GC_GRACE`, `STRATUS_INDEX_INTERVAL`,
-`STRATUS_THUMBS_AHEAD`, `STRATUS_INCOMING_INTERVAL`, `STRATUS_VIDEO_TRANSCODE`
-and `STRATUS_MUSIC_LOOKUP`, described where they matter below, and
+`STRATUS_THUMBS_AHEAD`, `STRATUS_INCOMING_INTERVAL`, `STRATUS_VIDEO_TRANSCODE`,
+`STRATUS_MUSIC_LOOKUP` and `STRATUS_SEMANTIC_SEARCH`, described where they
+matter below, and
 `STRATUS_WEEK_START` — `monday` or `sunday`, the day the calendar page's weeks
 begin on. The page offers `TZ` from the zones the machine's own time zone
 database holds. A change there
@@ -1577,8 +1613,8 @@ environment wins**: a variable that is set is shown on the page and not
 offered, so whatever an install wrote in its compose file or its platform's
 dashboard is what runs — and a value stored before somebody set the variable
 comes back if they unset it. What opens the database and the store, the
-credentials, the Sentry DSN and `STRATUS_INCOMING_DIR` are the environment's
-alone.
+credentials, the Sentry DSN, `STRATUS_INCOMING_DIR` and `STRATUS_EMBED_MODEL`
+are the environment's alone.
 
 ### Blob storage
 
@@ -1845,13 +1881,21 @@ build rather than a note in a document.
 ## Container
 
 Multi-stage build, `distroless/static:nonroot` runtime, about 48 MB unpacked
-and a 19 MB download on amd64. The Go binary is most of it at 29 MB, beside
-2.4 MB of `ffprobe` (2.2 MB on arm64), 13.2 MB of `ffmpeg` (11.1 MB on arm64)
-and a base under one megabyte. It grew 4 MB with the web UI: `html/template`
+and a 19 MB download on amd64 before `stratus-embed` was added, which is 9 MB
+more on arm64 and not yet measured on amd64. The Go binary is most of it at 29 MB, beside
+2.4 MB of `ffprobe` (2.2 MB on arm64), 13.2 MB of `ffmpeg` (11.1 MB on arm64),
+`stratus-embed`, and a base under one megabyte. It grew 4 MB with the web UI: `html/template`
 costs about three of those and the embedded Bootstrap a third of one, with htmx
 a further 50 KB, which is what a page rendered by the standard library and
 served from the binary costs. The names of places are another 750 KB: GeoNames'
 towns, built in so that naming where a photograph was taken asks nobody.
+
+**`stratus-embed` is ONNX Runtime built for two models and nothing else**, in
+`build/embed`: a minimal build that reads only its own format, linked
+statically against exactly the operators SigLIP 2's two halves use, around a
+`main.cc` that reads a tensor on standard input and writes a vector back. It
+is what runs [a search by content](#web-ui), and the model it runs is a release
+asset rather than part of the image; `build/embed/model` is how that is made.
 
 **Both FFmpeg tools are built here rather than taken off the shelf**, in
 `build/ffprobe/Dockerfile` and `build/ffmpeg/Dockerfile`. A general-purpose
@@ -1934,7 +1978,8 @@ Working now:
 - Adopting a Nextcloud instance on S3, surveyed first and then imported without
   moving a byte, from its SQLite, PostgreSQL or MySQL database.
 - A search box over names, titles, artists, albums, what a camera recorded,
-  events and contacts.
+  events and contacts -- and, opt-in, over what is in a photograph, with a model
+  that runs here. `STRATUS_SEMANTIC_SEARCH=on`.
 - A web UI: sign in, walk the tree, open or download a file, upload one, make a folder,
   rename and delete, see what the indexer found about a file, a gallery of every photo by date -- also served as
   folders by date over WebDAV -- and a music library to browse and play. A signed-cookie session and a CSP that allows nothing but

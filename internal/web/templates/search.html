@@ -76,6 +76,24 @@
 {{end}}
 {{end}}
 
+{{/* Ranked by how close a photograph's content is to the words (#505), so
+     it has no cursor: "more" is the same search narrowed and longer. */}}
+{{if and .SearchesContent (.Shows "content")}}
+<h2 class="h6 text-body-secondary">In the photos</h2>
+{{if .ContentTiles}}
+<div class="row g-1 mb-4">
+  {{range .ContentTiles}}
+  {{template "tile" .}}
+  {{end}}
+  {{with .MoreContent}}
+  <div class="col-12 text-center py-3"><a class="link-secondary small text-decoration-none" href="{{.}}">More photos like this</a></div>
+  {{end}}
+</div>
+{{else}}
+<p class="text-body-secondary small mb-4">Nothing in a photograph looks like that.</p>
+{{end}}
+{{end}}
+
 {{if and .SearchesEvents (.Shows "events")}}
 <h2 class="h6 text-body-secondary">Calendar</h2>
 {{if .FoundEvents}}

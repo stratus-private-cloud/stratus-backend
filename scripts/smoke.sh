@@ -72,6 +72,10 @@ BIN_SIZE_FAIL=$((30 * 1024 * 1024))
 # from 16 when it learned to re-encode a film (#50): libx264 and zimg are 2.2
 # MB on arm64, which put amd64 past the old line.
 TOOLS_SIZE_FAIL=$((20 * 1024 * 1024))
+# stratus-embed, ONNX Runtime built for two models' operators: 9 MB on arm64
+# against the 20 MB a general-purpose libonnxruntime.so costs before the
+# program that uses it (#505).
+EMBED_SIZE_FAIL=$((12 * 1024 * 1024))
 
 BASE_IMAGE="gcr.io/distroless/static:nonroot"
 
@@ -165,7 +169,15 @@ section "Image properties"
 # ---------------------------------------------------------------------------
 # Not merely non-root but this uid: every named volume out there was made owned
 # by it, and a different one would refuse to start on all of them (#177).
-img_user="$(docker image inspect -f '{{.Config.User}}' "$REF")"
+img_# The helper is optional to the server and not to the image: a build that lost
+# it is one where turning the setting on says it is not installed.
+if docker run --rm --entrypoint /usr/local/bin/stratus-embed "$REF" 2>&1 | grep -q "usage: stratus-embed"; then
+  ok "stratus-embed runs inside the image"
+else
+  bad "stratus-embed runs inside the image" "it is missing or not executable"
+fi
+
+user="$(docker image inspect -f '{{.Config.User}}' "$REF")"
 if [ "$img_user" = "65532:65532" ]; then
   ok "runs as 65532:65532, which existing volumes are owned by"
 else
@@ -177,15 +189,16 @@ fi
 docker pull -q "$BASE_IMAGE" >/dev/null 2>&1 || true
 base_layers="$(docker image inspect -f '{{len .RootFS.Layers}}' "$BASE_IMAGE" 2>/dev/null || echo 0)"
 img_layers="$(docker image inspect -f '{{len .RootFS.Layers}}' "$REF")"
-# Five layers now: the binary, ffprobe, ffmpeg, ffmpeg's licence notice, which
-# GPLv3 wants beside the binary since it carries libx264 (#50), and an empty
-# /data for a fresh named volume to take its owner from (#177). The
-# number matters less than the fact that it is counted -- a base swapped for
-# something with a package manager in it would show up here first.
-if [ "$base_layers" -gt 0 ] && [ "$((img_layers - base_layers))" -eq 5 ]; then
-  ok "adds exactly five layers over the base ($base_layers -> $img_layers)"
+# Seven layers now: the binary, ffprobe, ffmpeg, ffmpeg's licence notice, which
+# GPLv3 wants beside the binary since it carries libx264 (#50), stratus-embed
+# and ONNX Runtime's notices (#505), and an empty /data for a fresh named
+# volume to take its owner from (#177). The number matters less than the fact
+# that it is counted -- a base swapped for something with a package manager in
+# it would show up here first.
+if [ "$base_layers" -gt 0 ] && [ "$((img_layers - base_layers))" -eq 7 ]; then
+  ok "adds exactly seven layers over the base ($base_layers -> $img_layers)"
 else
-  bad "adds exactly five layers over the base" "base=$base_layers image=$img_layers"
+  bad "adds exactly seven layers over the base" "base=$base_layers image=$img_layers"
 fi
 
 # Both media tools are requirements, so an absence has to fail here rather than
@@ -231,6 +244,13 @@ if docker cp "$licid:/usr/local/share/licenses/ffmpeg" "$licdir/ffmpeg" >/dev/nu
 else
   bad "the image carries ffmpeg's licence notice and texts" "$(ls "$licdir/ffmpeg" 2>/dev/null | tr '\n' ' ')"
 fi
+if docker cp "$licid:/usr/local/share/licenses/stratus-embed" "$licdir/embed" >/dev/null 2>&1 &&
+   grep -q "MIT License" "$licdir/embed/onnxruntime-LICENSE" &&
+   [ -s "$licdir/embed/onnxruntime-ThirdPartyNotices.txt" ]; then
+  ok "the image carries ONNX Runtime's licence and notices"
+else
+  bad "the image carries ONNX Runtime's licence and notices" "$(ls "$licdir/embed" 2>/dev/null | tr '\n' ' ')"
+fi
 
 # ---------------------------------------------------------------------------
 section "Binary"
@@ -261,6 +281,14 @@ else
   bad "media tools within budget" \
     "$((tools_size / 1024 / 1024)) MB exceeds $((TOOLS_SIZE_FAIL / 1024 / 1024)) MB"
 fi
+docker cp "$cid:/usr/local/bin/stratus-embed" "$bindir/stratus-embed" >/dev/null
+embed_size="$(stat -c '%s' "$bindir/stratus-embed")"
+if [ "$embed_size" -le "$EMBED_SIZE_FAIL" ]; then
+  ok "stratus-embed is $((embed_size / 1024 / 1024)) MB, within budget"
+else
+  bad "stratus-embed within budget" \
+    "$((embed_size / 1024 / 1024)) MB exceeds $((EMBED_SIZE_FAIL / 1024 / 1024)) MB"
+fi
 
 buildinfo="$(docker run --rm -v "$bindir:/b:ro" "golang:1.27.0-alpine3.24" go version -m /b/stratus 2>/dev/null || true)"
 if grep -q 'CGO_ENABLED=0' <<<"$buildinfo"; then
@@ -284,12 +312,15 @@ else
 fi
 
 # A static binary has no PT_INTERP segment. readelf comes with the Debian image.
-if docker run --rm -v "$bindir:/b:ro" "golang:1.27.0-trixie" \
-     sh -c 'readelf -l /b/stratus 2>/dev/null | grep -q INTERP'; then
-  bad "binary is statically linked" "an INTERP segment is present, so it needs a dynamic loader"
-else
-  ok "binary is statically linked (no INTERP segment)"
-fi
+# stratus-embed too, since the base has no C library for it to load (#505).
+for exe in stratus stratus-embed; do
+  if docker run --rm -v "$bindir:/b:ro" "golang:1.27.0-trixie" \
+       sh -c "readelf -l /b/$exe 2>/dev/null | grep -q INTERP"; then
+    bad "$exe is statically linked" "an INTERP segment is present, so it needs a dynamic loader"
+  else
+    ok "$exe is statically linked (no INTERP segment)"
+  fi
+done
 
 # ---------------------------------------------------------------------------
 section "Flags"

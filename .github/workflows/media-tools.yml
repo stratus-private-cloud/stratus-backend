@@ -1,5 +1,6 @@
-# Publishes the trimmed media tools the server image copies in: ffprobe reads
-# files and ffmpeg turns them into pixels.
+# Publishes the trimmed tools the server image copies in: ffprobe reads files,
+# ffmpeg turns them into pixels, and stratus-embed runs the model a search by
+# content reads photographs with (#505).
 #
 # Separate from ci.yml on purpose: this compiles C, and doing it in the server
 # Dockerfile would put a cross-architecture build on every commit. Here it runs
@@ -11,7 +12,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['build/ffprobe/**', 'build/ffmpeg/**', '.github/workflows/media-tools.yml']
+    paths: ['build/ffprobe/**', 'build/ffmpeg/**', 'build/embed/**', '.github/workflows/media-tools.yml']
 
 permissions:
   contents: read
@@ -27,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tool: [ffprobe, ffmpeg]
+        tool: [ffprobe, ffmpeg, embed]
         arch: [amd64, arm64]
         # arch is a matrix key and not only an include value, so each of these
         # merges into the combinations whose arch matches. Naming the platform
@@ -52,8 +53,12 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           TOOL: ${{ matrix.tool }}
         run: |
-          version="$(sed -n 's/^ARG FFMPEG_VERSION=//p' "build/$TOOL/Dockerfile")"
-          [ -n "$version" ] || { echo "no FFMPEG_VERSION in build/$TOOL/Dockerfile"; exit 1; }
+          # The FFmpeg tools are tagged by the FFmpeg they are; stratus-embed by
+          # its own count, since main.cc changes without ONNX Runtime moving.
+          var=FFMPEG_VERSION
+          [ "$TOOL" = embed ] && var=EMBED_VERSION
+          version="$(sed -n "s/^ARG $var=//p" "build/$TOOL/Dockerfile")"
+          [ -n "$version" ] || { echo "no $var in build/$TOOL/Dockerfile"; exit 1; }
           # A registry repository name has to be lowercase and the owner is not.
           owner="$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')"
           {
@@ -71,12 +76,40 @@ jobs:
 
       # --platform is stated rather than left to the runner so that a runner on
       # the wrong architecture fails here instead of quietly emulating.
-      - name: build and push ${{ matrix.tool }} ${{ matrix.arch }}
+      - name: build ${{ matrix.tool }} ${{ matrix.arch }}
         run: |
           docker buildx build \
             --platform "${{ matrix.platform }}" \
             --tag "${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}-${{ matrix.arch }}" \
-            --push "build/${{ matrix.tool }}"
+            --load "build/${{ matrix.tool }}"
+
+      # The model is converted once, on arm64, and this is what says the same
+      # bytes give the same vectors under the helper built for each
+      # architecture: internal/embed's test, against the asset as published.
+      - name: check stratus-embed ${{ matrix.arch }} against the published model
+        if: matrix.tool == 'embed'
+        env:
+          IMAGE: ${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}-${{ matrix.arch }}
+        run: |
+          field() { sed -n "s/^\t$1: *\"\(.*\)\",$/\1/p" internal/embed/fetch.go | head -1; }
+          name="$(field Name)"; url="$(field URL)"; sum="$(field SHA256)"
+          go="$(sed -n 's/^ARG GO_VERSION=//p' Dockerfile)"
+          [ -n "$name" ] && [ -n "$url" ] && [ -n "$sum" ] && [ -n "$go" ] || { echo "cannot read the pinned model"; exit 1; }
+          curl -fsSL -o model.tar.gz "$url"
+          echo "$sum  model.tar.gz" | sha256sum -c -
+          tar -xzf model.tar.gz
+          docker create --name embed "$IMAGE" x >/dev/null
+          docker cp embed:/stratus-embed ./stratus-embed
+          docker run --rm -v "$PWD":/src -w /src \
+            -v "$PWD/stratus-embed":/usr/local/bin/stratus-embed:ro \
+            -e STRATUS_TEST_EMBED_MODEL="/src/$name" -e STRATUS_TEST_TOKENIZER="/src/$name/tokenizer.bin" \
+            -e CGO_ENABLED=0 "golang:$go-alpine" \
+            go test -v -run 'TestTheModelGivesWhatPythonGave|TestTokenizerMatchesTheReference' ./internal/embed/ \
+            | tee test.log
+          ! grep -q -- '--- SKIP' test.log
+
+      - name: push ${{ matrix.tool }} ${{ matrix.arch }}
+        run: docker push "${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}-${{ matrix.arch }}"
 
   # The version tag is a manifest list over the two architecture tags, so the
   # server Dockerfile can COPY --from it without naming an architecture.
@@ -84,7 +117,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        tool: [ffprobe, ffmpeg]
+        tool: [ffprobe, ffmpeg, embed]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -96,7 +129,9 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           TOOL: ${{ matrix.tool }}
         run: |
-          version="$(sed -n 's/^ARG FFMPEG_VERSION=//p' "build/$TOOL/Dockerfile")"
+          var=FFMPEG_VERSION
+          [ "$TOOL" = embed ] && var=EMBED_VERSION
+          version="$(sed -n "s/^ARG $var=//p" "build/$TOOL/Dockerfile")"
           owner="$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')"
           {
             echo "version=$version"
