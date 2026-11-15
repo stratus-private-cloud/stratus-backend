@@ -96,6 +96,10 @@ func (a *App) indexEvery(ctx context.Context, deps Deps, changed <-chan struct{}
 			if a.values(deps).IndexInterval != d {
 				return true
 			}
+			// A switch turned on is a pass wanted now: the pictures or the
+			// content ahead would otherwise wait for the hour's tick, which is
+			// a setting that looks like it did nothing.
+			again = after(thumbPause)
 			continue
 
 		case f := <-deps.Indexer.Noticed():
