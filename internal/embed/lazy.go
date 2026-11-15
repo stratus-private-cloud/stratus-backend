@@ -23,7 +23,7 @@ const fetchRetry = time.Hour
 // Lazy is the model, opened on first use and fetched first if it has to be.
 //
 // The fetch runs on its own, and every call meanwhile answers ErrFetching:
-// 347 MB is minutes, and the loop that asks is the indexer's, which has
+// 348 MB is minutes, and the loop that asks is the indexer's, which has
 // uploads to see to in the meantime.
 type Lazy struct {
 	dir, helper string

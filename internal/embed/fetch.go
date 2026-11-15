@@ -28,10 +28,10 @@ type Bundle struct {
 // SigLIP2 is the model this build reads photographs with, a release asset
 // built by build/embed/model, as the demo's media are.
 var SigLIP2 = Bundle{
-	Name:   "siglip2-base-patch16-224-int8.1",
-	URL:    "https://github.com/stratus-private-cloud/stratus-backend/releases/download/model-siglip2-v1/siglip2-base-patch16-224-int8.1.tar.gz",
-	SHA256: "87f5b053907e9692f7080c58bf6af39a9392512ef008503e35c539e98cbac9c3",
-	Size:   347239358,
+	Name:   "siglip2-base-patch16-224-int8.2",
+	URL:    "https://github.com/stratus-private-cloud/stratus-backend/releases/download/model-siglip2-v2/siglip2-base-patch16-224-int8.2.tar.gz",
+	SHA256: "b8c07e77995b9a18f03a357dbf8f9f80ceadc630eb6f49147d9bb5cdf50bcf03",
+	Size:   347709300,
 }
 
 // maxBundleFile bounds what one file of an archive may unpack to.

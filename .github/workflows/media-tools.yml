@@ -94,6 +94,9 @@ jobs:
       # architecture: internal/embed's test, against the asset as published.
       - name: check stratus-embed ${{ matrix.arch }} against the published model
         if: matrix.tool == 'embed'
+        # bash by name, which is what brings pipefail: without it a failing
+        # go test behind tee passed this step and the image was pushed.
+        shell: bash
         env:
           IMAGE: ${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}-${{ matrix.arch }}
         run: |

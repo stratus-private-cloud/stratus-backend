@@ -2863,7 +2863,7 @@ Restraint here is principle 3, not laziness:
   not equal bytes, which is why the asset is what is pinned.
 
   **The model is a release asset fetched on first use, as the demo's media
-  are**: 347 MB nobody who leaves the setting off should download in every
+  are**: 348 MB nobody who leaves the setting off should download in every
   image. `embed.Lazy` fetches it into `<data>/models/` once something asks,
   verifies the SHA-256 the binary carries, unpacks only the names a bundle has,
   and answers `ErrFetching` meanwhile, which the pass waits out like somebody

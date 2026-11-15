@@ -1183,9 +1183,9 @@ called.
 
 What turning it on costs, so nobody finds out the hard way:
 
-- **A 347 MB download, once.** The model is not in the image — most installs
+- **A 348 MB download, once.** The model is not in the image — most installs
   will never turn this on — so the first time it is needed the server fetches
-  it from [this repository's releases](https://github.com/stratus-private-cloud/stratus-backend/releases/tag/model-siglip2-v1)
+  it from [this repository's releases](https://github.com/stratus-private-cloud/stratus-backend/releases/tag/model-siglip2-v2)
   into `<data>/models/`, checks it against the SHA-256 the binary carries, and
   says so on `/status` meanwhile. That is the only thing that goes out. With no
   route out, download the tarball elsewhere, unpack it where the server can

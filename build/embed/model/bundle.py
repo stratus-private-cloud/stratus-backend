@@ -32,7 +32,7 @@ from transformers import AutoModel, AutoTokenizer
 
 REPO = "google/siglip2-base-patch16-224"
 REVISION = "75de2d55ec2d0b4efc50b3e9ad70dba96a7b2fa2"
-NAME = "siglip2-base-patch16-224-int8.1"
+NAME = "siglip2-base-patch16-224-int8.2"
 HERE = Path(__file__).parent
 WORK = Path("/work")
 OUT = Path("/out")
@@ -124,24 +124,15 @@ def vocabulary_table(graph):
 
 def quantize_text():
     """Dynamic int8 on every MatMul but KEEP_FLOAT, and the 256k-token table
-    int8 per row: 291 MB, of which a query touches the rows it uses."""
-    # The table as fp16 first, so quantize_dynamic leaves its Gather alone.
-    m = onnx.load(WORK / "text.onnx")
-    node, init = vocabulary_table(m.graph)
-    table = numpy_helper.to_array(init)
-    m.graph.initializer.remove(init)
-    m.graph.initializer.append(numpy_helper.from_array(table.astype(np.float16), init.name))
-    out = node.output[0]
-    node.output[0] = out + "_f16"
-    m.graph.node.insert(list(m.graph.node).index(node) + 1,
-                        helper.make_node("Cast", [out + "_f16"], [out], to=TensorProto.FLOAT))
-    onnx.save(m, WORK / "text.t16.onnx")
+    int8 per row: 291 MB, of which a query touches the rows it uses.
 
-    quantize_dynamic(WORK / "text.t16.onnx", WORK / "text.q16.onnx", weight_type=QuantType.QInt8,
+    The table is dequantised in float32 after the lookup. It was fp16 at first,
+    which an arm64 build runs and an amd64 one has no kernel for -- the first
+    publish of this bundle failed to load on every x86 machine."""
+    quantize_dynamic(WORK / "text.onnx", WORK / "text.q8.onnx", weight_type=QuantType.QInt8,
                      op_types_to_quantize=["MatMul"], nodes_to_exclude=KEEP_FLOAT)
 
-    # Then the table int8, one scale per row, dequantised after the lookup.
-    m = onnx.load(WORK / "text.q16.onnx")
+    m = onnx.load(WORK / "text.q8.onnx")
     node, init = vocabulary_table(m.graph)
     w = numpy_helper.to_array(init).astype(np.float32)
     scale = (np.abs(w).max(1) / 127).astype(np.float32)
@@ -149,15 +140,15 @@ def quantize_text():
     q = np.round(w / scale[:, None]).astype(np.int8)
     m.graph.initializer.remove(init)
     m.graph.initializer.extend([numpy_helper.from_array(q, "tok_q"),
-                                numpy_helper.from_array(scale[:, None].astype(np.float16), "tok_s")])
-    ids, f16 = node.input[1], node.output[0]
+                                numpy_helper.from_array(scale[:, None], "tok_s")])
+    ids, out = node.input[1], node.output[0]
     at = list(m.graph.node).index(node)
     m.graph.node.remove(node)
     for i, n in enumerate([
         helper.make_node("Gather", ["tok_q", ids], ["tok_qg"], axis=0),
         helper.make_node("Gather", ["tok_s", ids], ["tok_sg"], axis=0),
-        helper.make_node("Cast", ["tok_qg"], ["tok_qf"], to=TensorProto.FLOAT16),
-        helper.make_node("Mul", ["tok_qf", "tok_sg"], [f16]),
+        helper.make_node("Cast", ["tok_qg"], ["tok_qf"], to=TensorProto.FLOAT),
+        helper.make_node("Mul", ["tok_qf", "tok_sg"], [out]),
     ]):
         m.graph.node.insert(at + i, n)
     onnx.save(m, WORK / "text.q.onnx")

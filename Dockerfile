@@ -72,7 +72,7 @@ COPY --from=ffmpeg /licenses /usr/local/share/licenses/ffmpeg
 
 # Optional where ffmpeg is not: without it a search answers names alone. It is
 # in the image because 9 MB is less than a second image would cost, and the
-# 347 MB model is not, because most installs will never turn it on -- it is
+# 348 MB model is not, because most installs will never turn it on -- it is
 # fetched into the data directory the first time somebody does.
 COPY --from=embed /stratus-embed /usr/local/bin/stratus-embed
 COPY --from=embed /licenses /usr/local/share/licenses/stratus-embed
