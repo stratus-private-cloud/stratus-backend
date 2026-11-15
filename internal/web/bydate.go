@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
+	"github.com/stratus-private-cloud/stratus-backend/internal/media"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media/thumb"
 	"github.com/stratus-private-cloud/stratus-backend/internal/timeline"
 )
@@ -122,6 +124,9 @@ type photoView struct {
 	Newer      string
 	Older      string
 	Back       string
+	// Similar are the photographs most like this one (#514), and empty for a
+	// film or with the search by content off.
+	Similar []tile
 }
 
 // href is the URL of a place in this library's tree.
@@ -335,6 +340,8 @@ func (h *handler) viewer(w http.ResponseWriter, r *http.Request, user string, l 
 		}
 	}
 
+	pv.Similar = h.similarTo(r, user, f)
+
 	h.render(w, http.StatusOK, pagePhoto, view{Title: pv.Name, User: user, Gallery: l.title, Photo: &pv})
 }
 
@@ -476,4 +483,28 @@ func parseCaptureCursor(v string) (db.CaptureCursor, error) {
 		return db.CaptureCursor{}, errors.New("photo cursor: no file")
 	}
 	return db.CaptureCursor{At: time.UnixMilli(ms).UTC(), FileID: fileID}, nil
+}
+
+// similarCount is how many photographs a photograph's viewer shows as like it.
+const similarCount = 10
+
+// similarTo is the photographs most like f, closest first, when f is one and
+// there is a search by content to ask. A failure is logged and leaves the
+// viewer as it was: the photograph is the page's point, and this is extra.
+func (h *handler) similarTo(r *http.Request, user string, f db.File) []tile {
+	ix := h.indexingNow()
+	if ix.Contents == nil || !ix.Semantic || !media.IsImage(f.Path) {
+		return nil
+	}
+	hits, err := ix.Contents.Similar(r.Context(), f.ID, similarCount)
+	if err != nil {
+		slog.WarnContext(r.Context(), "finding photographs like one", "path", f.Path, "err", err)
+		return nil
+	}
+	photos, err := h.filesOf(r, user, hits)
+	if err != nil {
+		slog.WarnContext(r.Context(), "reading photographs like one", "path", f.Path, "err", err)
+		return nil
+	}
+	return shots(photos, h.statesOf(r.Context(), r.URL.Path, photos))
 }

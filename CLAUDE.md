@@ -2889,7 +2889,7 @@ Restraint here is principle 3, not laziness:
   -- and standing aside on the same "is anybody looking" the pictures ask
   (`thumb.WhenIdle`). A refusal comes back in a week like theirs.
 
-  **A photograph's details show the ten most like it** (#514), its own
+  **The gallery's viewer shows the ten photographs most like one** (#514), its own
   vector the query and no model run. Two pictures are far closer than a
   picture and words -- unrelated COCO photographs reach 0.79 at the 99th
   percentile, three photographs of horses 0.79 to 0.80 -- so
