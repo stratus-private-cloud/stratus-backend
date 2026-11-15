@@ -1794,15 +1794,15 @@ suites, the coverage floors and the container suite, so nothing reaches it that
 has not been through all of them. Anywhere `FLY_APP` is unset, including every
 fork, the job does not run.
 
-That instance is deliberately disposable, and deliberately open: the smallest
-machine Fly sells, a disk of about 100 MB made of its memory, and **the password is
+That instance is deliberately disposable, and deliberately open: a 512 MB
+machine, a disk of about 240 MB made of its memory, and **the password is
 `stratus-private-cloud`**, written in [`deploy/demo/fly.toml`](deploy/demo/fly.toml)
 in the clear. Four things follow, and none of them is an accident:
 
 - **Anyone can sign in and upload to it, but not much.** It is a demo, it
   holds nothing but the demo, and it is not a place to put anything of yours.
   Its data is in `/dev/shm`, which the kernel sizes at half the machine's
-  memory: once the demo media is in there are some 85 MB left, and an upload
+  memory: once the demo media is in there are some 220 MB left, and an upload
   past that is refused with `507`. The smallest volume Fly sells would have
   left nine hundred megabytes to anybody with the password.
 - **The password does not change**, so a client set up against it keeps
@@ -1813,11 +1813,16 @@ in the clear. Four things follow, and none of them is an accident:
   anything.
 - **It seeds itself whenever it starts**, because its disk is memory and any
   restart empties it — Fly moving the machine as much as the reset. Its image
-  is the published one with the demo media and a shell laid over it
+  is the published one with the demo media, the model a search by content
+  reads with, and a shell laid over it
   ([`deploy/demo/Dockerfile`](deploy/demo/Dockerfile)), so the binary is the
   build's while the image people pull still has no shell. A restart costs
   about a minute of an empty demo, and it never sleeps, since waking would
   cost the same.
+- **It searches photographs by what is in them**, which an install has to
+  turn on: `una abeja` finds the bee. The model is in its image rather than
+  fetched, since its data directory is emptied every hour, and the machine is
+  512 MB rather than Fly's smallest so the two helpers fit beside the server.
 - **It wipes itself every hour**, and on every deploy. That is what makes an open
   instance not worth abusing: whatever anybody leaves there — including you — is
   gone within the hour, and the demo media is put back. The hour is the
