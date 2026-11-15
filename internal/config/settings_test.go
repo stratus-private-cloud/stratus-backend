@@ -105,3 +105,17 @@ func TestTheBackupFolderIsAFolderInTheTree(t *testing.T) {
 		}
 	}
 }
+
+// TestASectionIsOneRunOfSettings: the page heads a section wherever it changes,
+// so a setting added at the end of the list under an earlier section draws that
+// section twice.
+func TestASectionIsOneRunOfSettings(t *testing.T) {
+	seen := map[string]bool{}
+	last := ""
+	for _, s := range config.Settings {
+		if s.Section != last && seen[s.Section] {
+			t.Errorf("%s is in %q, which the list has already left", s.Key, s.Section)
+		}
+		seen[s.Section], last = true, s.Section
+	}
+}
