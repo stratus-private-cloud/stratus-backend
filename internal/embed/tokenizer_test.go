@@ -1,9 +1,12 @@
 package embed_test
 
 import (
+	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
@@ -43,5 +46,52 @@ func TestTokenizerMatchesTheReference(t *testing.T) {
 		if got := tok.Encode(c.Text); !slices.Equal(got, c.IDs) {
 			t.Errorf("Encode(%q)\n got  %v\n want %v", c.Text, got, c.IDs)
 		}
+	}
+}
+
+// tinyTokenizer is a vocabulary of ten tokens in the bundle's format, enough
+// for every rule Encode has: merges by rank, byte fallback, a special token
+// matched literally, truncation and padding.
+func tinyTokenizer(t *testing.T) *embed.Tokenizer {
+	t.Helper()
+	tokens := []string{"<pad>", "<eos>", "<unk>", "a", "b", "ab", "▁", "▁ab", "<0xC3>", "<0xB1>"}
+	var buf bytes.Buffer
+	buf.WriteString("STK1")
+	le := func(v any) {
+		if err := binary.Write(&buf, binary.LittleEndian, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	le(uint32(len(tokens)))
+	for _, s := range tokens {
+		le(uint16(len(s)))
+		buf.WriteString(s)
+	}
+	le(uint32(2))
+	le([]uint32{3, 4, 6, 5}) // a+b, then ▁+ab
+	le(uint32(1))
+	le([]uint32{1})
+	tok, err := embed.ReadTokenizer(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tok
+}
+
+func TestTheTokenizerFollowsItsRules(t *testing.T) {
+	tok := tinyTokenizer(t)
+	got := tok.Encode("AB ab ñ<eos>")
+	want := []int64{5, 7, 6, 8, 9, 1, 1}
+	if !slices.Equal(got[:len(want)], want) || got[len(want)] != 0 || len(got) != embed.ContextLength {
+		t.Errorf("Encode = %v, want %v then padding", got[:len(want)+1], want)
+	}
+
+	long := tok.Encode(strings.Repeat("ab ", 100))
+	if len(long) != embed.ContextLength || long[embed.ContextLength-1] != 1 {
+		t.Errorf("a long query is not cut to leave its <eos>: %v", long[embed.ContextLength-3:])
+	}
+
+	if _, err := embed.ReadTokenizer(strings.NewReader("JSON")); err == nil {
+		t.Error("something that is not a tokenizer was read as one")
 	}
 }

@@ -169,15 +169,7 @@ section "Image properties"
 # ---------------------------------------------------------------------------
 # Not merely non-root but this uid: every named volume out there was made owned
 # by it, and a different one would refuse to start on all of them (#177).
-img_# The helper is optional to the server and not to the image: a build that lost
-# it is one where turning the setting on says it is not installed.
-if docker run --rm --entrypoint /usr/local/bin/stratus-embed "$REF" 2>&1 | grep -q "usage: stratus-embed"; then
-  ok "stratus-embed runs inside the image"
-else
-  bad "stratus-embed runs inside the image" "it is missing or not executable"
-fi
-
-user="$(docker image inspect -f '{{.Config.User}}' "$REF")"
+img_user="$(docker image inspect -f '{{.Config.User}}' "$REF")"
 if [ "$img_user" = "65532:65532" ]; then
   ok "runs as 65532:65532, which existing volumes are owned by"
 else
@@ -210,6 +202,16 @@ for tool in ffprobe ffmpeg; do
     bad "$tool runs inside the image" "it is missing or not executable"
   fi
 done
+
+# The helper is optional to the server and not to the image: a build that lost
+# it is one where turning the setting on says it is not installed.
+# Run with no model it prints its usage and exits 2, which pipefail would take
+# for the check failing.
+if { docker run --rm --entrypoint /usr/local/bin/stratus-embed "$REF" 2>&1 || true; } | grep -q "usage: stratus-embed"; then
+  ok "stratus-embed runs inside the image"
+else
+  bad "stratus-embed runs inside the image" "it is missing or not executable"
+fi
 
 user="$(docker image inspect -f '{{.Config.User}}' "$REF")"
 if [ "$user" = "65532:65532" ]; then

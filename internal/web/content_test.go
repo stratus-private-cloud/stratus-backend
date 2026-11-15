@@ -2,6 +2,8 @@ package web_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -20,14 +22,18 @@ type contents struct {
 	counts db.EmbeddingCounts
 	asked  []string
 	state  string
+	fail   error
 }
 
 func (c *contents) State() string { return c.state }
 
-func (c *contents) Counts(context.Context) (db.EmbeddingCounts, error) { return c.counts, nil }
+func (c *contents) Counts(context.Context) (db.EmbeddingCounts, error) { return c.counts, c.fail }
 
 func (c *contents) Search(_ context.Context, q string, limit int) ([]embed.Hit, error) {
 	c.asked = append(c.asked, q)
+	if c.fail != nil {
+		return nil, c.fail
+	}
 	return c.hits[:min(limit, len(c.hits))], nil
 }
 
@@ -104,4 +110,41 @@ func TestStatusSaysHowMuchContentIsRead(t *testing.T) {
 	if body := get(t, off, "/status", cookie3).Body.String(); strings.Contains(body, "Content read") {
 		t.Error("the page reports a search by content that is off and not installed")
 	}
+}
+
+// TestASearchByContentThatFailsLeavesTheRestOfThePage: the bucket is empty and
+// the page is still an answer, as the calendar's is when it fails.
+func TestASearchByContentThatFailsLeavesTheRestOfThePage(t *testing.T) {
+	t.Parallel()
+	c := &contents{fail: errors.New("the helper is unavailable")}
+	h, cookie, photo := browserWithContents(t, c, true)
+	photo("IMG_0001.jpg")
+
+	rec := get(t, h, "/search?q=perro", cookie)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("a search whose content half failed = %d", rec.Code)
+	}
+	has(t, rec.Body.String(), "In the photos", "Nothing in a photograph looks like that.")
+
+	if body := get(t, h, "/status", cookie).Body.String(); strings.Contains(body, "Content read") {
+		t.Error("the status page reports counts it could not read")
+	}
+}
+
+// TestMoreThanARowOfContentIsALinkToTheRest: twenty-four beside the other
+// buckets, and the rest on the page narrowed to them.
+func TestMoreThanARowOfContentIsALinkToTheRest(t *testing.T) {
+	t.Parallel()
+	c := &contents{}
+	h, cookie, photo := browserWithContents(t, c, true)
+	for i := range 30 {
+		c.hits = append(c.hits, embed.Hit{FileID: photo(fmt.Sprintf("IMG_%04d.jpg", i)).ID, Score: 0.1})
+	}
+
+	body := get(t, h, "/search?q=perro", cookie).Body.String()
+	has(t, body, "More photos like this", "in=content")
+	if strings.Contains(body, "IMG_0024.jpg") {
+		t.Error("more than a row of content is on the page with the other buckets")
+	}
+	has(t, get(t, h, "/search?q=perro&in=content", cookie).Body.String(), "IMG_0029.jpg")
 }

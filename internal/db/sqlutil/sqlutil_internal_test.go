@@ -566,3 +566,27 @@ func TestUnder(t *testing.T) {
 		}
 	}
 }
+
+func TestEachVector(t *testing.T) {
+	t.Parallel()
+	cfg := &config{columns: []string{"file_id", "vector"}, rows: [][]driver.Value{
+		{int64(1), []byte{1, 2}}, {int64(2), []byte{3}},
+	}}
+	got := map[int64][]byte{}
+	err := EachVector(t.Context(), open(t, cfg), "SELECT", "m", func(id int64, v []byte) error {
+		got[id] = v
+		return nil
+	})
+	if err != nil || len(got) != 2 || got[2][0] != 3 {
+		t.Errorf("EachVector = %v, %v", got, err)
+	}
+
+	calls := 0
+	err = EachVector(t.Context(), open(t, cfg), "SELECT", "m", func(int64, []byte) error { calls++; return errBoom })
+	if !errors.Is(err, errBoom) || calls != 1 {
+		t.Errorf("an error from fn = %v after %d calls", err, calls)
+	}
+	if err := EachVector(t.Context(), open(t, &config{queryErr: errBoom}), "SELECT", "m", nil); !errors.Is(err, errBoom) {
+		t.Errorf("a failing query = %v", err)
+	}
+}
