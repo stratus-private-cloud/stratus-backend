@@ -152,20 +152,21 @@ func TestATrackIsDrawnWithItsFolderCover(t *testing.T) {
 	h, s, _ := browserOver(t)
 	cookie := signIn(t, h)
 	mkdir(t, s, "album")
-	for i := range 60 {
-		write(t, s, "album/"+string(rune('a'+i/26))+string(rune('a'+i%26))+".mp3", "not really a track")
+	// Every track before the cover by name, and more of them than a page.
+	for i := range 110 {
+		write(t, s, "album/a"+string(rune('a'+i/26))+string(rune('a'+i%26))+".mp3", "not really a track")
 	}
 	write(t, s, "album/cover.jpg", "pixels")
 
-	listing := get(t, h, "/files/album/?rows=50", cookie).Body.String()
+	listing := get(t, h, "/files/album/", cookie).Body.String()
 	if strings.Contains(listing, ">cover.jpg<") {
 		t.Fatalf("the cover is on the first page, so this proves nothing:\n%s", listing)
 	}
-	if n := strings.Count(listing, `<img src="/thumb/album/cover.jpg?size=96`); n != 50 {
-		t.Errorf("%d tracks were drawn with the folder's cover, want all 50", n)
+	if n := strings.Count(listing, `<img src="/thumb/album/cover.jpg?size=96`); n != 100 {
+		t.Errorf("%d tracks were drawn with the folder's cover, want all 100", n)
 	}
-	if n := strings.Count(listing, coverMark); n != 50 {
-		t.Errorf("%d tracks have the note under their cover, want all 50", n)
+	if n := strings.Count(listing, coverMark); n != 100 {
+		t.Errorf("%d tracks have the note under their cover, want all 100", n)
 	}
 }
 

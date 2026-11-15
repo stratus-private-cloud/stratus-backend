@@ -20,17 +20,15 @@ import (
 // file has the same one, because to somebody typing it they are the same thing.
 const filesPrefix = "/files/"
 
-// listPageSize is how much of a directory one page holds unless the reader says
-// otherwise. A folder with a hundred thousand photographs in it is an ordinary
-// size for this project, and rendering all of it would be one query, one
-// enormous document and, since #135, an offer of a thumbnail per row.
+// listPageSize is how much of a directory one page holds. A folder with a
+// hundred thousand photographs in it is an ordinary size for this project, and
+// rendering all of it would be one query, one enormous document and, since
+// #135, an offer of a thumbnail per row.
 //
-// It stopped being the only value in #251 and stayed the default. What it is a
-// property of has not changed -- what a browser can lay out, and how many
-// pictures it is fair to ask this server for at once -- and that is still not
-// an operator's setting. It is the reader's, in their own browser, out of the
-// three listRows offers, and the largest of those is where the old paragraph
-// still bites: five hundred rows is five hundred thumbnails to offer.
+// It was the reader's to choose for a while (#251), out of 50, 100 or 500, and
+// stopped being once the rest of a folder loaded as it was scrolled to: a page
+// is then how much arrives at a time and not how much can be seen, which is
+// nothing a reader decides.
 const listPageSize = 100
 
 // listFragment is the part of the page htmx asks for when it extends a
@@ -92,7 +90,7 @@ func (h *handler) browse(w http.ResponseWriter, r *http.Request, user string) {
 		h.badRequest(w, display, "That is not a place in this folder to carry on from.")
 		return
 	}
-	children, more, err := h.files.ListPage(r.Context(), user, p, state.order(), after, state.Rows)
+	children, more, err := h.files.ListPage(r.Context(), user, p, state.order(), after, listPageSize)
 	if err != nil {
 		h.fail(w, r, display, err)
 		return
@@ -107,7 +105,6 @@ func (h *handler) browse(w http.ResponseWriter, r *http.Request, user string) {
 		Crumbs:  crumbs(p, token, root),
 		Entries: entries(children, h.statesOf(r.Context(), r.URL.Path, children), token, h.folderCover(r.Context(), user, p, children, token)),
 		Columns: columns(href(p), state, token),
-		Rows:    rowChoices(href(p), state, token),
 		// Where this page's two forms post: into the directory being listed.
 		Here:    href(p),
 		Folders: link(folderPrefix, p),

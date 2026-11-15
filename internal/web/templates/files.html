@@ -36,20 +36,16 @@
 {{end}}
 
 {{if .Entries}}
-{{/* The headings are links and the row counts are links, because a control
-     that submits itself needs a script and this page has none. Each one carries
-     the whole state -- ordering, direction, row count, and the share token when
-     there is one -- so that whichever is clicked, the other two survive it. */}}
-<div class="d-flex justify-content-end align-items-baseline gap-2 small text-body-secondary mb-2">
-  {{if .Select}}<form id="selection" method="post" action="{{.Select}}" class="me-auto">
+{{/* The headings are links, because a control that submits itself needs a
+     script and this page has none. Each one carries the whole state --
+     ordering, direction, and the share token when there is one. */}}
+{{if .Select}}
+<div class="d-flex align-items-baseline gap-2 small mb-2">
+  <form id="selection" method="post" action="{{.Select}}">
     <button class="btn btn-sm btn-outline-danger" type="submit">Delete selected</button>
-  </form>{{end}}
-  <span>Rows</span>
-  {{range .Rows}}
-  {{if .Active}}<span class="fw-semibold text-body">{{.Label}}</span>
-  {{else}}<a class="link-secondary text-decoration-none" href="{{.Href}}">{{.Label}}</a>{{end}}
-  {{end}}
+  </form>
 </div>
+{{end}}
 
 <div class="card">
   <div class="table-responsive">

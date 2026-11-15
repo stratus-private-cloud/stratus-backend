@@ -174,10 +174,8 @@ type view struct {
 	Here     string
 	Folders  string
 	NextPage string
-	// Columns and Rows are the listing's own controls: one link per ordering,
-	// and one per page size on offer.
+	// Columns are the listing's own control: one link per ordering.
 	Columns []column
-	Rows    []rowChoice
 	// Query is what was typed into the search box, on every page so the box
 	// keeps it, and the five fields under it are a result: a bucket of rows
 	// and the link to the rest of each. Only is the bucket a result page was

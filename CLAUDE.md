@@ -730,10 +730,12 @@ Hard constraints, in the same spirit as the rest of the project:
   publish it. The file answers in front of the session, because a crawler has
   none and would otherwise be told to sign in before it could be told to leave.
 
-- **A listing can be ordered and counted, and both are the query's** (#251):
-  the headings order a folder by name, size or mtime in either direction, and
-  three links choose 50, 100 or 500 rows. Neither could be done to a page after
-  it arrived -- a page re-sorted in Go is sorted inside itself and wrong at
+- **A listing can be ordered, and that is the query's** (#251): the headings
+  order a folder by name, size or mtime in either direction. Three links chose
+  50, 100 or 500 rows too, until the rest of a folder loaded as it was
+  scrolled to and a page became how much arrives at a time rather than how much
+  can be seen; `listPageSize` is a hundred and nobody's choice. An ordering
+  could not be done to a page after it arrived -- a page re-sorted in Go is sorted inside itself and wrong at
   every boundary -- so `ListFilesPage` grew a `db.FileOrder` and `db.Cursor`
   grew the sort value beside the path that breaks its ties.
 
@@ -755,15 +757,15 @@ Hard constraints, in the same spirit as the rest of the project:
   timeline found, and the reason the two drivers that can seek use the row form
   while MySQL keeps the expanded one it cannot optimise either way.
 
-  **The URL is the state and the cookie is only a default.** `sort`, `order` and
-  `rows` are query parameters, so an arranged folder is a link somebody can be
+  **The URL is the state and the cookie is only a default.** `sort` and
+  `order` are query parameters, so an arranged folder is a link somebody can be
   sent, and `stratus_list` supplies them only when the URL does not. It is a
   preference and not an authority, so it is unsigned, has no `HttpOnly` to earn,
   is written only when the URL expressed an opinion, and is never written for a
   request that arrived on a share link -- a visitor's browser is not the owner's.
-  A value outside the closed set is a 400: `rows` is one of three numbers rather
-  than a number, or it would be a way to ask this server to render a hundred
-  thousand rows and offer a thumbnail for each.
+  A value outside the closed set is a 400. `rows` is passed over rather than
+  refused, so a link or a cookie from when it meant something still opens the
+  folder.
 
 - **The search box is a GET form, which is the first one here** (#259). It
   submits to `/search?q=`, so a search is a URL somebody can send and not a
