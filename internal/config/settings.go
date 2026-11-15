@@ -97,7 +97,8 @@ func (s Setting) Apply(v *Values, raw string) error {
 	return s.apply(v, raw)
 }
 
-// Settings are every editable setting, in the order a page shows them.
+// Settings are every editable setting, in the order a page shows them, and a
+// section's settings together: the page heads a section wherever it changes.
 var Settings = []Setting{
 	{
 		Key: "STRATUS_TRASH_RETENTION", Section: "Trash and sweep", Default: "720h",
@@ -153,6 +154,14 @@ var Settings = []Setting{
 		},
 	},
 	{
+		Key: "STRATUS_SEMANTIC_SEARCH", Section: "Indexing", Default: SemanticSearchOff, Choices: []string{SemanticSearchOn, SemanticSearchOff},
+		Help: "Whether photographs are read so a search finds them by what is in them; nothing leaves the machine.",
+		apply: func(v *Values, raw string) (err error) {
+			v.SemanticSearch, err = onOff(raw)
+			return err
+		},
+	},
+	{
 		Key: "STRATUS_INCOMING_INTERVAL", Section: "Import folder", Default: "1m",
 		Help: "How often the import folder is swept, and how long a file must hold its size; 0 stops it.",
 		apply: func(v *Values, raw string) (err error) {
@@ -171,14 +180,6 @@ var Settings = []Setting{
 				return nil
 			}
 			return errors.New("must be auto, on or off")
-		},
-	},
-	{
-		Key: "STRATUS_SEMANTIC_SEARCH", Section: "Indexing", Default: SemanticSearchOff, Choices: []string{SemanticSearchOn, SemanticSearchOff},
-		Help: "Whether photographs are read so a search finds them by what is in them; nothing leaves the machine.",
-		apply: func(v *Values, raw string) (err error) {
-			v.SemanticSearch, err = onOff(raw)
-			return err
 		},
 	},
 	{
