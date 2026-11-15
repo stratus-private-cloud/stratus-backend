@@ -38,6 +38,7 @@ RUN curl -fsSLO https://github.com/stratus-private-cloud/stratus-backend/release
 # costs the machine's memory nothing it cannot take back. Which asset and
 # which digest are read from the one place the server pins them.
 FROM alpine:${ALPINE_VERSION} AS model
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 # hadolint ignore=DL3018
 RUN apk add --no-cache curl
 WORKDIR /model
