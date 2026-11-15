@@ -319,3 +319,35 @@ func TestASwitchTurnedOnRunsAPassNow(t *testing.T) {
 	}
 	eventually(t, "the picture made once the switch was on", made)
 }
+
+// TestThePassesRunAfterAStart: a restart with pictures to make makes them in
+// seconds rather than at the hour's tick.
+func TestThePassesRunAfterAStart(t *testing.T) {
+	t.Parallel()
+	blobs, meta := filestest.Backends(t)
+	service := files.New(blobs, meta)
+	s := liveSettings(t, meta)
+	for key, value := range map[string]string{"STRATUS_INDEX_INTERVAL": "1h", "STRATUS_THUMBS_AHEAD": "on"} {
+		if err := s.Set(t.Context(), key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writePhoto(t, service, meta, "holiday.jpg")
+	f, err := service.Stat(t.Context(), "edu", "holiday.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps := Deps{Storage: blobs, Database: meta, Files: service, Settings: s,
+		Indexer: media.NewIndexer(service, meta, t.TempDir(), "ffprobe"),
+		Thumbs:  thumb.New(blobs, service, meta, "ffmpeg", t.TempDir())}
+	a := New(config.Config{}, "test", "2026-01-01T09:30:00Z")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	go a.indexPeriodically(ctx, deps)
+
+	eventually(t, "the picture made after a start", func() bool {
+		states, err := meta.MediaStates(t.Context(), []int64{f.ID})
+		return err == nil && states[f.ID].Thumb == db.ThumbMade
+	})
+}
