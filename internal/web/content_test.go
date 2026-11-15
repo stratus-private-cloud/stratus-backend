@@ -5,12 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/auth"
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
+	"github.com/stratus-private-cloud/stratus-backend/internal/db/dbtest"
 	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
 	"github.com/stratus-private-cloud/stratus-backend/internal/web"
 )
@@ -23,11 +25,20 @@ type contents struct {
 	asked  []string
 	state  string
 	fail   error
+	likeOf []int64
 }
 
 func (c *contents) State() string { return c.state }
 
 func (c *contents) Counts(context.Context) (db.EmbeddingCounts, error) { return c.counts, c.fail }
+
+func (c *contents) Similar(_ context.Context, id int64, limit int) ([]embed.Hit, error) {
+	c.likeOf = append(c.likeOf, id)
+	if c.fail != nil {
+		return nil, c.fail
+	}
+	return c.hits[:min(limit, len(c.hits))], nil
+}
 
 func (c *contents) Search(_ context.Context, q string, limit int) ([]embed.Hit, error) {
 	c.asked = append(c.asked, q)
@@ -37,16 +48,20 @@ func (c *contents) Search(_ context.Context, q string, limit int) ([]embed.Hit, 
 	return c.hits[:min(limit, len(c.hits))], nil
 }
 
-func browserWithContents(t *testing.T, c web.Contents, on bool) (http.Handler, *http.Cookie, func(name string) db.File) {
+func browserWithContents(t *testing.T, c web.Contents, on bool, fail ...string) (http.Handler, *http.Cookie, func(name string) db.File) {
 	t.Helper()
 	s, thumbs, meta := pieces(t)
 	creds := credentials()
 	ix := indexing(meta)
 	ix.Contents, ix.Semantic = c, on
+	var index web.Index = meta
+	for _, method := range fail {
+		index = dbtest.FailOn(t, meta, method)
+	}
 	h := web.Handler(web.Deps{
 		Version: version, BuildDate: buildDate, Verifier: creds,
 		Sessions: auth.NewSessions(creds, auth.DefaultSessionTTL), Shares: auth.NewShares(creds),
-		Files: s, Thumbs: thumbs, Index: meta, Playlists: playlistsOf(meta), Indexing: ix,
+		Files: s, Thumbs: thumbs, Index: index, Playlists: playlistsOf(meta), Indexing: ix,
 		TrashRetention: aMonth,
 	})
 	photo := func(name string) db.File {
@@ -147,4 +162,72 @@ func TestMoreThanARowOfContentIsALinkToTheRest(t *testing.T) {
 		t.Error("more than a row of content is on the page with the other buckets")
 	}
 	has(t, get(t, h, "/search?q=perro&in=content", cookie).Body.String(), "IMG_0029.jpg")
+}
+
+// TestAPhotographsDetailsShowTheOnesLikeIt (#514): the tiles, closest first,
+// in the dialog and on the page; nothing for a file that is not a photograph,
+// with the search off, or when it fails.
+func TestAPhotographsDetailsShowTheOnesLikeIt(t *testing.T) {
+	t.Parallel()
+	c := &contents{}
+	h, cookie, photo := browserWithContents(t, c, true)
+	me := photo("IMG_0001.jpg")
+	near := photo("IMG_0002.jpg")
+	far := photo("IMG_0003.jpg")
+	c.hits = []embed.Hit{{FileID: near.ID, Score: 0.95}, {FileID: far.ID, Score: 0.82}, {FileID: 99999, Score: 0.81}}
+
+	page := get(t, h, "/info/IMG_0001.jpg", cookie).Body.String()
+	has(t, page, "Like this", "IMG_0002.jpg", "IMG_0003.jpg")
+	if strings.Index(page, "IMG_0002.jpg") > strings.Index(page, "IMG_0003.jpg") {
+		t.Error("the closest photograph is not first")
+	}
+	if len(c.likeOf) != 1 || c.likeOf[0] != me.ID {
+		t.Errorf("Similar was asked about %v, want the photograph itself", c.likeOf)
+	}
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/info/IMG_0001.jpg", nil)
+	req.AddCookie(cookie)
+	req.Header.Set("HX-Request", "true")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	has(t, rec.Body.String(), "<dialog", "Like this", "IMG_0002.jpg")
+
+	// Asked by the name, as every surface here asks what a file is.
+	photo("notes.txt")
+	c.likeOf = nil
+	if body := get(t, h, "/info/notes.txt", cookie).Body.String(); strings.Contains(body, "Like this") || len(c.likeOf) != 0 {
+		t.Error("a file that is not a photograph was asked about")
+	}
+
+	c.fail = errors.New("the index will not load")
+	rec2 := get(t, h, "/info/IMG_0001.jpg", cookie)
+	if rec2.Code != http.StatusOK || strings.Contains(rec2.Body.String(), "Like this") {
+		t.Errorf("details whose likeness failed = %d, showing the section anyway", rec2.Code)
+	}
+
+	off, cookieOff, photoOff := browserWithContents(t, &contents{hits: c.hits}, false)
+	photoOff("IMG_0001.jpg")
+	if body := get(t, off, "/info/IMG_0001.jpg", cookieOff).Body.String(); strings.Contains(body, "Like this") {
+		t.Error("the details show likeness with the search by content off")
+	}
+}
+
+// TestPhotographsThatCannotBeReadBackAreLeftOut: the ids came back and the rows
+// did not, and both the search and the details are still pages.
+func TestPhotographsThatCannotBeReadBackAreLeftOut(t *testing.T) {
+	t.Parallel()
+	c := &contents{}
+	h, cookie, photo := browserWithContents(t, c, true, "FilesByID")
+	near := photo("IMG_0002.jpg")
+	photo("IMG_0001.jpg")
+	c.hits = []embed.Hit{{FileID: near.ID, Score: 0.9}}
+
+	search := get(t, h, "/search?q=perro&in=content", cookie)
+	if search.Code != http.StatusOK || strings.Contains(search.Body.String(), "IMG_0002.jpg") {
+		t.Errorf("a search whose rows failed = %d", search.Code)
+	}
+	details := get(t, h, "/info/IMG_0001.jpg", cookie)
+	if details.Code != http.StatusOK || strings.Contains(details.Body.String(), "Like this") {
+		t.Errorf("details whose rows failed = %d", details.Code)
+	}
 }

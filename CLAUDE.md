@@ -2888,6 +2888,14 @@ Restraint here is principle 3, not laziness:
   300-pixel picture the grid already has -- HEIC included, since ffmpeg made it
   -- and standing aside on the same "is anybody looking" the pictures ask
   (`thumb.WhenIdle`). A refusal comes back in a week like theirs.
+
+  **A photograph's details show the ten most like it** (#514), its own
+  vector the query and no model run. Two pictures are far closer than a
+  picture and words -- unrelated COCO photographs reach 0.79 at the 99th
+  percentile, three photographs of horses 0.79 to 0.80 -- so
+  `semantic.SimilarFloor` is 0.77 and not `Floor`: low enough for the
+  horses after the helper's int8 rounding, high enough that a photograph with
+  nothing like it shows nothing.
 - **A track is transcoded when a client asks, by one ffmpeg per playback**
   (#50). Three pieces, and each is where it is for a reason.
 

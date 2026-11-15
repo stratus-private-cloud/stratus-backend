@@ -84,7 +84,7 @@ var pages = map[string]*template.Template{
 	pageFiles:     parse(pageFiles, pageRows, pageCrumbs),
 	pageSearch:    parse(pageSearch, pageRows, pageTile),
 	pageRename:    parse(pageRename),
-	pageInfo:      parse(pageInfo),
+	pageInfo:      parse(pageInfo, pageTile),
 	pageDelete:    parse(pageDelete),
 	pageStatus:    parse(pageStatus),
 	pageTrash:     parse(pageTrash),

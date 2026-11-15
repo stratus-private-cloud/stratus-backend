@@ -35,6 +35,16 @@ const Batch = 8
 // the order puts the best first.
 const Floor = 0.06
 
+// SimilarFloor is the least similarity a photograph needs to be shown as like
+// another (#514). Two pictures are far closer than a picture and words: among
+// the spike's 500 COCO photographs, chosen to have nothing to do with each
+// other, pairs sharing no object still reach 0.68 at the median and 0.79 at the
+// 99th percentile, and three photographs of horses were 0.79 to 0.80 apart. So
+// the floor is under those, with room for the helper's int8 rounding: at 0.77 a
+// photograph shows nine on average, two in three sharing an object with it,
+// and seven in five hundred show none -- 0.80 had lost the horses.
+const SimilarFloor = 0.77
+
 // Dimensions is the size of SigLIP2 base's vectors.
 const Dimensions = 768
 
@@ -165,6 +175,28 @@ func (s *Service) Search(ctx context.Context, query string, limit int) ([]embed.
 		return nil, err
 	}
 	return index.Search(q, Floor, limit), nil
+}
+
+// Similar answers the photographs closest to the one fileID is, closest first
+// and at most limit, leaving it out. No model runs: the photograph's own
+// vector is the query. One with no vector yet has nothing like it.
+func (s *Service) Similar(ctx context.Context, fileID int64, limit int) ([]embed.Hit, error) {
+	index, err := s.loaded(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q, ok := index.Vector(fileID)
+	if !ok {
+		return nil, nil
+	}
+	hits := index.Search(q, SimilarFloor, limit+1)
+	out := make([]embed.Hit, 0, len(hits))
+	for _, h := range hits {
+		if h.FileID != fileID && len(out) < limit {
+			out = append(out, h)
+		}
+	}
+	return out, nil
 }
 
 // loaded is the index, read from the table on the first search and dropped
