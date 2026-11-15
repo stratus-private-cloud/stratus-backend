@@ -84,8 +84,10 @@ func (a *App) indexEvery(ctx context.Context, deps Deps, changed <-chan struct{}
 	// again is armed when the pass has said when to come back, so the next
 	// batch happens then rather than on the hour -- and through the select, so
 	// a file that has just landed is indexed before the next eight are
-	// decoded.
-	var again <-chan time.Time
+	// decoded. It starts armed: the pictures and the content are passes of
+	// their own after the metadata, and a restart that left them for the
+	// hour's tick would be a deploy after which nothing seems to happen.
+	again := after(thumbPause)
 	for {
 		select {
 		case <-ctx.Done():
