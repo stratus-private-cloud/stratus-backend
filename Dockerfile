@@ -16,7 +16,7 @@ ARG FFMPEG_VERSION=7.1
 # The helper that runs the model a search by content reads photographs with
 # (#505): ONNX Runtime built for its operators and nothing else, published by
 # the same workflow from build/embed. Its tag is EMBED_VERSION there.
-ARG EMBED_VERSION=1.24.4-1
+ARG EMBED_VERSION=1.24.4-2
 
 # --platform=$BUILDPLATFORM keeps the toolchain native and cross-compiles to the
 # target instead of emulating the whole build stage under QEMU. Go cross-compiles

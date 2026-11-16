@@ -1,13 +1,15 @@
 // stratus-embed: runs one ONNX Runtime graph over tensors read from stdin.
 //
 // It decides nothing. The server tokenises and resizes, sends a tensor and reads
-// a vector back; which model, which input and what the vector means are all its
-// business. One model per process, so the two towers come and go separately.
+// the graph's outputs back; which model, which input and what the outputs mean
+// are all its business. One model per process, so each comes and goes
+// separately.
 //
 // Frames, little-endian:
 //   request:  u8 dtype (1 = float32, 7 = int64), u8 rank, rank x u32 dims, data
-//   response: u32 status (0 = ok), u32 count, count x float32 -- or, when status
-//             is not 0, u32 length and that many bytes of message.
+//   response: u32 status (0 = ok), u32 outputs, and per output, in the graph's
+//             order, u32 count and count x float32 -- or, when status is not 0,
+//             u32 length and that many bytes of message.
 // EOF on stdin is the end of the process.
 
 #include <onnxruntime_c_api.h>
@@ -103,9 +105,12 @@ int main(int argc, char **argv) {
 
   OrtAllocator *alloc;
   CHECK("allocator", api->GetAllocatorWithDefaultOptions(&alloc));
-  char *inName, *outName;
+  char *inName;
   CHECK("input", api->SessionGetInputName(session, 0, alloc, &inName));
-  CHECK("output", api->SessionGetOutputName(session, 0, alloc, &outName));
+  size_t outCount;
+  CHECK("outputs", api->SessionGetOutputCount(session, &outCount));
+  std::vector<char *> outNames(outCount);
+  for (size_t i = 0; i < outCount; i++) CHECK("output", api->SessionGetOutputName(session, i, alloc, &outNames[i]));
   OrtMemoryInfo *mem;
   CHECK("memory", api->CreateCpuMemoryInfo(OrtArenaAllocator, OrtMemTypeDefault, &mem));
 
@@ -134,32 +139,39 @@ int main(int argc, char **argv) {
     data.resize(count * width);
     if (!readFull(data.data(), data.size())) return 3;
 
-    OrtValue *in = nullptr, *out = nullptr;
+    OrtValue *in = nullptr;
+    std::vector<OrtValue *> out(outCount, nullptr);
     OrtStatus *st = api->CreateTensorWithDataAsOrtValue(mem, data.data(), data.size(), dims, rank, type, &in);
-    if (!st) st = api->Run(session, nullptr, &inName, &in, 1, &outName, 1, &out);
+    if (!st) st = api->Run(session, nullptr, &inName, &in, 1, outNames.data(), outCount, out.data());
     if (in) api->ReleaseValue(in);
-    if (st) {
-      fail(api->GetErrorMessage(st));
-      api->ReleaseStatus(st);
-      continue;
+
+    // Every output is read before anything is written, so a failure halfway
+    // is still one error frame and not half a reply.
+    std::vector<float *> v(outCount, nullptr);
+    std::vector<uint32_t> n(outCount, 0);
+    for (size_t i = 0; !st && i < outCount; i++) {
+      OrtTensorTypeAndShapeInfo *info;
+      size_t count = 0;
+      st = api->GetTensorTypeAndShape(out[i], &info);
+      if (!st) {
+        st = api->GetTensorShapeElementCount(info, &count);
+        api->ReleaseTensorTypeAndShapeInfo(info);
+      }
+      if (!st) st = api->GetTensorMutableData(out[i], reinterpret_cast<void **>(&v[i]));
+      n[i] = static_cast<uint32_t>(count);
     }
-    OrtTensorTypeAndShapeInfo *info;
-    size_t n = 0;
-    float *v = nullptr;
-    st = api->GetTensorTypeAndShape(out, &info);
-    if (!st) {
-      st = api->GetTensorShapeElementCount(info, &n);
-      api->ReleaseTensorTypeAndShapeInfo(info);
-    }
-    if (!st) st = api->GetTensorMutableData(out, reinterpret_cast<void **>(&v));
     if (st) {
       fail(api->GetErrorMessage(st));
       api->ReleaseStatus(st);
     } else {
-      uint32_t ok[2] = {0, static_cast<uint32_t>(n)};
+      uint32_t ok[2] = {0, static_cast<uint32_t>(outCount)};
       writeFull(ok, sizeof ok);
-      writeFull(v, n * 4);
+      for (size_t i = 0; i < outCount; i++) {
+        writeFull(&n[i], 4);
+        writeFull(v[i], n[i] * 4);
+      }
     }
-    api->ReleaseValue(out);
+    for (OrtValue *o : out)
+      if (o) api->ReleaseValue(o);
   }
 }

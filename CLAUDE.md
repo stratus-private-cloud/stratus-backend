@@ -2855,11 +2855,12 @@ Restraint here is principle 3, not laziness:
   which is principle 5 read the way ffmpeg already reads it: inference in Go is
   either cgo or toys, and a binary beside ours keeps this one static.
   `build/embed` is ONNX Runtime's minimal build, linked statically against the
-  operators the two towers use (`ops.config`) and nothing else, 9 MB, around a
-  `main.cc` that decides nothing: a tensor in on stdin, a vector out. One
-  process per tower, started by the first call and stopped ten minutes after
-  the last, so the text tower lives while somebody searches and the vision
-  tower while the pass runs.
+  operators the two towers and the face models use (`ops.config`) and nothing
+  else, 9 MB, around a `main.cc` that decides nothing: a tensor in on stdin,
+  every output of the graph out, in its order -- YuNet has twelve. One process
+  per model, started by the first call and stopped ten minutes after the last,
+  so the text tower lives while somebody searches and the vision tower while
+  the pass runs.
 
   **The model is mapped, never loaded**, and that is what put it within a 512
   MB machine: the `.ort` format lets the session keep its weights where the
@@ -2892,6 +2893,19 @@ Restraint here is principle 3, not laziness:
   -- the conversion with nothing platform-specific in it -- and
   `media-tools.yml` holds the amd64 helper to the same vectors before it
   publishes it.
+
+  **The face models are a second bundle, and taken as OpenCV ships them**
+  (#519): YuNet (MIT) to find a face and its five landmarks, SFace (Apache
+  2.0) for a 128-number vector of the face aligned on those, 36 MB fetched only
+  when faces are on. Both fp32: OpenCV's int8 SFace put a face's vector at a
+  median 0.975 of the float one's and as low as 0.82 on the spike's COCO faces,
+  for a model that is nothing but a cosine against a threshold. Nobody says
+  what SFace's weights were trained on -- the paper trains on CASIA-WebFace,
+  VGGFace2 and MS-Celeb-1M, and opencv_zoo#313 asks and is unanswered -- and
+  that was weighed and accepted for a single-user install; the bundle's
+  `NOTICE` says it. `build/embed/model/faces.py` is the recipe: no training
+  and no quantising, only SFace's weights taken out of its inputs, where they
+  could not be folded, and the conversion to `.ort`.
 
   **Vectors are a table of their own, searched in Go.** `embeddings` hangs off
   media's key rather than adding 772 bytes to rows the indexer and the gallery

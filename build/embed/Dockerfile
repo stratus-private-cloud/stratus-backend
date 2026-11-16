@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # A statically linked stratus-embed: main.cc around an ONNX Runtime built for
-# exactly the operators the two SigLIP2 towers use (ops.config), published so the
-# server image can COPY it in one line, as build/ffmpeg is.
+# exactly the operators the two SigLIP2 towers and the face models use
+# (ops.config), published so the server image can COPY it in one line, as
+# build/ffmpeg is.
 #
 # A minimal build: it reads the .ort format and nothing else, which is what lets
 # it map a model instead of parsing one into memory.
@@ -10,7 +11,7 @@ ARG ALPINE_VERSION=3.24
 ARG ORT_VERSION=1.24.4
 # What the image is tagged with: the ONNX Runtime it is built on and a count
 # of changes to main.cc or the operators since, so either is a new tag.
-ARG EMBED_VERSION=1.24.4-1
+ARG EMBED_VERSION=1.24.4-2
 
 FROM alpine:${ALPINE_VERSION} AS build
 ARG ORT_VERSION

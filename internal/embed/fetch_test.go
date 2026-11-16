@@ -59,7 +59,10 @@ func serve(t *testing.T, body []byte) (embed.Bundle, *atomic.Int32) {
 	}))
 	t.Cleanup(srv.Close)
 	sum := sha256.Sum256(body)
-	return embed.Bundle{Name: testBundle, URL: srv.URL, SHA256: hex.EncodeToString(sum[:]), Size: int64(len(body))}, &hits
+	return embed.Bundle{
+		Name: testBundle, URL: srv.URL, SHA256: hex.EncodeToString(sum[:]), Size: int64(len(body)),
+		Files: embed.SigLIP2.Files,
+	}, &hits
 }
 
 func TestAFetchedBundleIsInPlaceAndNotFetchedTwice(t *testing.T) {
