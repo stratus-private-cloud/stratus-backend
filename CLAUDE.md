@@ -2704,7 +2704,9 @@ Restraint here is principle 3, not laziness:
   decode is the cost and a second encode is a hundredth of it, so 96 and 300
   are made together. 1200 stays lazy, because it is one photograph at a time
   in the viewer, where a wait is a wait for the picture somebody is looking
-  at. On the ffmpeg path the frame comes back scaled to the larger of the two
+  at -- and only of a HEIC, a TIFF or a RAW: a format every browser opens is
+  shown as the original (#518), which costs no decode, no stored object and,
+  revalidated by its ETag, no read of the store. On the ffmpeg path the frame comes back scaled to the larger of the two
   and the smaller is reduced from that, so those pixels are not bit for bit
   what a decode straight to 96 gives -- the same picture at the same size,
   against a second 4K decode to save a resize.

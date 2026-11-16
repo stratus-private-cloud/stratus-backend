@@ -267,6 +267,20 @@ func TestTheGalleryPages(t *testing.T) {
 	}
 }
 
+// A HEIC opens in Safari alone, so the viewer shows the large thumbnail of it
+// where a JPEG gets the file itself (#518).
+func TestTheViewerShowsAThumbnailOnlyOfWhatABrowserCannotOpen(t *testing.T) {
+	t.Parallel()
+	h, s, meta := browserOver(t)
+	cookie := signIn(t, h)
+	addPhoto(t, s, meta, "a.heic", time.Date(2024, 6, 3, 9, 0, 0, 0, time.UTC), "")
+
+	body := get(t, h, "/photos/2024/06/a.heic?view", cookie).Body.String()
+	if !strings.Contains(body, `<img src="/thumb/a.heic?size=1200&amp;v=`) {
+		t.Error("a HEIC is not shown by its thumbnail")
+	}
+}
+
 func TestTheViewer(t *testing.T) {
 	t.Parallel()
 	h, s, meta := browserOver(t)
@@ -283,7 +297,7 @@ func TestTheViewer(t *testing.T) {
 	for _, want := range []string{
 		`href="/photos/2024/06/a.jpg?view" rel="prev"`,
 		`href="/photos/2024/06/c.jpg?view" rel="next"`,
-		`/thumb/b.jpg?size=1200&amp;v=`,
+		`<img src="/files/b.jpg"`,
 		`href="/files/b.jpg"`,
 		"Taken", "2 June 2024, 09:30", "Apple iPhone 15", "4032 × 3024",
 	} {
