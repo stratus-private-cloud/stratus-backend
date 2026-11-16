@@ -6,9 +6,8 @@ import (
 	"math"
 	"slices"
 
-	xdraw "golang.org/x/image/draw"
-
 	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
+	"github.com/stratus-private-cloud/stratus-backend/internal/media/thumb"
 )
 
 // Detection is one face YuNet found: its box, its five landmarks -- the eyes,
@@ -46,7 +45,7 @@ func detectInput(picture image.Image) ([]float32, float64) {
 	if w == b.Dx() && h == b.Dy() {
 		draw.Draw(fitted, fitted.Bounds(), picture, b.Min, draw.Src)
 	} else {
-		xdraw.CatmullRom.Scale(fitted, fitted.Bounds(), picture, b, xdraw.Src, nil)
+		thumb.Scale(fitted, picture, b)
 	}
 	plane := side * side
 	px := make([]float32, 3*plane)

@@ -5,9 +5,8 @@ import (
 	"image/draw"
 	"math"
 
-	xdraw "golang.org/x/image/draw"
-
 	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
+	"github.com/stratus-private-cloud/stratus-backend/internal/media/thumb"
 )
 
 // template is where SFace expects the five landmarks in its 112 square:
@@ -103,7 +102,7 @@ func reduceAround(src *image.RGBA, t similarity, k float64) (*image.RGBA, image.
 	w := max(1, int(math.Round(float64(cut.Dx())*k)))
 	h := max(1, int(math.Round(float64(cut.Dy())*k)))
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
-	xdraw.CatmullRom.Scale(dst, dst.Bounds(), src, cut, xdraw.Src, nil)
+	thumb.Scale(dst, src, cut)
 	return dst, cut
 }
 
