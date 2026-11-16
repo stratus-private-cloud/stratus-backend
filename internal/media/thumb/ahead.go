@@ -295,6 +295,11 @@ func (t *Service) decodeIfIdle() (func(), bool) {
 // decode again -- a library whose thumbnails were made before the reader was
 // switched on.
 //
+// The other readers that want f are handed the same decode after fn, so that
+// two passes catching up on one library fetch each photograph once between
+// them (#519). Who wants it is asked again once fn is done, because fn is
+// usually one of them and has just stopped wanting it.
+//
 // ErrNoThumbnail for a file this build cannot draw, and media.ErrBusy when
 // somebody is looking, as Prepare. An error from fn comes back as it is.
 func (t *Service) Look(ctx context.Context, f db.File, size int, fn func(image.Image) error) error {
@@ -307,17 +312,29 @@ func (t *Service) Look(ctx context.Context, f db.File, size int, fn func(image.I
 	}
 	defer release()
 
-	var picture image.Image
+	box := thumbSize(size)
+	for _, r := range t.wanting(ctx, f) {
+		box = max(box, thumbSize(r.Size()))
+	}
+	var pic decoded
 	err := t.fromStore(ctx, f, func(body io.ReadSeeker) error {
-		pic, err := t.decode(ctx, f, body, thumbSize(size))
-		if err != nil {
-			return err
-		}
-		picture = pic.picture(thumbSize(size))
-		return nil
+		var err error
+		pic, err = t.decode(ctx, f, body, box)
+		return err
 	})
 	if err != nil {
 		return err
 	}
-	return fn(picture)
+	if err := fn(pic.picture(thumbSize(size))); err != nil {
+		return err
+	}
+	for _, r := range t.wanting(ctx, f) {
+		if thumbSize(r.Size()) > box {
+			continue
+		}
+		if err := r.Read(ctx, f, pic.picture(thumbSize(r.Size()))); err != nil {
+			slog.InfoContext(ctx, "reading a photograph beside another reader's", "path", f.Path, "err", err)
+		}
+	}
+	return nil
 }

@@ -318,3 +318,36 @@ func TestAReaderGetsThePassesDecode(t *testing.T) {
 		t.Errorf("Look while a request is decoding = %v, want media.ErrBusy", err)
 	}
 }
+
+// TestALookIsSharedWithTheOtherReaders is #519 for a library read before a
+// reader was on: the pass catching up hands its decode to whoever else still
+// wants the photograph, so the store is asked once between them, and not to
+// a reader the look itself has just satisfied.
+func TestALookIsSharedWithTheOtherReaders(t *testing.T) {
+	t.Parallel()
+	th, service, _, _ := thumbsOver(t)
+	other := &keeper{wants: true, size: 300, got: map[int64]image.Rectangle{}}
+	satisfied := &keeper{wants: true, size: GridSize, got: map[int64]image.Rectangle{}}
+	th.Also(other)
+	th.Also(satisfied)
+	f := writeImage(t, service, "photos/one.jpg", 600, 400)
+
+	err := th.Look(t.Context(), f, GridSize, func(image.Image) error { satisfied.wants = false; return nil })
+	if err != nil {
+		t.Fatalf("Look: %v", err)
+	}
+	if got := other.got[f.ID]; got.Dx() != 300 || got.Dy() != 200 {
+		t.Errorf("the other reader was handed %v, want the picture in a box of 300", got)
+	}
+	if len(satisfied.got) != 0 {
+		t.Error("the reader the look was for was handed the picture a second time")
+	}
+
+	other.got = map[int64]image.Rectangle{}
+	if err := th.Look(t.Context(), f, GridSize, func(image.Image) error { return errors.New("no") }); err == nil {
+		t.Error("Look kept quiet about what its own reader said")
+	}
+	if len(other.got) != 0 {
+		t.Error("a look whose own reader failed handed the picture on anyway")
+	}
+}
