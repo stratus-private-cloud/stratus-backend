@@ -1292,7 +1292,9 @@ What turning it on costs:
 - **A little CPU per photograph**, off the same decode the thumbnails and the
   search by content read: a new photograph costs no extra request to the
   store, and a library that is already there is read once more by a
-  background pass, newest first, while nobody is browsing. `/status` counts
+  background pass, newest first, while nobody is browsing. Turned on together
+  with the search by content, or while that is still catching up, the two
+  share that read: a photograph is fetched once for both. `/status` counts
   photographs read, faces and people.
 - **Faces need to be big enough.** A face is looked for in the photograph
   fitted in 640 pixels and read from it at 1,600, and one smaller than 40 of
