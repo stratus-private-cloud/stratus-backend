@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/evanoberholster/imagemeta"
-	"golang.org/x/image/draw"
 
 	_ "image/png" // registered so a PNG cover decodes
 
@@ -770,7 +769,7 @@ func firstTrack(entries []db.File) (db.File, bool) {
 //
 // CatmullRom because this runs once per image per size and the result is looked
 // at many times, so the sharper filter is the cheap one over the life of the
-// thumbnail.
+// thumbnail. Scale's and not x/image's, which draw the same picture.
 func reduce(src image.Image, px int) image.Image {
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
@@ -790,7 +789,7 @@ func reduce(src image.Image, px int) image.Image {
 	w, h = max(w, 1), max(h, 1)
 
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), src, b, draw.Src, nil)
+	Scale(dst, src, b)
 	return dst
 }
 

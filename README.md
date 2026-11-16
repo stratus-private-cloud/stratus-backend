@@ -1377,9 +1377,11 @@ you scroll, and the server decodes a few at a time — one per CPU, and fewer if
 the memory is short, which it works out from the container's limit and says in
 the log at startup — because opening a folder of five hundred photographs
 should not ask for five hundred at once. For the same reason the server holds
-its own heap under three quarters of that memory, which keeps the scratch a
-large photograph leaves behind from pushing a 512 MB machine into swap; set
-`GOMEMLIMIT` to choose another ceiling.
+its own heap under three quarters of that memory, which keeps the photographs
+it has just decoded from pushing a 512 MB machine into swap; set `GOMEMLIMIT`
+to choose another ceiling. Fitting a photograph in a smaller box holds a few
+rows of it at a time rather than a copy of the whole, so a 50 MP photograph
+costs its decode and not four times that.
 
 **A folder arrives a hundred rows at a time.** The listing is paged by a cursor
 rather than by a page number, so opening a folder costs the same whether it

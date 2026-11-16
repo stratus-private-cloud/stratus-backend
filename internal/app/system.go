@@ -105,10 +105,10 @@ func readInt(root fs.FS, name string) (int64, error) {
 
 // holdTheHeap gives the garbage collector a ceiling of three quarters of the
 // machine's memory, unless GOMEMLIMIT has set one. Without it the heap may
-// grow to twice what was live after the last collection, and one photograph
-// fitted in the faces' 1,600 pixels leaves 154 MB of x/image's scratch behind
-// it: on a 512 MB machine that was the server in swap. The quarter left is for
-// the helpers, ffmpeg and the kernel.
+// grow to twice what was live after the last collection, and a decoded
+// photograph is tens of megabytes of garbage a moment later: on a 512 MB
+// machine that was the server in swap (#529). The quarter left is for the
+// helpers, ffmpeg and the kernel.
 func holdTheHeap(limit int64) {
 	if limit <= 0 || debug.SetMemoryLimit(-1) != math.MaxInt64 {
 		return

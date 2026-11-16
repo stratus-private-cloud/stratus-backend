@@ -33,7 +33,6 @@ github.com/tinylib/msgp
 github.com/zeebo/xxh3
 go.yaml.in/yaml/v3
 golang.org/x/crypto
-golang.org/x/image
 golang.org/x/net
 golang.org/x/sync
 golang.org/x/sys

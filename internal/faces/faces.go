@@ -24,8 +24,6 @@ import (
 	"sync"
 	"time"
 
-	xdraw "golang.org/x/image/draw"
-
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
 	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
 	"github.com/stratus-private-cloud/stratus-backend/internal/files"
@@ -254,7 +252,7 @@ func cropOf(picture image.Image, d Detection) ([]byte, error) {
 	if !r.Empty() {
 		// Squeezed rather than padded when the box runs off the picture: a
 		// face at the edge is a little wider on the page, not half black.
-		xdraw.CatmullRom.Scale(dst, dst.Bounds(), picture, r, xdraw.Src, nil)
+		thumb.Scale(dst, picture, r)
 	}
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 82}); err != nil {
