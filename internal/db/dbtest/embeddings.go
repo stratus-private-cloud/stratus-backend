@@ -22,6 +22,7 @@ func RunEmbeddings(t *testing.T, newRepo func(t *testing.T) db.Repo) {
 		{"a vector or a refusal takes a photograph out, and a refusal comes back stale", embeddingsVerdicts},
 		{"another model or other bytes put a photograph back", embeddingsModelAndBytes},
 		{"a re-index keeps the vector", embeddingsSurviveReindex},
+		{"one file is asked about by the queue's rule", embeddingsWanted},
 		{"a vector comes back byte for byte, for its model and its bytes only", embeddingsEach},
 		{"the counts are the photographs, the vectors and the refusals", embeddingsCounted},
 		{"a vector needs a media row, and goes with the file", embeddingsNeedARow},
@@ -142,6 +143,55 @@ func embeddingsSurviveReindex(t *testing.T, s db.Repo) {
 	}
 	if got := pendingIDs(t, s, embedModel, time.Now()); len(got) != 0 {
 		t.Errorf("PendingEmbeddings after a re-index = %v, want the vector kept", got)
+	}
+}
+
+func wants(t *testing.T, s db.Repo, f db.File, model string, staleBefore time.Time) bool {
+	t.Helper()
+	ok, err := s.WantsEmbedding(t.Context(), f.ID, model, staleBefore)
+	if err != nil {
+		t.Fatalf("WantsEmbedding: %v", err)
+	}
+	return ok
+}
+
+func embeddingsWanted(t *testing.T, s db.Repo) {
+	fresh := photoAt(t, s, "fresh.jpg", time.Now())
+	made := photoAt(t, s, "made.jpg", time.Now())
+	refused := photoAt(t, s, "refused.jpg", time.Now())
+	film := put(t, s, file("holiday.mp4"))
+	if err := s.PutMedia(t.Context(), indexedAs(film, db.KindVideo, 1)); err != nil {
+		t.Fatal(err)
+	}
+	unread := put(t, s, file("unread.jpg"))
+	at := time.Now()
+	putEmbedding(t, s, embedded(made, db.EmbeddingMade, embedModel, at))
+	putEmbedding(t, s, embedded(refused, db.EmbeddingRefused, embedModel, at))
+
+	for _, c := range []struct {
+		f     db.File
+		model string
+		stale time.Time
+		want  bool
+	}{
+		{fresh, embedModel, at.Add(-time.Hour), true},
+		{made, embedModel, at.Add(time.Hour), false},
+		{made, "a-better-model", at.Add(-time.Hour), true},
+		{refused, embedModel, at.Add(-time.Hour), false},
+		{refused, embedModel, at.Add(time.Hour), true},
+		{film, embedModel, at, false},
+		{unread, embedModel, at, false},
+	} {
+		if got := wants(t, s, c.f, c.model, c.stale); got != c.want {
+			t.Errorf("WantsEmbedding(%s, %s) = %v, want %v", c.f.Path, c.model, got, c.want)
+		}
+	}
+
+	replacement := file("made.jpg")
+	replacement.BlobKey = "blobs/made-2"
+	put(t, s, replacement)
+	if !wants(t, s, made, embedModel, at.Add(-time.Hour)) {
+		t.Error("WantsEmbedding after an overwrite = false, want the photograph back")
 	}
 }
 

@@ -35,7 +35,7 @@ var ErrInjected = errors.New("dbtest: injected failure")
 // test asking for one would silently never fail.
 var repoMethods = []string{
 	"PutFile", "CreateDir", "FileByPath", "ListFiles", "ListFilesPage", "MoveFile", "DeleteFile",
-	"BlobKeys", "PutMedia", "MediaByFile", "MediaCounts", "MediaStates", "PendingThumbs", "PendingEmbeddings", "FilesByID",
+	"BlobKeys", "PutMedia", "MediaByFile", "MediaCounts", "MediaStates", "PendingThumbs", "PendingEmbeddings", "WantsEmbedding", "FilesByID",
 	"PutUpload", "UploadByID", "DeleteUpload", "ExpiredUploads",
 	"Find", "TrackByFile", "CreatePlaylist", "Playlists", "PlaylistByID", "LockPlaylist", "PlaylistTracks",
 	"UpdatePlaylist", "SetPlaylistTracks", "Timeline", "Around", "Months",
@@ -565,6 +565,14 @@ func (f *failingRepo) PendingEmbeddings(ctx context.Context, model string, stale
 		return nil, err
 	}
 	return f.Repo.PendingEmbeddings(ctx, model, staleBefore, limit)
+}
+
+// WantsEmbedding implements db.Repo.
+func (f *failingRepo) WantsEmbedding(ctx context.Context, fileID int64, model string, staleBefore time.Time) (bool, error) {
+	if err := f.fails("WantsEmbedding"); err != nil {
+		return false, err
+	}
+	return f.Repo.WantsEmbedding(ctx, fileID, model, staleBefore)
 }
 
 // FilesByID implements db.Repo.

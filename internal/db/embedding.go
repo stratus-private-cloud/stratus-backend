@@ -21,6 +21,11 @@ type Embeddings interface {
 	// refused before staleBefore.
 	PendingEmbeddings(ctx context.Context, model string, staleBefore time.Time, limit int) ([]File, error)
 
+	// WantsEmbedding is PendingEmbeddings asked about one file, for a pass
+	// that has a photograph's pixels in hand for another reason and would read
+	// its vector off them rather than fetch the original again (#519).
+	WantsEmbedding(ctx context.Context, fileID int64, model string, staleBefore time.Time) (bool, error)
+
 	// PutEmbedding records one photograph's vector or its refusal, replacing
 	// what was there, and answers ErrNotFound for a file with no media row --
 	// deleted while it was being read, or never indexed.

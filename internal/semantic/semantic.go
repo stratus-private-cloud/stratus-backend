@@ -1,18 +1,17 @@
-// Package semantic finds a photograph by what is in it (#505): a pass that
-// reads every photograph's vector off its grid picture, as the indexer's
-// third half, and a search that compares a query's vector with all of them.
+// Package semantic finds a photograph by what is in it (#505): vectors read
+// off the decode a photograph's thumbnails are made from, or by a pass of its
+// own for what no thumbnail pass will decode again, and a search that compares
+// a query's vector with all of them.
 //
 // The vectors are internal/embed's and the table is db.Embeddings; what is
 // here is when each is made, and the index in memory a search reads.
 package semantic
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"image"
-	_ "image/jpeg" // the grid's pictures are JPEG
 	"log/slog"
 	"sync"
 	"time"
@@ -54,12 +53,17 @@ type Encoder interface {
 	Text(ctx context.Context, query string) ([]float32, error)
 }
 
-// Pictures is where a photograph's grid picture comes from, and the one
-// question of whether anybody is looking.
+// Pictures decodes a photograph for the pass, holding the decoder while fn
+// runs: thumb.Service.Look.
 type Pictures interface {
-	Picture(ctx context.Context, f db.File) ([]byte, error)
-	WhenIdle(fn func() error) error
+	Look(ctx context.Context, f db.File, fn func(image.Image) error) error
 }
+
+// Pipeline is what a vector's model name carries besides the model: how the
+// picture it read was made. Vectors read off the grid's JPEG became vectors
+// read off the decode it is written from (#519), and the two are not mixed in
+// one index, so the name changed and the pass reads the library again.
+const Pipeline = "+decoded"
 
 // Service is the pass and the search over one model.
 type Service struct {
@@ -76,14 +80,16 @@ type Service struct {
 
 // New wires the service for the model named model.
 func New(store db.Embeddings, pictures Pictures, encoder Encoder, model string) *Service {
-	return &Service{store: store, pictures: pictures, encoder: encoder, model: model, idle: embed.Idle}
+	return &Service{store: store, pictures: pictures, encoder: encoder, model: model + Pipeline, idle: embed.Idle}
 }
 
 // Model is the name every vector this writes records.
 func (s *Service) Model() string { return s.model }
 
 // Batch reads up to Batch photographs that have no vector from this model,
-// newest first, and answers how many it reached a verdict about.
+// newest first, and answers how many it reached a verdict about. What is new
+// is read beside its thumbnails (Read); this is the rest -- a library whose
+// thumbnails were made before the switch was on, or by another model.
 //
 // media.ErrBusy is the pass standing aside for whoever is looking, as the
 // thumbnails' does, and embed.ErrUnavailable a helper that could not run: in
@@ -95,7 +101,11 @@ func (s *Service) Batch(ctx context.Context, now time.Time) (int, error) {
 	}
 	done := 0
 	for _, f := range pending {
-		switch err := s.read(ctx, f, now); {
+		err := s.pictures.Look(ctx, f, func(img image.Image) error { return s.Read(ctx, f, img) })
+		if errors.Is(err, thumb.ErrNoThumbnail) {
+			err = s.refuse(ctx, f, now)
+		}
+		switch {
 		case errors.Is(err, media.ErrBusy), errors.Is(err, embed.ErrUnavailable),
 			errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 			return done, err
@@ -110,39 +120,21 @@ func (s *Service) Batch(ctx context.Context, now time.Time) (int, error) {
 	return done, nil
 }
 
-// read makes one photograph's vector, or writes down why there is none.
-func (s *Service) read(ctx context.Context, f db.File, now time.Time) error {
-	refuse := func() error {
-		return s.store.PutEmbedding(ctx, db.Embedding{
-			FileID: f.ID, State: db.EmbeddingRefused, Model: s.model, BlobKey: f.BlobKey, At: now,
-		})
-	}
+// Wants implements thumb.Reader: whether f is one Batch would read.
+func (s *Service) Wants(ctx context.Context, f db.File) (bool, error) {
+	return s.store.WantsEmbedding(ctx, f.ID, s.model, time.Now().Add(-files.CacheRetention))
+}
 
-	picture, err := s.pictures.Picture(ctx, f)
-	switch {
-	case errors.Is(err, thumb.ErrNoThumbnail):
-		return refuse()
-	case err != nil:
-		return err
-	}
-	img, _, err := image.Decode(bytes.NewReader(picture))
+// Read implements thumb.Reader: one photograph's vector made of its picture,
+// or written down as refused when the model would not take it.
+func (s *Service) Read(ctx context.Context, f db.File, picture image.Image) error {
+	now := time.Now()
+	v, err := s.encoder.Image(ctx, picture)
 	if err != nil {
-		// A picture this server wrote that it cannot read back is a verdict
-		// on nothing but the picture, and the week brings it round again.
-		return refuse()
-	}
-
-	var v []float32
-	err = s.pictures.WhenIdle(func() error {
-		var ierr error
-		v, ierr = s.encoder.Image(ctx, img)
-		return ierr
-	})
-	if err != nil {
-		if errors.Is(err, media.ErrBusy) || errors.Is(err, embed.ErrUnavailable) || ctx.Err() != nil {
+		if errors.Is(err, embed.ErrUnavailable) || ctx.Err() != nil {
 			return err
 		}
-		return refuse()
+		return s.refuse(ctx, f, now)
 	}
 	if len(v) != Dimensions {
 		return fmt.Errorf("%w: %d dimensions", embed.ErrDimension, len(v))
@@ -161,6 +153,13 @@ func (s *Service) read(ctx context.Context, f db.File, now time.Time) error {
 	}
 	s.mu.Unlock()
 	return nil
+}
+
+// refuse writes down that f has no vector, which the week brings round again.
+func (s *Service) refuse(ctx context.Context, f db.File, now time.Time) error {
+	return s.store.PutEmbedding(ctx, db.Embedding{
+		FileID: f.ID, State: db.EmbeddingRefused, Model: s.model, BlobKey: f.BlobKey, At: now,
+	})
 }
 
 // Search answers the photographs closest to query, closest first, and at

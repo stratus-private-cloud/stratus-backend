@@ -414,7 +414,10 @@ photograph or a film that has just been indexed gets the two sizes a listing
 and a photo grid draw — the file is already in hand, so it costs no query at
 all — and everything else the library holds is found by the same kind of query
 behind it, newest first, because what somebody opens is the roll that just
-arrived. One decode makes both sizes. The gallery's viewer shows the original
+arrived. One decode makes both sizes, and **a photograph is fetched from the
+store once** for its metadata, its pictures and — with the search by content on
+— its vector: on S3 every read is a request somebody pays for, and a new
+photograph used to cost ten of them. The gallery's viewer shows the original
 itself where every browser opens it — JPEG, PNG, GIF, WebP, AVIF — and a
 1200-pixel picture, made when it is asked for, only of what one cannot: HEIC,
 TIFF and RAW.
@@ -1192,11 +1195,13 @@ What turning it on costs, so nobody finds out the hard way:
   says so on `/status` meanwhile. That is the only thing that goes out. With no
   route out, download the tarball elsewhere, unpack it where the server can
   read it and point `STRATUS_EMBED_MODEL` at the folder: nothing is fetched then.
-- **A CPU for a while.** Every photograph is read once, off the 300-pixel
-  thumbnail the grid already uses, by the same background pass as the
-  metadata and the thumbnails, after them and only while nobody is browsing:
-  about 0.4 s a photograph on one arm64 core, so a library of 50,000 is most of
-  a day the first time and a second per upload after that. `/status` counts it.
+- **A CPU for a while.** Every photograph is read once, off the same decode
+  its thumbnails are made from — an upload as it arrives, the rest of the
+  library by a background pass after the thumbnails and only while nobody is
+  browsing, which fetches each original once more: about 0.4 s a photograph on
+  one arm64 core, so a library of 50,000 is most of a day the first time and a
+  second per upload after that. `/status` counts it. An upgrade from a version
+  that read the stored thumbnail instead reads the library again, once.
 - **Memory only while it is used.** The model runs in a helper process,
   `stratus-embed`, one per half, started when it is needed and stopped after
   ten minutes without: some 5 MB of its own each, plus the model's pages, which
