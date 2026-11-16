@@ -86,9 +86,11 @@ by default.
 read-only collection holding everything there is:
 
 ```
-/                 files/, music/, photos/, playlists/, trash/, videos/
+/                 files/, music/, people/, photos/, playlists/, trash/, videos/
 /files/           your tree — read and write, locks and all
 /music/           your library by artist and album, generated, read-only
+/people/          the photographs each person is in, generated, read-only
+                  (empty unless faces are on)
 /photos/          your photographs by year and month, generated, read-only
 /playlists/       your playlists as .m3u8, generated, read-only
 /trash/           what you deleted, one folder per deletion, read-only
@@ -1258,8 +1260,10 @@ finds them and [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/fac
 turns each into 128 numbers — and the faces that look alike are put under one
 person, who appears at `/people/` once they are in three photographs. A person
 is unnamed until you name them on their page, which also merges two people who
-are the same one; the viewer says who is in a photograph. It all runs here and
-**nothing about a face leaves the machine**.
+are the same one; the viewer says who is in a photograph. The same address is
+a folder per person over WebDAV, holding the photographs they are in, so a
+client that mounts the server finds them too. It all runs here and **nothing
+about a face leaves the machine**.
 
 What it keeps is biometric data about everybody in your photographs, so:
 

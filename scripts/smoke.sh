@@ -663,12 +663,12 @@ if wait_serving "$davname"; then
 
   # And it lists the mounts, which is the whole point of one namespace: a
   # client that mounts the origin finds the calendars, the library, the photo
-  # folders, the videos, the playlists and the trash without being told their
-  # URLs.
+  # folders, the videos, the people, the playlists and the trash without
+  # being told their URLs.
   root_list="$(curl -s -u "$davuser:$davpass" -H 'Depth: 1' -X PROPFIND "http://$davhost/" 2>/dev/null || true)"
   case "$root_list" in
-    *'>/calendars/<'*'>/contacts/<'*'>/files/<'*'>/music/<'*'>/photos/<'*'>/playlists/<'*'>/trash/<'*'>/videos/<'*) ok "PROPFIND / lists the eight collections" ;;
-    *) bad "PROPFIND / lists the eight collections" "$(head -c 200 <<<"$root_list")" ;;
+    *'>/calendars/<'*'>/contacts/<'*'>/files/<'*'>/music/<'*'>/people/<'*'>/photos/<'*'>/playlists/<'*'>/trash/<'*'>/videos/<'*) ok "PROPFIND / lists the nine collections" ;;
+    *) bad "PROPFIND / lists the nine collections" "$(head -c 200 <<<"$root_list")" ;;
   esac
 
   # A calendar client is given the address and nothing else (#75): the

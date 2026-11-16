@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -386,5 +387,27 @@ func TestTheViewerNamesOnlyWhoIsThere(t *testing.T) {
 	p.failing = "People"
 	if strings.Contains(viewer(), "In this photo") {
 		t.Error("the viewer names people it could not read")
+	}
+}
+
+// TestAPhotographInSomebodysFolderIsTheFile: what a WebDAV client GETs of the
+// people mount is the browser half's to serve, as under /photos/.
+func TestAPhotographInSomebodysFolderIsTheFile(t *testing.T) {
+	t.Parallel()
+	_, h, cookie, photos := withFaces(t, true)
+	rec := get(t, h, "/people/Ana/"+path.Base(photos[1].Path), cookie)
+	if rec.Code != http.StatusOK || rec.Body.Len() == 0 {
+		t.Fatalf("a photograph in Ana's folder = %d, %d bytes", rec.Code, rec.Body.Len())
+	}
+	if rec := get(t, h, "/people/Ana/"+path.Base(photos[0].Path), cookie); rec.Code != http.StatusNotFound {
+		t.Errorf("somebody else's photograph in Ana's folder = %d, want 404", rec.Code)
+	}
+
+	p := &people{everybody: []db.Person{{ID: 2, Name: "Ana"}}}
+	broken, cookie2, photo := browserWithPeople(t, p, true, "FilesByID")
+	f := photo("IMG_0001.jpg")
+	p.faces = []db.Face{{ID: 10, FileID: f.ID, BlobKey: f.BlobKey, Person: 2}}
+	if rec := get(t, broken, "/people/Ana/IMG_0001.jpg", cookie2); rec.Code != http.StatusInternalServerError {
+		t.Errorf("a photograph whose row cannot be read = %d, want 500", rec.Code)
 	}
 }
