@@ -3081,10 +3081,17 @@ Restraint here is principle 3, not laziness:
   original, since a larger file that plays beats an error nobody reads -- the
   errors on that endpoint are XML a player does not parse.
 
-- `golang.org/x/image` for the scaler, which the standard library has no
-  equivalent of. JPEG and PNG are decoded and encoded by the stdlib; HEIC and
-  video frames need the ffmpeg above, so a format is either read in-process or
-  refused honestly, never read badly.
+- **The scaler is ours, `thumb.Scale`, and it is x/image's Catmull-Rom to the
+  bit** (#530). x/image ran the horizontal pass over the whole picture into
+  float64s before the vertical one -- 154 MB to fit a 12 MP photograph in the
+  faces' 1,600 pixels, which put a 512 MB instance in swap -- so the same
+  arithmetic runs a source row at a time over a ring of the rows under the
+  kernel: 3 MB, and a quarter faster. Copied rather than approximated because
+  every thumbnail, vector and face already stored was made by x/image's, and a
+  test compares the two pixel for pixel; x/image stays a test dependency for
+  that and is no longer linked. JPEG and PNG are decoded and encoded by the
+  stdlib; HEIC and video frames need the ffmpeg above, so a format is either
+  read in-process or refused honestly, never read badly.
 - **litmus is the canary, and it is the only test here that did not come from
   our own understanding** (#173). Everything else in this repository was
   written from the same reading of WebDAV as the code, so it agrees with the
