@@ -10,6 +10,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"io"
 	"log/slog"
 	"runtime/debug"
 	"time"
@@ -105,20 +107,12 @@ func (a *App) indexEvery(ctx context.Context, deps Deps, changed <-chan struct{}
 			continue
 
 		case f := <-deps.Indexer.Noticed():
-			switch err := deps.Indexer.IndexFile(ctx, time.Now(), f); {
-			case errors.Is(err, context.Canceled):
+			if !a.arrived(ctx, deps, f) {
 				return false
-			case err != nil:
-				slog.Error("indexing media", "path", f.Path, "err", err)
-				continue
 			}
-			// The picture of a file that has just been written, while it is
-			// still in hand: the phone that uploaded it is the one about to
-			// open the grid, and this costs no query at all.
-			a.thumbFor(ctx, deps, f)
-			// Its content waits for the pass, a minute after the uploads
-			// stop coming rather than an hour: a vector is a second of CPU
-			// a phone backing up a roll should not be queued behind.
+			// What that missed -- a decoder somebody else was using, a model
+			// still on its way -- waits for the pass, a minute after the
+			// uploads stop coming rather than an hour.
 			if again == nil && a.semanticOn(deps) {
 				again = time.After(thumbBusyPause)
 			}
@@ -239,18 +233,70 @@ func (a *App) embedAhead(ctx context.Context, deps Deps) time.Duration {
 //
 // Only for what a grid draws, by the name: a track's cover is a second picture
 // per blob and answers a different surface, and everything else has none.
-func (a *App) thumbFor(ctx context.Context, deps Deps, f db.File) {
+func (a *App) thumbFor(ctx context.Context, deps Deps, f db.File, held io.ReadSeeker) {
 	if !a.values(deps).ThumbsAhead || deps.Thumbs == nil {
 		return
 	}
 	if !media.IsImage(f.Path) && !media.IsVideo(f.Path) {
 		return
 	}
-	switch _, err := deps.Thumbs.Prepare(ctx, f); {
+	switch _, err := deps.Thumbs.PrepareFrom(ctx, f, held); {
 	case err == nil, errors.Is(err, media.ErrBusy), errors.Is(err, context.Canceled):
 	default:
 		slog.Info("making a thumbnail ahead", "path", f.Path, "err", err)
 	}
+}
+
+// arrived is what a file that has just been written gets: its metadata, its
+// pictures and its content, out of one read of a photograph because on S3
+// each read is a request (#519). False only when the process is stopping.
+func (a *App) arrived(ctx context.Context, deps Deps, f db.File) bool {
+	held := a.hold(ctx, deps, f)
+	switch err := deps.Indexer.IndexFileFrom(ctx, time.Now(), f, held); {
+	case errors.Is(err, context.Canceled):
+		return false
+	case err != nil:
+		slog.Error("indexing media", "path", f.Path, "err", err)
+		return true
+	}
+	// The picture of a file that has just been written, while it is still in
+	// hand: the phone that uploaded it is the one about to open the grid, and
+	// this costs no query at all.
+	a.thumbFor(ctx, deps, f, held)
+	return true
+}
+
+// hold reads a photograph that has just been written whole, when its
+// thumbnails are about to be made from it, so the indexer reads the same
+// bytes. Nil otherwise, and nil when the store would not answer: the two then
+// read for themselves and say what went wrong in their own words.
+func (a *App) hold(ctx context.Context, deps Deps, f db.File) io.ReadSeeker {
+	if !a.values(deps).ThumbsAhead || deps.Thumbs == nil {
+		return nil
+	}
+	held, err := deps.Thumbs.Hold(ctx, f)
+	if err != nil {
+		return nil
+	}
+	return held
+}
+
+// contentReader hands the content pass the pixels of the thumbnails' decode
+// while the switch is on (#519).
+type contentReader struct {
+	a    *App
+	deps Deps
+}
+
+func (r contentReader) Wants(ctx context.Context, f db.File) (bool, error) {
+	if !r.a.semanticOn(r.deps) {
+		return false, nil
+	}
+	return r.deps.Semantic.Wants(ctx, f)
+}
+
+func (r contentReader) Read(ctx context.Context, f db.File, picture image.Image) error {
+	return r.deps.Semantic.Read(ctx, f, picture)
 }
 
 // indexUntilDry runs the query until it stops filling a batch, and reports

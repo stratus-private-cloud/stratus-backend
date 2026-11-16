@@ -6,7 +6,6 @@ import (
 	"errors"
 	"image"
 	"io"
-	"strings"
 	"testing"
 	"time"
 
@@ -135,29 +134,6 @@ func TestAPassWritesDownWhatThisBuildCannotRead(t *testing.T) {
 	}
 }
 
-// TestAPassKeepsWhatIsAlreadyThere is the library somebody has already
-// browsed: the pictures are in the store and only the row did not know, so
-// what it costs is a Stat rather than a decode.
-func TestAPassKeepsWhatIsAlreadyThere(t *testing.T) {
-	t.Parallel()
-	th, service, blobs, meta := thumbsOver(t)
-	// Bytes nothing could decode, so a pass that tried would refuse them.
-	f := write(t, service, "photos/one.jpg", []byte("not an image at all"), "image/jpeg")
-	indexAs(t, meta, f, db.KindImage)
-	for _, size := range passSizes {
-		if _, err := blobs.Put(t.Context(), thumbKey(f.BlobKey, size), strings.NewReader("a picture"), 9); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	switch state, err := th.Prepare(t.Context(), f); {
-	case err != nil:
-		t.Fatalf("Prepare: %v", err)
-	case state != db.ThumbMade:
-		t.Fatalf("Prepare = %v, want the pictures that are there taken as made", state)
-	}
-}
-
 // TestAPassSaysNothingAboutBytesItCouldNotReach is #157 on this side: a store
 // that will not answer is not a verdict on anybody's photograph, so the row
 // is left as it was and the next pass asks again.
@@ -223,45 +199,6 @@ func TestAPassWorksThroughTheLibrary(t *testing.T) {
 	}
 }
 
-// TestARefusalCopiedFromTheNoteKeepsItsDate: the row comes due a week after
-// its verdict and the sweep takes the note a week after it was written, so a
-// pass that finds the note and dates the row by now pushes the next attempt a
-// second week out.
-func TestARefusalCopiedFromTheNoteKeepsItsDate(t *testing.T) {
-	t.Parallel()
-	_, service, blobs, meta := thumbsOver(t)
-	written := time.Now().Add(-6 * 24 * time.Hour).Truncate(time.Second)
-	th := New(agedStore{Storage: blobs, at: written}, service, meta, stubFFmpeg(t), t.TempDir())
-	f := writeImage(t, service, "photos/one.jpg", 400, 400)
-	indexAs(t, meta, f, db.KindImage)
-	if _, err := blobs.Put(t.Context(), verdictKey(f.BlobKey), strings.NewReader("no"), 2); err != nil {
-		t.Fatal(err)
-	}
-
-	if state, err := th.Prepare(t.Context(), f); err != nil || state != db.ThumbRefused {
-		t.Fatalf("Prepare = %v, %v, want the note believed", state, err)
-	}
-	states, err := meta.MediaStates(t.Context(), []int64{f.ID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := states[f.ID].ThumbAt; !got.Equal(written) {
-		t.Errorf("the row is dated %v, want the note's %v", got, written)
-	}
-}
-
-// agedStore answers every Stat as if the object had been written at.
-type agedStore struct {
-	storage.Storage
-	at time.Time
-}
-
-func (s agedStore) Stat(ctx context.Context, key string) (storage.ObjectInfo, error) {
-	info, err := s.Storage.Stat(ctx, key)
-	info.ModTime = s.at
-	return info, err
-}
-
 // TestARefusalIsBelievedForAWeek is the rule every reader of the column
 // shares, and the week is the whole of it: a page that stopped offering for
 // ever would be the reason nothing ever tried again after an upgrade that can
@@ -314,48 +251,66 @@ func stillPending(t *testing.T, meta db.MediaIndex, kind db.Kind) []db.File {
 	return pending
 }
 
-// TestAPictureIsTheGridsAndMadeIfItIsNotThere is what a search by content
-// reads a photograph off (#505): the 300-pixel picture, made by the pass's
-// rules when nothing has made it yet.
-func TestAPictureIsTheGridsAndMadeIfItIsNotThere(t *testing.T) {
-	t.Parallel()
-	th, service, _, meta := thumbsOver(t)
-	f := writeImage(t, service, "photos/one.jpg", 400, 400)
-	indexAs(t, meta, f, db.KindImage)
-
-	picture, err := th.Picture(t.Context(), f)
-	if err != nil {
-		t.Fatalf("Picture: %v", err)
-	}
-	if cfg, _, derr := image.DecodeConfig(bytes.NewReader(picture)); derr != nil || cfg.Width != int(thumbMedium) {
-		t.Errorf("the picture is %v, %v; want the grid's", cfg, derr)
-	}
-
-	notes := writeImage(t, service, "notes.txt", 10, 10)
-	if _, err := th.Picture(t.Context(), notes); !errors.Is(err, ErrNoThumbnail) {
-		t.Errorf("Picture of what cannot be drawn = %v, want ErrNoThumbnail", err)
-	}
+// keeper is a Reader that keeps what it was handed.
+type keeper struct {
+	wants bool
+	got   map[int64]image.Rectangle
 }
 
-func TestAPictureStandsAsideAndSoDoesWhatRunsWhenIdle(t *testing.T) {
+func (r *keeper) Wants(context.Context, db.File) (bool, error) { return r.wants, nil }
+
+func (r *keeper) Read(_ context.Context, f db.File, picture image.Image) error {
+	r.got[f.ID] = picture.Bounds()
+	return nil
+}
+
+// TestAReaderGetsThePassesDecode is #519: what else is made of a photograph's
+// pixels is made of the decode its thumbnails come from, and only by a reader
+// that still wants it.
+func TestAReaderGetsThePassesDecode(t *testing.T) {
 	t.Parallel()
 	th, service, _, meta := thumbsOver(t)
-	f := writeImage(t, service, "photos/one.jpg", 400, 400)
+	wanting := &keeper{wants: true, got: map[int64]image.Rectangle{}}
+	done := &keeper{got: map[int64]image.Rectangle{}}
+	th.Also(wanting)
+	th.Also(done)
+	f := writeImage(t, service, "photos/one.jpg", 600, 400)
 	indexAs(t, meta, f, db.KindImage)
 
-	ran := false
-	if err := th.WhenIdle(func() error { ran = true; return nil }); err != nil || !ran {
-		t.Fatalf("WhenIdle with nobody looking = %v, ran %v", err, ran)
+	held, err := th.Hold(t.Context(), f)
+	if err != nil || held == nil {
+		t.Fatalf("Hold = %v, %v", held, err)
+	}
+	if state, err := th.PrepareFrom(t.Context(), f, held); err != nil || state != db.ThumbMade {
+		t.Fatalf("PrepareFrom = %v, %v", state, err)
+	}
+	if got := wanting.got[f.ID]; got.Dx() != PictureSize || got.Dy() != PictureSize*2/3 {
+		t.Errorf("the reader was handed %v, want the picture in a box of %d", got, PictureSize)
+	}
+	if len(done.got) != 0 {
+		t.Error("a reader that wanted nothing was handed the picture anyway")
+	}
+
+	// And on its own, for what no thumbnail pass decodes again.
+	var looked image.Rectangle
+	if err := th.Look(t.Context(), f, func(p image.Image) error { looked = p.Bounds(); return nil }); err != nil {
+		t.Fatalf("Look: %v", err)
+	}
+	if looked != wanting.got[f.ID] {
+		t.Errorf("Look handed %v, want what the pass handed: %v", looked, wanting.got[f.ID])
+	}
+	notes := write(t, service, "notes.txt", []byte("words"), "text/plain")
+	if err := th.Look(t.Context(), notes, func(image.Image) error { return nil }); !errors.Is(err, ErrNoThumbnail) {
+		t.Errorf("Look at what cannot be drawn = %v, want ErrNoThumbnail", err)
+	}
+	if held, err := th.Hold(t.Context(), notes); held != nil || err != nil {
+		t.Errorf("Hold of what is not a photograph = %v, %v; want nothing", held, err)
 	}
 
 	th.decoding = make(chan struct{}, 1)
 	th.decoding <- struct{}{}
 	th.inQueue.Add(1)
-	if _, err := th.Picture(t.Context(), f); !errors.Is(err, media.ErrBusy) {
-		t.Errorf("Picture while a request is decoding = %v, want media.ErrBusy", err)
-	}
-	ran = false
-	if err := th.WhenIdle(func() error { ran = true; return nil }); !errors.Is(err, media.ErrBusy) || ran {
-		t.Errorf("WhenIdle while a request is decoding = %v, ran %v", err, ran)
+	if err := th.Look(t.Context(), f, func(image.Image) error { return nil }); !errors.Is(err, media.ErrBusy) {
+		t.Errorf("Look while a request is decoding = %v, want media.ErrBusy", err)
 	}
 }

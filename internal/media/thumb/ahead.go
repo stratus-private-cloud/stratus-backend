@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"log/slog"
 	"time"
@@ -12,7 +13,6 @@ import (
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
 	"github.com/stratus-private-cloud/stratus-backend/internal/files"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media"
-	"github.com/stratus-private-cloud/stratus-backend/internal/storage"
 )
 
 // Pictures made before anybody asks for them, which is the indexer's second
@@ -63,6 +63,47 @@ func Refused(state db.MediaState, now time.Time) bool {
 	return state.Thumb == db.ThumbRefused && now.Sub(state.ThumbAt) < files.CacheRetention
 }
 
+// Reader is something else made of a photograph's pixels, read off the decode
+// its thumbnails come from so that the original is fetched once for all of
+// them (#519): on S3 every read is a request somebody pays for.
+type Reader interface {
+	// Wants reports whether f still needs what this reader makes, so that a
+	// decode made for the thumbnails is handed only to who has a use for it.
+	Wants(ctx context.Context, f db.File) (bool, error)
+	// Read makes it from the picture, fitted in a box of PictureSize and
+	// turned the right way up. It holds the decoder while it runs.
+	Read(ctx context.Context, f db.File, picture image.Image) error
+}
+
+// PictureSize is the box a Reader's picture fits in: the grid's, so a reader
+// sees what the grid shows, decoded rather than read back from its JPEG.
+const PictureSize = int(thumbMedium)
+
+// Also hands every decode a pass makes to r as well. It is wiring, called
+// before the passes start.
+func (t *Service) Also(r Reader) { t.readers = append(t.readers, r) }
+
+// Hold reads a photograph whole when a pass is about to decode it, so that
+// the indexer and the pass read the same bytes and the store is asked once
+// (#519). Nil for anything else: a film is read where it lies, over ranges,
+// and a photograph past maxThumbSource is read the way it always was rather
+// than held in memory.
+func (t *Service) Hold(ctx context.Context, f db.File) (io.ReadSeeker, error) {
+	if !media.IsImage(f.Path) || !CanThumbnail(f.Path, f.Size) || f.Size > maxThumbSource {
+		return nil, nil
+	}
+	var held []byte
+	err := t.fromStore(ctx, f, func(r io.ReadSeeker) error {
+		var err error
+		held, err = io.ReadAll(r)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	return bytes.NewReader(held), nil
+}
+
 // Prepare makes the pictures a grid and a listing will ask for, before either
 // does, and writes down what became of them.
 //
@@ -71,7 +112,17 @@ func Refused(state db.MediaState, now time.Time) bool {
 // the bytes, which is nobody's verdict and leaves the row untouched so the
 // next pass tries again (#157); and a file this build cannot read, which is
 // remembered.
+//
+// It asks the store nothing before it decodes: the row is what says a picture
+// is wanted, since the lazy path writes it down as well (#341), and asking
+// the store again was a HEAD per size per file (#519).
 func (t *Service) Prepare(ctx context.Context, f db.File) (db.ThumbState, error) {
+	return t.PrepareFrom(ctx, f, nil)
+}
+
+// PrepareFrom is Prepare over bytes Hold has already read, or over the store
+// when held is nil.
+func (t *Service) PrepareFrom(ctx context.Context, f db.File, held io.ReadSeeker) (db.ThumbState, error) {
 	v := verdict{note: verdictKey(f.BlobKey), says: ErrNoThumbnail, file: f.ID, blobKey: f.BlobKey}
 
 	if !CanThumbnail(f.Path, f.Size) {
@@ -85,36 +136,37 @@ func (t *Service) Prepare(ctx context.Context, f db.File) (db.ThumbState, error)
 		return db.ThumbRefused, nil
 	}
 
-	missing, err := t.missingSizes(ctx, f)
-	switch {
-	case err != nil:
-		return 0, err
-	case len(missing) == 0:
-		// Made already, by a request that got here first or by a pass before
-		// the column existed. The row is the only thing that did not know.
-		t.record(ctx, v, db.ThumbMade)
-		return db.ThumbMade, nil
-	}
-	if at, ok := t.refusedBefore(ctx, v.note); ok {
-		// Dated by the note and not by now. The row comes due a week after
-		// this, and the sweep takes the note a week after it was written: a
-		// row restamped now would find the note a day short of collection,
-		// copy it again and wait a second week before anything decoded.
-		if at.IsZero() {
-			at = time.Now()
-		}
-		t.recordAt(ctx, v, db.ThumbRefused, at)
-		return db.ThumbRefused, nil
-	}
-
 	release, taken := t.decodeIfIdle()
 	if !taken {
 		return 0, media.ErrBusy
 	}
 	defer release()
 
-	made := make(map[thumbSize][]byte, len(missing))
-	if err := t.decodeInto(ctx, f, missing, made); err != nil {
+	readers := t.wanting(ctx, f)
+	made := make(map[thumbSize][]byte, len(passSizes))
+	err := t.read(ctx, f, held, func(body io.ReadSeeker) error {
+		pic, err := t.decode(ctx, f, body, largest(passSizes))
+		if err != nil {
+			return err
+		}
+		for _, size := range passSizes {
+			if made[size], err = pic.at(size); err != nil {
+				return err
+			}
+		}
+		if len(readers) > 0 {
+			picture := pic.picture(thumbMedium)
+			for _, r := range readers {
+				if err := r.Read(ctx, f, picture); err != nil {
+					// Its own pass comes round for it, at the price of the
+					// read this was saving.
+					slog.InfoContext(ctx, "reading a photograph beside its thumbnails", "path", f.Path, "err", err)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
 		t.remember(ctx, v, err)
 		if isVerdict(ctx, err) {
 			return db.ThumbRefused, nil
@@ -132,6 +184,32 @@ func (t *Service) Prepare(ctx context.Context, f db.File) (db.ThumbState, error)
 	}
 	t.record(ctx, v, db.ThumbMade)
 	return db.ThumbMade, nil
+}
+
+// wanting is the readers that have a use for f's pixels. One that cannot say
+// is left out: its own pass will ask again.
+func (t *Service) wanting(ctx context.Context, f db.File) []Reader {
+	var out []Reader
+	for _, r := range t.readers {
+		switch ok, err := r.Wants(ctx, f); {
+		case err != nil:
+			slog.InfoContext(ctx, "asking whether a photograph is wanted", "path", f.Path, "err", err)
+		case ok:
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// read hands use the held bytes, or the original from the store.
+func (t *Service) read(ctx context.Context, f db.File, held io.ReadSeeker, use func(io.ReadSeeker) error) error {
+	if held == nil {
+		return t.fromStore(ctx, f, use)
+	}
+	if _, err := held.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+	return use(held)
 }
 
 // PrepareBatch makes the pictures of up to Batch files that have none,
@@ -174,25 +252,6 @@ func (t *Service) PrepareBatch(ctx context.Context, now time.Time) (int, error) 
 	return done, nil
 }
 
-// missingSizes is which of the sizes a pass makes are not in the store yet, so
-// that a library browsed before this existed is not decoded a second time.
-//
-// A Stat each, which is a HEAD each on S3 -- paid once per file, because what
-// it learns is then on the row and the query does the asking from there.
-func (t *Service) missingSizes(ctx context.Context, f db.File) ([]thumbSize, error) {
-	var missing []thumbSize
-	for _, size := range passSizes {
-		switch _, err := t.blobs.Stat(ctx, thumbKey(f.BlobKey, size)); {
-		case err == nil:
-		case errors.Is(err, storage.ErrNotFound):
-			missing = append(missing, size)
-		default:
-			return nil, fmt.Errorf("%w: look for a thumbnail of %q: %w", media.ErrUnreachable, f.Path, err)
-		}
-	}
-	return missing, nil
-}
-
 // keep stores one picture a pass made.
 func (t *Service) keep(ctx context.Context, f db.File, size thumbSize, picture []byte) error {
 	key := thumbKey(f.BlobKey, size)
@@ -226,41 +285,33 @@ func (t *Service) decodeIfIdle() (func(), bool) {
 	}
 }
 
-// Picture is the grid's picture of f, made by Prepare's rules if it is not in
-// the store yet, for a pass that reads pictures rather than files: a
-// photograph's vector is read off this (#505), since the model sees 224 pixels
-// and the original is twelve million of them, possibly HEIC.
+// Look decodes f and hands fn its picture as a Reader would get it, for a
+// reader's own pass over what no thumbnail pass will decode again -- a library
+// whose thumbnails were made before the reader was switched on.
 //
 // ErrNoThumbnail for a file this build cannot draw, and media.ErrBusy when
-// somebody is looking, as Prepare.
-func (t *Service) Picture(ctx context.Context, f db.File) ([]byte, error) {
-	switch state, err := t.Prepare(ctx, f); {
-	case err != nil:
-		return nil, err
-	case state == db.ThumbRefused:
-		return nil, fmt.Errorf("%w: %q", ErrNoThumbnail, f.Path)
+// somebody is looking, as Prepare. An error from fn comes back as it is.
+func (t *Service) Look(ctx context.Context, f db.File, fn func(image.Image) error) error {
+	if !CanThumbnail(f.Path, f.Size) {
+		return fmt.Errorf("%w: %q", ErrNoThumbnail, f.Path)
 	}
-	key := thumbKey(f.BlobKey, thumbMedium)
-	body, _, err := t.blobs.Get(ctx, key, storage.All())
-	if err != nil {
-		return nil, fmt.Errorf("%w: read %q: %w", media.ErrUnreachable, key, err)
-	}
-	defer func() { _ = body.Close() }()
-	picture, err := io.ReadAll(body)
-	if err != nil {
-		return nil, fmt.Errorf("%w: read %q: %w", media.ErrUnreachable, key, err)
-	}
-	return picture, nil
-}
-
-// WhenIdle runs fn holding a decoder if nothing else wants one, and answers
-// media.ErrBusy otherwise: the same "is anybody looking" a pass of pictures
-// asks, for work that is not a decode but costs a CPU like one.
-func (t *Service) WhenIdle(fn func() error) error {
 	release, taken := t.decodeIfIdle()
 	if !taken {
 		return media.ErrBusy
 	}
 	defer release()
-	return fn()
+
+	var picture image.Image
+	err := t.fromStore(ctx, f, func(body io.ReadSeeker) error {
+		pic, err := t.decode(ctx, f, body, thumbMedium)
+		if err != nil {
+			return err
+		}
+		picture = pic.picture(thumbMedium)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return fn(picture)
 }

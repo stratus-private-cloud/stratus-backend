@@ -168,7 +168,14 @@ func (i *Indexer) IndexBatch(ctx context.Context, now time.Time) (int, error) {
 // why a lone file whose blob is missing gets a verdict -- exactly what a batch
 // of one already decides.
 func (i *Indexer) IndexFile(ctx context.Context, now time.Time, f db.File) error {
-	a := i.index(ctx, f)
+	return i.IndexFileFrom(ctx, now, f, nil)
+}
+
+// IndexFileFrom is IndexFile over bytes somebody has already read -- a
+// photograph held for its thumbnails, so the store is asked once for both
+// (#519) -- or over the store when held is nil.
+func (i *Indexer) IndexFileFrom(ctx context.Context, now time.Time, f db.File, held io.ReadSeeker) error {
+	a := i.indexFrom(ctx, f, held)
 	put, err := i.record(ctx, now, a, []attempt{a})
 	switch {
 	case err != nil:
@@ -250,7 +257,19 @@ func (a attempt) deferred(batch []attempt) bool {
 // that row is the last word is the caller's to decide, and a.err is what it
 // decides with.
 func (i *Indexer) index(ctx context.Context, f db.File) attempt {
-	m, err := i.extract(ctx, f)
+	return i.indexFrom(ctx, f, nil)
+}
+
+func (i *Indexer) indexFrom(ctx context.Context, f db.File, held io.ReadSeeker) attempt {
+	var m db.Media
+	var err error
+	if held != nil {
+		if _, err = held.Seek(0, io.SeekStart); err == nil {
+			m, err = i.extractFrom(ctx, held, f)
+		}
+	} else {
+		m, err = i.extract(ctx, f)
+	}
 	m.FileID = f.ID
 	m.IndexedAt = time.Now()
 	m.Version = Version

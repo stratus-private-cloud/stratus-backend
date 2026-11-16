@@ -2711,6 +2711,22 @@ Restraint here is principle 3, not laziness:
   what a decode straight to 96 gives -- the same picture at the same size,
   against a second 4K decode to save a resize.
 
+  **And one read of the store, for everything made of a photograph** (#519).
+  On S3 every read is a request somebody pays for, and a new photograph cost
+  ten: the indexer's sniff and EXIF, the decode's orientation and pixels --
+  each a `Seek` back, which reopens the range -- the thumbnail SigLIP read
+  back, and five HEADs asking whether pictures or a refusal note were already
+  there. Now `thumb.Hold` reads a photograph under `maxThumbSource` into
+  memory once, `IndexFileFrom` and `PrepareFrom` both read those bytes, and
+  every `thumb.Reader` that wants the pixels gets them from the same decode
+  -- `TestAPhotographIsReadOnce` counts one GET and nothing else. **The row is
+  what says a picture is wanted**, not the store: the lazy path writes it
+  down too (#341), so the HEADs were asking a question the row had answered,
+  and what they protected against -- a picture made but not recorded -- now
+  costs a decode rather than a request per file. A film is not held: it is
+  read where it lies, over ranges, and the window its thumbnail needs is the
+  other read.
+
   **Newest first, photographs before films**, by `sort_at`, the column the
   gallery already pages on: what somebody opens is the roll that just arrived.
   And a file that has just been written gets its picture there and then, out
@@ -2888,10 +2904,18 @@ Restraint here is principle 3, not laziness:
   part of the search page, so it has no cursor; `semantic.Floor` is 0.06, from
   the spike's precision and recall.
 
-  **The pass is the indexer's third half**, after the thumbnails, reading the
-  300-pixel picture the grid already has -- HEIC included, since ffmpeg made it
-  -- and standing aside on the same "is anybody looking" the pictures ask
-  (`thumb.WhenIdle`). A refusal comes back in a week like theirs.
+  **A vector is read off the thumbnails' decode** (#519): `semantic.Service`
+  is a `thumb.Reader`, so a photograph a thumbnail pass decodes is handed to
+  it -- fitted in the grid's 300-pixel box, HEIC included, before it is
+  written as a JPEG -- when `WantsEmbedding` says it still needs one. What no
+  thumbnail pass will decode again is the content pass's own, through
+  `thumb.Look`, which stands aside on the same "is anybody looking" the
+  pictures ask. A refusal comes back in a week like theirs. It read the
+  stored JPEG until then, and the model name grew `semantic.Pipeline` so the
+  two kinds of vector are never in one index; on the spike's 500 photographs
+  the change moved Spanish at `Floor` from 0.61/0.78 precision/recall to
+  0.64/0.75, English not at all, and `SimilarFloor`'s answers by a tenth of a
+  photograph.
 
   **The gallery's viewer shows the ten photographs most like one** (#514), its own
   vector the query and no model run. Two pictures are far closer than a

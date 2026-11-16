@@ -194,12 +194,12 @@ func TestThePicturePassPacesItself(t *testing.T) {
 	// The same of the half that takes the notice: a file whose bytes are not
 	// in the store is a log line, because what this does is extra and the
 	// write it followed has already succeeded.
-	a.thumbFor(t.Context(), deps, db.File{ID: 1, Path: "gone.jpg", BlobKey: "blobs/gone"})
+	a.thumbFor(t.Context(), deps, db.File{ID: 1, Path: "gone.jpg", BlobKey: "blobs/gone"}, nil)
 
 	// And nothing at all for a file a grid does not draw: a track's cover is
 	// a different picture answering a different surface, and everything else
 	// has none.
-	a.thumbFor(t.Context(), deps, db.File{ID: 1, Path: "notes.txt", BlobKey: "blobs/gone"})
+	a.thumbFor(t.Context(), deps, db.File{ID: 1, Path: "notes.txt", BlobKey: "blobs/gone"}, nil)
 
 	// Zero is the loop's own tick and nothing else: a nil channel never fires.
 	if again := after(0); again != nil {
@@ -215,7 +215,7 @@ func TestThePicturePassPacesItself(t *testing.T) {
 	if wait := off.thumbsAhead(t.Context(), deps); wait != 0 {
 		t.Errorf("the pass ran with the switch off and waits %v", wait)
 	}
-	off.thumbFor(t.Context(), deps, db.File{ID: 1, Path: "gone.jpg", BlobKey: "blobs/gone"})
+	off.thumbFor(t.Context(), deps, db.File{ID: 1, Path: "gone.jpg", BlobKey: "blobs/gone"}, nil)
 }
 
 // TestThePicturePassStandsAside is the rule the whole pass hangs on, read from

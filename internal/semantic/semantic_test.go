@@ -1,12 +1,10 @@
 package semantic_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"image"
 	"image/color"
-	"image/jpeg"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -64,29 +62,18 @@ type pictures struct {
 	refuse  map[int64]bool
 }
 
-func (p *pictures) Picture(_ context.Context, f db.File) ([]byte, error) {
+func (p *pictures) Look(_ context.Context, f db.File, fn func(image.Image) error) error {
 	if p.busy {
-		return nil, media.ErrBusy
+		return media.ErrBusy
 	}
 	if p.refuse[f.ID] {
-		return nil, thumb.ErrNoThumbnail
+		return thumb.ErrNoThumbnail
 	}
 	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
 	for i := range 64 {
 		img.Set(i%8, i/8, p.colours[f.ID])
 	}
-	var out bytes.Buffer
-	if err := jpeg.Encode(&out, img, nil); err != nil {
-		return nil, err
-	}
-	return out.Bytes(), nil
-}
-
-func (p *pictures) WhenIdle(fn func() error) error {
-	if p.busy {
-		return media.ErrBusy
-	}
-	return fn()
+	return fn(img)
 }
 
 type fixture struct {
@@ -173,6 +160,34 @@ func TestAPassReadsWhatASearchFinds(t *testing.T) {
 	if len(hits) != 2 || (hits[0].FileID != blue.ID && hits[1].FileID != blue.ID) ||
 		(hits[0].FileID != late.ID && hits[1].FileID != late.ID) {
 		t.Errorf("Search(blue) = %+v, want both blue photographs", hits)
+	}
+}
+
+// TestAPhotographIsReadBesideItsThumbnails is the reader's half (#519): a
+// photograph a pass would read is wanted, and once read it is not, so the
+// pass that follows has nothing to fetch again.
+func TestAPhotographIsReadBesideItsThumbnails(t *testing.T) {
+	fx := newFixture(t)
+	red := fx.photo(t, "red.jpg", color.RGBA{R: 255, A: 255})
+
+	if wanted, err := fx.service.Wants(t.Context(), red); err != nil || !wanted {
+		t.Fatalf("Wants of a photograph nothing has read = %v, %v", wanted, err)
+	}
+	picture := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	for i := range 16 {
+		picture.Set(i%4, i/4, color.RGBA{R: 255, A: 255})
+	}
+	if err := fx.service.Read(t.Context(), red, picture); err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if wanted, err := fx.service.Wants(t.Context(), red); err != nil || wanted {
+		t.Errorf("Wants after Read = %v, %v; want it read", wanted, err)
+	}
+	if done, err := fx.service.Batch(t.Context(), time.Now()); err != nil || done != 0 {
+		t.Errorf("Batch after Read = %d, %v; want nothing to do", done, err)
+	}
+	if hits, err := fx.service.Search(t.Context(), "red", 10); err != nil || len(hits) != 1 || hits[0].FileID != red.ID {
+		t.Errorf("Search(red) = %+v, %v", hits, err)
 	}
 }
 

@@ -1,6 +1,7 @@
 package media
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -107,4 +108,27 @@ func mustTempDir(t *testing.T, dir string) string {
 		t.Fatal(err)
 	}
 	return tmp
+}
+
+// TestIndexFileFromReadsWhatItIsHanded: bytes somebody already read are the
+// file (#519), so a store that would not answer again changes nothing.
+func TestIndexFileFromReadsWhatItIsHanded(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	blobs, meta := backends(t, dir)
+	body := exifJPEG(t)
+	f := write(t, files.New(blobs, meta), "photos/IMG_0001.jpg", body, "image/jpeg")
+
+	broken := storagetest.FailOn(t, blobs, "Get")
+	indexer := NewIndexer(files.New(broken, meta), meta, mustTempDir(t, dir), "ffprobe-does-not-exist")
+	if err := indexer.IndexFileFrom(t.Context(), time.Now(), f, bytes.NewReader(body)); err != nil {
+		t.Fatalf("IndexFileFrom: %v", err)
+	}
+	got, err := meta.MediaByFile(t.Context(), f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Indexed() || got.Camera != "Apple iPhone 15 Pro" {
+		t.Errorf("got %+v, want the row the store's bytes would have given", got)
+	}
 }

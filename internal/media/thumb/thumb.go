@@ -131,6 +131,8 @@ type Service struct {
 	// lookups is where a fetched cover is found from, and nil until
 	// WithLookups: see art.go.
 	lookups db.Lookups
+	// readers are handed the pixels of every decode a pass makes (#519).
+	readers []Reader
 }
 
 // New wires the generator. It takes the blob store directly because a
@@ -590,13 +592,19 @@ type decoded struct {
 	rotation int
 }
 
+// picture is the picture fitted in a box of size and turned the right way up,
+// which is a thumbnail before it is written as one.
+func (d decoded) picture(size thumbSize) image.Image {
+	return orient(reduce(d.src, int(size)), d.rotation)
+}
+
 // at fits the picture in a box of size and writes the JPEG.
 func (d decoded) at(size thumbSize) ([]byte, error) {
 	// Reduced first and turned after: a quarter turn of a thumbnail is a
 	// hundredth of the work of turning twelve megapixels, and it cannot fall out
 	// of the box either -- a quarter turn swaps the two sides and both of them
 	// already fit.
-	return writeJPEG(orient(reduce(d.src, int(size)), d.rotation), d.name)
+	return writeJPEG(d.picture(size), d.name)
 }
 
 // decodeInGo is the half of the decode this binary does itself.

@@ -36,6 +36,22 @@ func (r *repo) PendingEmbeddings(ctx context.Context, model string, staleBefore 
 	return out, nil
 }
 
+var wantsEmbedding = `SELECT COUNT(*)
+		FROM media m JOIN files f ON f.id = m.file_id
+		LEFT JOIN embeddings e ON e.file_id = m.file_id
+		WHERE m.file_id = $1 AND m.kind = ` + kindImage + `
+			AND (e.file_id IS NULL OR e.model <> $2 OR e.blob_key <> f.blob_key
+				OR (e.state = ` + embeddingRefused + ` AND e.at <= $3))`
+
+// WantsEmbedding implements db.Embeddings, by pendingEmbeddings' condition.
+func (r *repo) WantsEmbedding(ctx context.Context, fileID int64, model string, staleBefore time.Time) (bool, error) {
+	var n int
+	if err := r.q.QueryRowContext(ctx, wantsEmbedding, fileID, model, times.Arg(staleBefore)).Scan(&n); err != nil {
+		return false, fmt.Errorf("ask whether file %d wants an embedding: %w", fileID, mapErr(err))
+	}
+	return n > 0, nil
+}
+
 // PutEmbedding implements db.Embeddings. The foreign key is what answers a
 // file that went meanwhile.
 func (r *repo) PutEmbedding(ctx context.Context, e db.Embedding) error {

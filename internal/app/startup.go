@@ -179,6 +179,9 @@ func (a *App) open(ctx context.Context) (deps Deps, err error) {
 	// and a 390 MB directory cannot appear without a restart.
 	if credentials(a.cfg).Configured() {
 		deps.Model, deps.Semantic = openSemantic(a.cfg, deps)
+		if deps.Semantic != nil {
+			deps.Thumbs.Also(contentReader{a: a, deps: deps})
+		}
 	}
 
 	if credentials(a.cfg).Configured() {
