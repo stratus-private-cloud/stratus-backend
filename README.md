@@ -414,8 +414,10 @@ photograph or a film that has just been indexed gets the two sizes a listing
 and a photo grid draw — the file is already in hand, so it costs no query at
 all — and everything else the library holds is found by the same kind of query
 behind it, newest first, because what somebody opens is the roll that just
-arrived. One decode makes both sizes; the large one a viewer shows is still
-made when it is asked for.
+arrived. One decode makes both sizes. The gallery's viewer shows the original
+itself where every browser opens it — JPEG, PNG, GIF, WebP, AVIF — and a
+1200-pixel picture, made when it is asked for, only of what one cannot: HEIC,
+TIFF and RAW.
 
 **It loses to whoever is looking.** A decoder is taken only when nothing else
 wants one, so what the pass spends is a CPU that was idle, and the moment a

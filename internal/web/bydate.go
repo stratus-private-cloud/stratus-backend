@@ -90,6 +90,18 @@ const (
 	viewerThumb = 1200
 )
 
+// browserShows reports whether every browser opens the file as it is, so the
+// viewer shows the original and no large thumbnail is made of it (#518). What
+// is left -- HEIC, TIFF, RAW, a film's frame -- needs the thumbnail to be seen
+// anywhere but Safari, or at all.
+func browserShows(p string) bool {
+	switch strings.ToLower(path.Ext(p)) {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif":
+		return true
+	}
+	return false
+}
+
 // tilesFragment is the part of a grid htmx asks for when it extends it.
 const tilesFragment = "tiles"
 
@@ -323,7 +335,10 @@ func (h *handler) viewer(w http.ResponseWriter, r *http.Request, user string, l 
 	if m := around.Capture.Media; m.Width > 0 && m.Height > 0 {
 		pv.Dimensions = fmt.Sprintf("%d × %d", m.Width, m.Height)
 	}
-	if thumb.CanThumbnail(f.Path, f.Size) {
+	switch {
+	case browserShows(f.Path):
+		pv.Image = pv.Original
+	case thumb.CanThumbnail(f.Path, f.Size):
 		pv.Image = thumbURL(f, viewerThumb)
 	}
 	if p := around.Newer; p != nil {
