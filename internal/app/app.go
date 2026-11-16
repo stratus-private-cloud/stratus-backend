@@ -388,6 +388,7 @@ func (a *App) Run(ctx context.Context) error {
 	if a.listener != nil {
 		defer func() { _ = a.listener.Close() }()
 	}
+	holdTheHeap(media.MemoryLimit(os.DirFS("/")))
 	deps, err := a.open(ctx)
 	if err != nil {
 		return err
