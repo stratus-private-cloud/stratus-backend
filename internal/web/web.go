@@ -319,6 +319,9 @@ func Handler(d Deps) http.Handler {
 	// library is not what a link to one folder authorises.
 	mux.HandleFunc("GET "+searchPrefix, h.signedIn(h.search))
 	mux.HandleFunc("GET "+photosPrefix+"{path...}", h.signedIn(h.byDate(photoLibrary)))
+	mux.HandleFunc("GET "+peoplePrefix+"{path...}", h.signedIn(h.people))
+	mux.HandleFunc("POST "+peoplePrefix+"{path...}", h.signedIn(h.changePerson))
+	mux.HandleFunc("GET "+facePrefix+"{id}", h.signedIn(h.face))
 	mux.HandleFunc("GET "+videosPrefix+"{path...}", h.signedIn(h.byDate(videoLibrary)))
 	mux.HandleFunc("GET "+musicPrefix+"{path...}", h.signedIn(h.music))
 	mux.HandleFunc("GET "+playlistsPrefix+"{path...}", h.signedIn(h.playlistPages))
@@ -437,6 +440,7 @@ func (h *handler) indexingNow() Indexing {
 		v := h.settings()
 		ix.Interval, ix.Ahead, ix.Lookup = v.IndexInterval, v.ThumbsAhead, v.MusicLookup
 		ix.Semantic = v.SemanticSearch
+		ix.Faces = v.Faces
 	}
 	return ix
 }

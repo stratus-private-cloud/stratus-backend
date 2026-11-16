@@ -1,0 +1,36 @@
+{{define "content" -}}
+{{with .People}}
+<nav class="mb-3"><a class="btn btn-sm btn-outline-secondary" href="/people/">All people</a></nav>
+<h1 class="h4 mb-3">{{.Name}}</h1>
+
+<div class="row g-3 mb-4">
+  <form method="post" class="col-12 col-md-6">
+    <input type="hidden" name="do" value="rename">
+    <label class="form-label small" for="name">{{if .Unnamed}}Who is this?{{else}}Name{{end}}</label>
+    <div class="input-group input-group-sm">
+      <input class="form-control" id="name" name="name" type="text" maxlength="255" autocomplete="off"
+             {{if not .Unnamed}}value="{{.Name}}"{{end}} required>
+      <button class="btn btn-outline-primary" type="submit">{{if .Unnamed}}Name{{else}}Rename{{end}}</button>
+    </div>
+  </form>
+  {{with .Others}}
+  <form method="post" class="col-12 col-md-6">
+    <input type="hidden" name="do" value="merge">
+    <label class="form-label small" for="into">The same person as</label>
+    <div class="input-group input-group-sm">
+      <select class="form-select" id="into" name="into" required>
+        <option value="" selected disabled>Choose…</option>
+        {{range .}}<option value="{{.Href}}">{{.Name}}</option>{{end}}
+      </select>
+      <button class="btn btn-outline-primary" type="submit">Merge</button>
+    </div>
+  </form>
+  {{end}}
+</div>
+
+<div class="row g-1">
+  {{range .Faces}}{{template "tile" .}}{{end}}
+</div>
+{{if .More}}<p class="mt-3"><a class="btn btn-sm btn-outline-secondary" href="{{.More}}">More</a></p>{{end}}
+{{end}}
+{{- end}}

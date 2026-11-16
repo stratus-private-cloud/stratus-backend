@@ -25,6 +25,7 @@ import (
 	"github.com/stratus-private-cloud/stratus-backend/internal/db/postgres"
 	"github.com/stratus-private-cloud/stratus-backend/internal/db/sqlite"
 	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
+	"github.com/stratus-private-cloud/stratus-backend/internal/faces"
 	"github.com/stratus-private-cloud/stratus-backend/internal/files"
 	"github.com/stratus-private-cloud/stratus-backend/internal/incoming"
 	"github.com/stratus-private-cloud/stratus-backend/internal/lookup"
@@ -181,6 +182,15 @@ func (a *App) open(ctx context.Context) (deps Deps, err error) {
 		deps.Model, deps.Semantic = openSemantic(a.cfg, deps)
 		if deps.Semantic != nil {
 			deps.Thumbs.Also(contentReader{a: a, deps: deps})
+		}
+	}
+
+	// The same for faces (#519), whose pass runs only while STRATUS_FACES is
+	// on -- and whose rows are deleted while it is off, which needs no model.
+	if credentials(a.cfg).Configured() {
+		deps.FaceModels, deps.Faces = openFaces(a.cfg, deps)
+		if deps.Faces != nil {
+			deps.Thumbs.Also(faceReader{a: a, deps: deps})
 		}
 	}
 
@@ -366,4 +376,27 @@ func openSemantic(cfg config.Config, deps Deps) (*embed.Lazy, *semantic.Service)
 	lazy := embed.NewLazy(dir, helper, &bundle, &http.Client{Timeout: time.Hour})
 	slog.Info("search by content ready", "model", bundle.Name, "dir", dir)
 	return lazy, semantic.New(deps.Database, deps.Thumbs, lazy, bundle.Name)
+}
+
+// openFaces is openSemantic for the face models.
+func openFaces(cfg config.Config, deps Deps) (*embed.LazyFaces, *faces.Service) {
+	helper := embed.LookupHelper()
+	if helper == "" {
+		slog.Info("faces unavailable", "reason", "stratus-embed is not installed")
+		return nil, nil
+	}
+	if cfg.FacesModel != "" {
+		models, err := embed.OpenFaces(cfg.FacesModel, helper)
+		if err != nil {
+			slog.Info("faces unavailable", "reason", err)
+			return nil, nil
+		}
+		models.Close()
+		lazy := embed.NewLazyFaces(cfg.FacesModel, helper, nil, nil)
+		return lazy, faces.New(deps.Database, deps.Storage, deps.Thumbs, lazy, models.Name)
+	}
+	bundle := embed.Faces
+	dir := filepath.Join(cfg.DataDir, "models", bundle.Name)
+	lazy := embed.NewLazyFaces(dir, helper, &bundle, &http.Client{Timeout: time.Hour})
+	return lazy, faces.New(deps.Database, deps.Storage, deps.Thumbs, lazy, bundle.Name)
 }

@@ -333,6 +333,7 @@ type Repo interface {
 	Files
 	MediaIndex
 	Embeddings
+	Faces
 	Music
 	Finder
 	Annotations

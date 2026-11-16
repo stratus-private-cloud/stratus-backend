@@ -1,0 +1,281 @@
+package postgres
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/stratus-private-cloud/stratus-backend/internal/db"
+	"github.com/stratus-private-cloud/stratus-backend/internal/db/sqlutil"
+)
+
+// faceScanWanted is pendingEmbeddings' condition over face_scans.
+// The placeholders are the caller's, since the two queries number them apart.
+func faceScanWanted(model, staleBefore int) string {
+	return `(s.file_id IS NULL OR s.model <> $` + strconv.Itoa(model) + ` OR s.blob_key <> f.blob_key
+		OR (s.state = ` + embeddingRefused + ` AND s.at <= $` + strconv.Itoa(staleBefore) + `))`
+}
+
+// currentFaces is every face of bytes its file still points at.
+const currentFaces = `faces fa JOIN files f ON f.id = fa.file_id AND f.blob_key = fa.blob_key
+		JOIN media m ON m.file_id = fa.file_id`
+
+// PendingFaceScans implements db.Faces.
+func (r *repo) PendingFaceScans(ctx context.Context, model string, staleBefore time.Time, limit int) ([]db.File, error) {
+	query := `SELECT ` + joinedFileColumns + `
+		FROM media m JOIN files f ON f.id = m.file_id
+		LEFT JOIN face_scans s ON s.file_id = m.file_id
+		WHERE m.kind = ` + kindImage + ` AND ` + faceScanWanted(1, 2) + `
+		ORDER BY m.sort_at DESC, m.file_id DESC LIMIT $3`
+	out, err := sqlutil.Collect(ctx, r.q, scanFileRow, query, model, times.Arg(staleBefore), limit)
+	if err != nil {
+		return nil, fmt.Errorf("list pending face scans: %w", mapErr(err))
+	}
+	return out, nil
+}
+
+// WantsFaceScan implements db.Faces.
+func (r *repo) WantsFaceScan(ctx context.Context, fileID int64, model string, staleBefore time.Time) (bool, error) {
+	query := `SELECT COUNT(*)
+		FROM media m JOIN files f ON f.id = m.file_id
+		LEFT JOIN face_scans s ON s.file_id = m.file_id
+		WHERE m.file_id = $1 AND m.kind = ` + kindImage + ` AND ` + faceScanWanted(2, 3)
+	var n int
+	if err := r.q.QueryRowContext(ctx, query, fileID, model, times.Arg(staleBefore)).Scan(&n); err != nil {
+		return false, fmt.Errorf("ask whether file %d wants a face scan: %w", fileID, mapErr(err))
+	}
+	return n > 0, nil
+}
+
+// PutFaceScan implements db.Faces.
+func (r *repo) PutFaceScan(ctx context.Context, s db.FaceScan) error {
+	const query = `INSERT INTO face_scans (file_id, state, model, blob_key, at) VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (file_id) DO UPDATE SET state = excluded.state, model = excluded.model,
+			blob_key = excluded.blob_key, at = excluded.at`
+	if _, err := r.q.ExecContext(ctx, query, s.FileID, int(s.State), s.Model, s.BlobKey, times.Arg(s.At)); err != nil {
+		return fmt.Errorf("record face scan of file %d: %w", s.FileID, mapErr(err))
+	}
+	return nil
+}
+
+// AddFace implements db.Faces.
+func (r *repo) AddFace(ctx context.Context, f db.Face) (int64, error) {
+	const query = `INSERT INTO faces (file_id, blob_key, x, y, w, h, score, vector, person_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULLIF($9::BIGINT, 0)) RETURNING id`
+	var id int64
+	if err := r.q.QueryRowContext(ctx, query, f.FileID, f.BlobKey, f.X, f.Y, f.W, f.H, f.Score, f.Vector,
+		f.Person).Scan(&id); err != nil {
+		return 0, fmt.Errorf("record a face of file %d: %w", f.FileID, mapErr(err))
+	}
+	return id, nil
+}
+
+func scanFace(rows *sql.Rows) (db.Face, error) { return sqlutil.ScanFace(rows, times) }
+
+// FacesOf implements db.Faces.
+func (r *repo) FacesOf(ctx context.Context, fileID int64) ([]db.Face, error) {
+	query := `SELECT ` + sqlutil.FaceColumns + ` FROM faces fa JOIN media m ON m.file_id = fa.file_id
+		WHERE fa.file_id = $1 ORDER BY fa.id`
+	out, err := sqlutil.Collect(ctx, r.q, scanFace, query, fileID)
+	if err != nil {
+		return nil, fmt.Errorf("read the faces of file %d: %w", fileID, mapErr(err))
+	}
+	return out, nil
+}
+
+// DeleteFacesOf implements db.Faces.
+func (r *repo) DeleteFacesOf(ctx context.Context, fileID int64) error {
+	if _, err := r.q.ExecContext(ctx, `DELETE FROM faces WHERE file_id = $1`, fileID); err != nil {
+		return fmt.Errorf("delete the faces of file %d: %w", fileID, mapErr(err))
+	}
+	return nil
+}
+
+// Face implements db.Faces.
+func (r *repo) Face(ctx context.Context, id int64) (db.Face, error) {
+	query := `SELECT ` + sqlutil.FaceColumns + ` FROM faces fa JOIN media m ON m.file_id = fa.file_id WHERE fa.id = $1`
+	f, err := sqlutil.ScanFace(r.q.QueryRowContext(ctx, query, id), times)
+	if err != nil {
+		return db.Face{}, fmt.Errorf("read face %d: %w", id, mapErr(err))
+	}
+	return f, nil
+}
+
+// EachFace implements db.Faces.
+func (r *repo) EachFace(ctx context.Context, model string, fn func(db.Face) error) error {
+	query := `SELECT ` + sqlutil.FaceColumns + ` FROM ` + currentFaces + `
+		JOIN face_scans s ON s.file_id = fa.file_id AND s.blob_key = fa.blob_key
+		WHERE s.model = $1 ORDER BY fa.id`
+	for f, err := range sqlutil.Seq(ctx, r.q, scanFace, query, model) {
+		if err != nil {
+			return fmt.Errorf("read faces: %w", mapErr(err))
+		}
+		if err := fn(f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// EachFaceCrop implements db.Faces.
+func (r *repo) EachFaceCrop(ctx context.Context, fn func(id int64, blobKey string) error) error {
+	type crop struct {
+		id  int64
+		key string
+	}
+	scan := func(rows *sql.Rows) (crop, error) {
+		var c crop
+		return c, rows.Scan(&c.id, &c.key)
+	}
+	for c, err := range sqlutil.Seq(ctx, r.q, scan, `SELECT id, blob_key FROM faces ORDER BY id`) {
+		if err != nil {
+			return fmt.Errorf("read faces: %w", mapErr(err))
+		}
+		if err := fn(c.id, c.key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// PersonFaces implements db.Faces.
+func (r *repo) PersonFaces(ctx context.Context, person int64, after db.FaceCursor, limit int) ([]db.Face, error) {
+	query := `SELECT ` + sqlutil.FaceColumns + ` FROM ` + currentFaces + ` WHERE fa.person_id = $1`
+	args := []any{person}
+	if after.ID != 0 {
+		query += ` AND (m.sort_at < $2 OR (m.sort_at = $2 AND fa.id < $3))`
+		args = append(args, times.Arg(after.SortAt), after.ID)
+	}
+	query += ` ORDER BY m.sort_at DESC, fa.id DESC LIMIT $` + strconv.Itoa(len(args)+1)
+	out, err := sqlutil.Collect(ctx, r.q, scanFace, query, append(args, limit)...)
+	if err != nil {
+		return nil, fmt.Errorf("read the faces of person %d: %w", person, mapErr(err))
+	}
+	return out, nil
+}
+
+// personColumns is a person's row with what People says about them, over
+// people as p.
+const personColumns = `p.id, p.name,
+	(SELECT COUNT(*) FROM ` + currentFaces + ` WHERE fa.person_id = p.id),
+	COALESCE((SELECT fa.id FROM ` + currentFaces + ` WHERE fa.person_id = p.id
+		ORDER BY fa.score DESC, fa.id LIMIT 1), 0)`
+
+// People implements db.Faces.
+func (r *repo) People(ctx context.Context) ([]db.Person, error) {
+	out, err := sqlutil.Collect(ctx, r.q, func(rows *sql.Rows) (db.Person, error) { return sqlutil.ScanPerson(rows) },
+		`SELECT `+personColumns+` FROM people p`)
+	if err != nil {
+		return nil, fmt.Errorf("list people: %w", mapErr(err))
+	}
+	return db.SortPeople(out), nil
+}
+
+// Person implements db.Faces.
+func (r *repo) Person(ctx context.Context, id int64) (db.Person, error) {
+	p, err := sqlutil.ScanPerson(r.q.QueryRowContext(ctx, `SELECT `+personColumns+` FROM people p WHERE p.id = $1`, id))
+	if err != nil {
+		return db.Person{}, fmt.Errorf("read person %d: %w", id, mapErr(err))
+	}
+	return p, nil
+}
+
+// NewPerson implements db.Faces.
+func (r *repo) NewPerson(ctx context.Context, name string) (int64, error) {
+	var id int64
+	if err := r.q.QueryRowContext(ctx, `INSERT INTO people (name) VALUES ($1) RETURNING id`, name).Scan(&id); err != nil {
+		return 0, fmt.Errorf("record a person: %w", mapErr(err))
+	}
+	return id, nil
+}
+
+// AssignFaces implements db.Faces.
+func (r *repo) AssignFaces(ctx context.Context, person int64, faces []int64) error {
+	if len(faces) == 0 {
+		return nil
+	}
+	query := `UPDATE faces SET person_id = $1 WHERE person_id IS NULL AND id IN (` + placeholders(2, len(faces)) + `)`
+	args := make([]any, 0, len(faces)+1)
+	args = append(args, person)
+	for _, id := range faces {
+		args = append(args, id)
+	}
+	if _, err := r.q.ExecContext(ctx, query, args...); err != nil {
+		return fmt.Errorf("assign faces to person %d: %w", person, mapErr(err))
+	}
+	return nil
+}
+
+// RenamePerson implements db.Faces.
+func (r *repo) RenamePerson(ctx context.Context, id int64, name string) error {
+	result, err := r.q.ExecContext(ctx, `UPDATE people SET name = $1 WHERE id = $2`, name, id)
+	if err != nil {
+		return fmt.Errorf("rename person %d: %w", id, mapErr(err))
+	}
+	return affectedOne(result, "rename person", id)
+}
+
+// MergePeople implements db.Faces.
+func (r *repo) MergePeople(ctx context.Context, from, into int64) error {
+	if _, err := r.Person(ctx, into); err != nil {
+		return err
+	}
+	if _, err := r.q.ExecContext(ctx, `UPDATE faces SET person_id = $1 WHERE person_id = $2`, into, from); err != nil {
+		return fmt.Errorf("merge person %d into %d: %w", from, into, mapErr(err))
+	}
+	result, err := r.q.ExecContext(ctx, `DELETE FROM people WHERE id = $1`, from)
+	if err != nil {
+		return fmt.Errorf("merge person %d into %d: %w", from, into, mapErr(err))
+	}
+	return affectedOne(result, "merge person", from)
+}
+
+// DeleteEmptyPeople implements db.Faces.
+func (r *repo) DeleteEmptyPeople(ctx context.Context) (int64, error) {
+	result, err := r.q.ExecContext(ctx, `DELETE FROM people WHERE name = ''
+		AND NOT EXISTS (SELECT 1 FROM faces fa WHERE fa.person_id = people.id)`)
+	if err != nil {
+		return 0, fmt.Errorf("delete people with no faces: %w", mapErr(err))
+	}
+	return result.RowsAffected()
+}
+
+// ForgetFaces implements db.Faces.
+func (r *repo) ForgetFaces(ctx context.Context) error {
+	for _, table := range []string{"faces", "people", "face_scans"} {
+		if _, err := r.q.ExecContext(ctx, `DELETE FROM `+table); err != nil {
+			return fmt.Errorf("forget faces: %w", mapErr(err))
+		}
+	}
+	return nil
+}
+
+// FaceCounts implements db.Faces.
+func (r *repo) FaceCounts(ctx context.Context, model string) (db.FaceCounts, error) {
+	query := `SELECT COUNT(*),
+			COUNT(CASE WHEN s.state = ` + embeddingMade + ` AND s.model = $1 AND s.blob_key = f.blob_key THEN 1 END),
+			COUNT(CASE WHEN s.state = ` + embeddingRefused + ` AND s.model = $1 AND s.blob_key = f.blob_key THEN 1 END),
+			(SELECT COUNT(*) FROM ` + currentFaces + `),
+			(SELECT COUNT(*) FROM people p WHERE EXISTS (SELECT 1 FROM ` + currentFaces + ` WHERE fa.person_id = p.id))
+		FROM media m JOIN files f ON f.id = m.file_id
+		LEFT JOIN face_scans s ON s.file_id = m.file_id
+		WHERE m.kind = ` + kindImage
+	var c db.FaceCounts
+	if err := r.q.QueryRowContext(ctx, query, model).Scan(&c.Files, &c.Scanned, &c.Refused, &c.Faces, &c.People); err != nil {
+		return db.FaceCounts{}, fmt.Errorf("count faces: %w", mapErr(err))
+	}
+	return c, nil
+}
+
+func affectedOne(result sql.Result, what string, id int64) error {
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%s %d: %w", what, id, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("%s %d: %w", what, id, db.ErrNotFound)
+	}
+	return nil
+}

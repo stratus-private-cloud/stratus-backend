@@ -21,6 +21,7 @@ import (
 	"github.com/stratus-private-cloud/stratus-backend/internal/contacts"
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
 	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
+	"github.com/stratus-private-cloud/stratus-backend/internal/faces"
 	"github.com/stratus-private-cloud/stratus-backend/internal/files"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media/thumb"
@@ -48,6 +49,11 @@ func (a *App) indexPeriodically(ctx context.Context, deps Deps) {
 	for {
 		changed := changes(deps)
 		d := a.values(deps).IndexInterval
+		if !a.values(deps).Faces {
+			// Here as well as in the pass, because off has to mean none even
+			// while indexing is.
+			a.forgetFaces(ctx, deps)
+		}
 		if d <= 0 {
 			// Off, notices included: they pile up past what the channel
 			// holds, and LostTrack is what makes the query find them the day
@@ -113,7 +119,7 @@ func (a *App) indexEvery(ctx context.Context, deps Deps, changed <-chan struct{}
 			// What that missed -- a decoder somebody else was using, a model
 			// still on its way -- waits for the pass, a minute after the
 			// uploads stop coming rather than an hour.
-			if again == nil && a.semanticOn(deps) {
+			if again == nil && (a.semanticOn(deps) || a.facesOn(deps)) {
 				again = time.After(thumbBusyPause)
 			}
 			continue
@@ -132,8 +138,11 @@ func (a *App) indexEvery(ctx context.Context, deps Deps, changed <-chan struct{}
 		if wait == 0 {
 			// Pictures first, because the content is read off them and a
 			// grid is what somebody opens; the third half gets the CPU the
-			// second one has finished with.
+			// second one has finished with, and faces what that leaves.
 			wait = a.embedAhead(ctx, deps)
+		}
+		if wait == 0 {
+			wait = a.facesAhead(ctx, deps)
 		}
 		again = after(wait)
 	}
@@ -196,6 +205,59 @@ func (a *App) thumbsAhead(ctx context.Context, deps Deps) time.Duration {
 // semanticOn is whether the third half runs: the setting, and a model to run.
 func (a *App) semanticOn(deps Deps) bool {
 	return a.values(deps).SemanticSearch && deps.Semantic != nil
+}
+
+// facesOn is whether the face pass runs: the setting, and models to run.
+func (a *App) facesOn(deps Deps) bool {
+	return a.values(deps).Faces && deps.Faces != nil
+}
+
+// facesAhead looks at one batch of photographs for faces (#519), groups what
+// it found when a round is due, and answers how long to wait before the next,
+// on thumbsAhead's rules. With the switch off it forgets them instead.
+func (a *App) facesAhead(ctx context.Context, deps Deps) time.Duration {
+	if !a.values(deps).Faces {
+		a.forgetFaces(ctx, deps)
+		return 0
+	}
+	if deps.Faces == nil {
+		return 0
+	}
+	done, err := deps.Faces.Batch(ctx, time.Now())
+	wait := thumbPause
+	switch {
+	case errors.Is(err, context.Canceled):
+		return 0
+	case errors.Is(err, media.ErrBusy), errors.Is(err, embed.ErrFetching):
+		wait = thumbBusyPause
+	case err != nil:
+		slog.Error("looking for faces", "err", err)
+		wait = 0
+	case done > 0:
+		slog.Info("looked for faces", "files", done)
+	}
+	if err == nil && done < faces.Batch {
+		wait = 0
+	}
+	if deps.Faces.Grouping(wait == 0) {
+		if err := deps.Faces.Group(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Error("grouping faces", "err", err)
+		}
+	}
+	return wait
+}
+
+// forgetFaces deletes every face while the switch is off: what off promises
+// (#519), kept by the loop rather than by the moment it was turned off, so a
+// restart in between or a database restored with faces in it still ends with
+// none. With none it costs a query and three deletes of nothing.
+func (a *App) forgetFaces(ctx context.Context, deps Deps) {
+	if deps.Database == nil || deps.Storage == nil {
+		return
+	}
+	if err := faces.Forget(ctx, deps.Database, deps.Storage); err != nil && !errors.Is(err, context.Canceled) {
+		slog.Error("forgetting faces", "err", err)
+	}
 }
 
 // embedAhead reads one batch of photographs' content (#505), and answers how
@@ -281,6 +343,26 @@ func (a *App) hold(ctx context.Context, deps Deps, f db.File) io.ReadSeeker {
 	return held
 }
 
+// faceReader hands the face pass the pixels of the thumbnails' decode while
+// the switch is on (#519).
+type faceReader struct {
+	a    *App
+	deps Deps
+}
+
+func (r faceReader) Wants(ctx context.Context, f db.File) (bool, error) {
+	if !r.a.facesOn(r.deps) {
+		return false, nil
+	}
+	return r.deps.Faces.Wants(ctx, f)
+}
+
+func (r faceReader) Size() int { return r.deps.Faces.Size() }
+
+func (r faceReader) Read(ctx context.Context, f db.File, picture image.Image) error {
+	return r.deps.Faces.Read(ctx, f, picture)
+}
+
 // contentReader hands the content pass the pixels of the thumbnails' decode
 // while the switch is on (#519).
 type contentReader struct {
@@ -294,6 +376,8 @@ func (r contentReader) Wants(ctx context.Context, f db.File) (bool, error) {
 	}
 	return r.deps.Semantic.Wants(ctx, f)
 }
+
+func (r contentReader) Size() int { return r.deps.Semantic.Size() }
 
 func (r contentReader) Read(ctx context.Context, f db.File, picture image.Image) error {
 	return r.deps.Semantic.Read(ctx, f, picture)

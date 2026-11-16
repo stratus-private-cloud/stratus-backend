@@ -311,3 +311,8 @@ func TestContactsOnAClosedStore(t *testing.T) {
 		}
 	}
 }
+
+func TestFacesOnAClosedStore(t *testing.T) {
+	t.Parallel()
+	dbtest.FacesOnAClosedStore(t, newStore(t))
+}

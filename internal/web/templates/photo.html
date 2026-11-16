@@ -24,6 +24,19 @@
   {{if .Dimensions}}<dt class="col-sm-3">Size</dt><dd class="col-sm-9">{{.Dimensions}}</dd>{{end}}
 </dl>
 
+{{/* Who is in it (#519): everybody a face of it has been put under. */}}
+{{with .People}}
+<h2 class="h6 text-body-secondary mt-4">In this photo</h2>
+<ul class="list-inline mb-0">
+  {{range .}}<li class="list-inline-item mb-2">
+    <a href="{{.Href}}" class="d-inline-flex align-items-center gap-2 text-decoration-none">
+      <img src="{{.Thumb}}" alt="" width="40" height="40" class="rounded-circle object-fit-cover">
+      <span>{{.Name}}</span>
+    </a>
+  </li>{{end}}
+</ul>
+{{end}}
+
 {{/* The photographs most like this one (#514), as the gallery's tiles, and
      nothing at all when there are none: an empty heading would read as a
      search that failed. */}}

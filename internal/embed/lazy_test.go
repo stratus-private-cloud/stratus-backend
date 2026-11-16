@@ -62,3 +62,29 @@ func TestAFailedFetchIsSaidAndNotRetriedAtOnce(t *testing.T) {
 		t.Errorf("the bundle was asked for %d times, want once within the hour", hits.Load())
 	}
 }
+
+func TestLazyFaceModelsAreFetchedAsTheOtherBundleIs(t *testing.T) {
+	files := map[string]string{}
+	for _, f := range embed.Faces.Files {
+		files[testBundle+"/"+f] = f + " bytes"
+	}
+	files[testBundle+"/NAME"] = testBundle + "\n"
+	b, _ := serve(t, archive(t, files))
+	b.Files = embed.Faces.Files
+	l := embed.NewLazyFaces(filepath.Join(t.TempDir(), testBundle), "", &b, http.DefaultClient)
+	t.Cleanup(l.Close)
+
+	if _, err := l.Detect(t.Context(), nil); !errors.Is(err, embed.ErrFetching) {
+		t.Fatalf("the first call = %v, want ErrFetching", err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for l.State() == "fetching the model" {
+		if time.Now().After(deadline) {
+			t.Fatal("the fetch never finished")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := l.Recognize(t.Context(), nil); errors.Is(err, embed.ErrFetching) || !strings.Contains(err.Error(), "not installed") {
+		t.Errorf("after the fetch = %v, want the helper missing", err)
+	}
+}

@@ -2718,8 +2718,9 @@ Restraint here is principle 3, not laziness:
   back, and five HEADs asking whether pictures or a refusal note were already
   there. Now `thumb.Hold` reads a photograph under `maxThumbSource` into
   memory once, `IndexFileFrom` and `PrepareFrom` both read those bytes, and
-  every `thumb.Reader` that wants the pixels gets them from the same decode
-  -- `TestAPhotographIsReadOnce` counts one GET and nothing else. **The row is
+  every `thumb.Reader` that wants the pixels gets them from the same decode,
+  made as large as the largest reader asks (`Size`: the grid's 300 for SigLIP,
+  1,600 for faces) -- `TestAPhotographIsReadOnce` counts one GET and nothing else. **The row is
   what says a picture is wanted**, not the store: the lazy path writes it
   down too (#341), so the HEADs were asking a question the row had answered,
   and what they protected against -- a picture made but not recorded -- now
@@ -2938,6 +2939,42 @@ Restraint here is principle 3, not laziness:
   `semantic.SimilarFloor` is 0.77 and not `Floor`: low enough for the
   horses after the helper's int8 rounding, high enough that a photograph with
   nothing like it shows nothing.
+
+- **Faces are found and grouped into people, opt-in and here** (#519).
+  `internal/faces` is a third `thumb.Reader` beside the thumbnails and
+  SigLIP, so a new photograph still costs one read of the store: YuNet finds
+  faces in the decode fitted in its 640 square, each face is turned onto
+  SFace's five-point template by a similarity fitted in Go and sampled from
+  the 1,600-pixel picture (reduced first when the face would be read off a
+  sparse grid), and SFace's 128 numbers are kept int8 as SigLIP's are. Go and
+  OpenCV's Python pipeline agree to a median cosine of 0.998 on LFW, once the
+  picture is enlarged to the square as OpenCV's is -- not enlarging it was
+  0.957. A face also gets a 160-pixel picture, a derived blob beside the
+  thumbnails so the sweep takes it with the photograph.
+
+  **Grouping is a round of its own, not a step of each photograph**, because
+  it reads every face: `Group` runs when the pass has finished or every 256
+  new faces, puts a loose face under the person whose average face it is
+  closest to at 0.5 or more, links what is left pair by pair at 0.55, and
+  makes somebody of any group of three. Measured on LFW (6,711 faces of 610
+  people, 1,496 strangers): 7 of 604 groups mixed two people and a stranger
+  was put with somebody once in 250; against the nearest face rather than an
+  average, one look-alike linked two people: at 0.45 and 0.5 that mixed 61
+  groups where the average mixed 35. It only
+  ever fills `person_id IS NULL`, which is what keeps a merge or a name made by
+  hand from being undone by the next round. Removing one wrong face from
+  somebody is not there yet.
+
+  **Off means deleted**, and that is the loop's promise rather than the
+  setting's: `faces.Forget` deletes the pictures and then every face, scan and
+  person whenever the loop comes round with the switch off, at startup too,
+  so a restart or a restored database cannot leave them behind. Names are
+  biometric data's labels and go with it. A person is addressed by
+  `faces.Names` -- the name when it is theirs alone, the name and id when it
+  is shared, `Person <id>` unnamed -- one segment, because `/people/<name>/`
+  is meant to be a WebDAV collection as well as the page. The models are
+  OpenCV Zoo's (see the bundle paragraph above, and the README for what was
+  weighed about SFace's training data).
 - **A track is transcoded when a client asks, by one ffmpeg per playback**
   (#50). Three pieces, and each is where it is for a reason.
 

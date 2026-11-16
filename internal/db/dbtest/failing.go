@@ -44,6 +44,8 @@ var repoMethods = []string{
 	"LyricsOf", "AlbumLookup", "LookupCounts",
 	"PruneAlbumLookups", "PendingAlbumLookups", "PendingLyrics", "PutAlbumLookup", "PutLyrics",
 	"PruneCalendarTombstones", "Calendars", "CalendarObjects", "AddressBooks", "Contacts", "PruneContactTombstones", "Settings", "PutSetting", "DeleteSetting",
+	"PendingFaceScans", "FacesOf", "AddFace", "EachFace", "EachFaceCrop", "Face", "People", "NewPerson", "DeleteEmptyPeople",
+	"ForgetFaces",
 }
 
 // Failing is a db.Store that fails one named method and passes the rest
@@ -581,4 +583,84 @@ func (f *failingRepo) FilesByID(ctx context.Context, owner string, ids []int64) 
 		return nil, err
 	}
 	return f.Repo.FilesByID(ctx, owner, ids)
+}
+
+// PendingFaceScans implements db.Repo.
+func (f *failingRepo) PendingFaceScans(ctx context.Context, model string, staleBefore time.Time, limit int) ([]db.File, error) {
+	if err := f.fails("PendingFaceScans"); err != nil {
+		return nil, err
+	}
+	return f.Repo.PendingFaceScans(ctx, model, staleBefore, limit)
+}
+
+// FacesOf implements db.Repo.
+func (f *failingRepo) FacesOf(ctx context.Context, fileID int64) ([]db.Face, error) {
+	if err := f.fails("FacesOf"); err != nil {
+		return nil, err
+	}
+	return f.Repo.FacesOf(ctx, fileID)
+}
+
+// AddFace implements db.Repo.
+func (f *failingRepo) AddFace(ctx context.Context, face db.Face) (int64, error) {
+	if err := f.fails("AddFace"); err != nil {
+		return 0, err
+	}
+	return f.Repo.AddFace(ctx, face)
+}
+
+// EachFace implements db.Repo.
+func (f *failingRepo) EachFace(ctx context.Context, model string, fn func(db.Face) error) error {
+	if err := f.fails("EachFace"); err != nil {
+		return err
+	}
+	return f.Repo.EachFace(ctx, model, fn)
+}
+
+// EachFaceCrop implements db.Repo.
+func (f *failingRepo) EachFaceCrop(ctx context.Context, fn func(int64, string) error) error {
+	if err := f.fails("EachFaceCrop"); err != nil {
+		return err
+	}
+	return f.Repo.EachFaceCrop(ctx, fn)
+}
+
+// Face implements db.Repo.
+func (f *failingRepo) Face(ctx context.Context, id int64) (db.Face, error) {
+	if err := f.fails("Face"); err != nil {
+		return db.Face{}, err
+	}
+	return f.Repo.Face(ctx, id)
+}
+
+// People implements db.Repo.
+func (f *failingRepo) People(ctx context.Context) ([]db.Person, error) {
+	if err := f.fails("People"); err != nil {
+		return nil, err
+	}
+	return f.Repo.People(ctx)
+}
+
+// NewPerson implements db.Repo.
+func (f *failingRepo) NewPerson(ctx context.Context, name string) (int64, error) {
+	if err := f.fails("NewPerson"); err != nil {
+		return 0, err
+	}
+	return f.Repo.NewPerson(ctx, name)
+}
+
+// DeleteEmptyPeople implements db.Repo.
+func (f *failingRepo) DeleteEmptyPeople(ctx context.Context) (int64, error) {
+	if err := f.fails("DeleteEmptyPeople"); err != nil {
+		return 0, err
+	}
+	return f.Repo.DeleteEmptyPeople(ctx)
+}
+
+// ForgetFaces implements db.Repo.
+func (f *failingRepo) ForgetFaces(ctx context.Context) error {
+	if err := f.fails("ForgetFaces"); err != nil {
+		return err
+	}
+	return f.Repo.ForgetFaces(ctx)
 }

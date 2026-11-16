@@ -371,3 +371,26 @@ func EachVector(ctx context.Context, q Querier, query string, model string, fn f
 	}
 	return nil
 }
+
+// FaceColumns is a face's row, over faces as fa and media as m.
+const FaceColumns = `fa.id, fa.file_id, fa.blob_key, fa.x, fa.y, fa.w, fa.h, fa.score, fa.vector,
+	COALESCE(fa.person_id, 0), m.sort_at`
+
+// ScanFace reads one row of FaceColumns.
+func ScanFace(s Scanner, t Times) (db.Face, error) {
+	var f db.Face
+	if err := s.Scan(&f.ID, &f.FileID, &f.BlobKey, &f.X, &f.Y, &f.W, &f.H, &f.Score, &f.Vector,
+		&f.Person, t.NullDest(&f.SortAt)); err != nil {
+		return db.Face{}, err
+	}
+	return f, nil
+}
+
+// ScanPerson reads a person's id, name, count of faces and cover.
+func ScanPerson(s Scanner) (db.Person, error) {
+	var p db.Person
+	if err := s.Scan(&p.ID, &p.Name, &p.Faces, &p.Cover); err != nil {
+		return db.Person{}, err
+	}
+	return p, nil
+}

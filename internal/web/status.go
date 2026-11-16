@@ -44,6 +44,10 @@ type Indexing struct {
 	// model is missing, and Semantic whether its pass is on.
 	Contents Contents
 	Semantic bool
+	// People is the faces (#519), nil when the helper is missing, and Faces
+	// whether their pass is on.
+	People People
+	Faces  bool
 }
 
 // Contents is the search by content as a page uses it: how far the pass has
@@ -65,6 +69,13 @@ type contentView struct {
 	Missing bool
 	State   string
 	db.EmbeddingCounts
+}
+
+// facesView is the status page's line about faces.
+type facesView struct {
+	Missing bool
+	State   string
+	db.FaceCounts
 }
 
 // MediaReads is the half of the media index a page reads (#365): what is
@@ -122,6 +133,7 @@ func (h *handler) status(w http.ResponseWriter, r *http.Request, user string) {
 		PicturesOff:  !h.indexingNow().Ahead,
 		Lookup:       h.lookupOf(r),
 		Content:      h.contentOf(r),
+		Faces:        h.facesOf(r),
 		Running:      h.runningOf(),
 		Sweep:        h.sweepOf(),
 		System:       h.systemOf(),
@@ -164,6 +176,23 @@ func (h *handler) contentOf(r *http.Request) *contentView {
 		view.State = ix.Contents.State()
 	}
 	return view
+}
+
+// facesOf is what the page says about faces, and nil while they are off.
+func (h *handler) facesOf(r *http.Request) *facesView {
+	ix := h.indexingNow()
+	switch {
+	case !ix.Faces:
+		return nil
+	case ix.People == nil:
+		return &facesView{Missing: true}
+	}
+	counts, err := ix.People.Counts(r.Context())
+	if err != nil {
+		slog.WarnContext(r.Context(), "counting faces", "err", err)
+		return nil
+	}
+	return &facesView{State: ix.People.State(), FaceCounts: counts}
 }
 
 // lookupOf is what the page says about music metadata from outside, and nil
