@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -100,12 +101,45 @@ func (h *handler) people(w http.ResponseWriter, r *http.Request, user string) {
 		return
 	}
 
+	if folder, name, ok := strings.Cut(segment, "/"); ok {
+		// A photograph in somebody's folder is the file, which is also the
+		// GET a WebDAV client makes of it.
+		n, rerr := faces.NewTree(treeOf{ix.People, h.byID}, user, true).Resolve(r.Context(), folder+"/"+name)
+		switch {
+		case errors.Is(rerr, os.ErrNotExist):
+			h.notFound(w, r)
+		case rerr != nil:
+			h.fail(w, r, user, rerr)
+		default:
+			h.download(w, r, user, n.File)
+		}
+		return
+	}
 	person, err := faces.Resolve(all, segment)
 	if err != nil {
 		h.notFound(w, r)
 		return
 	}
 	h.person(w, r, user, ix.People, &pv, person, all, names)
+}
+
+// treeOf is the people pages' half of faces.TreeSource and the files by id
+// the rest of the pages read.
+type treeOf struct {
+	people People
+	files  interface {
+		FilesByID(ctx context.Context, owner string, ids []int64) ([]db.File, error)
+	}
+}
+
+func (t treeOf) People(ctx context.Context) ([]db.Person, error) { return t.people.People(ctx) }
+
+func (t treeOf) PersonFaces(ctx context.Context, person int64, after db.FaceCursor, limit int) ([]db.Face, error) {
+	return t.people.PersonFaces(ctx, person, after, limit)
+}
+
+func (t treeOf) FilesByID(ctx context.Context, owner string, ids []int64) ([]db.File, error) {
+	return t.files.FilesByID(ctx, owner, ids)
 }
 
 func (h *handler) person(w http.ResponseWriter, r *http.Request, user string, people People, pv *peopleView,

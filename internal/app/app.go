@@ -86,6 +86,10 @@ const playlistsPrefix = "/playlists/"
 // collection per deletion to a client that mounts the server.
 const trashPrefix = "/trash/"
 
+// peoplePrefix is the people the faces are grouped into (#519): their pages
+// to a browser, a folder of photographs each to a client.
+const peoplePrefix = "/people/"
+
 // calendarsPrefix is where calendars are served over CalDAV (#75), and where a
 // browser gets a month of one (#111): one address and two protocols, split by
 // collectionOrBrowser.
@@ -324,6 +328,10 @@ func (a *App) Handler(deps Deps) http.Handler {
 		mux.Handle(trashPrefix, collection(dav.Trash(trashPrefix, service)))
 		mux.Handle(photosPrefix, collection(dav.ByDate(photosPrefix, filesPrefix, deps.Database, db.KindImage)))
 		mux.Handle(videosPrefix, collection(dav.ByDate(videosPrefix, filesPrefix, deps.Database, db.KindVideo)))
+		// The people the faces are grouped into (#519), empty while faces are
+		// off; the pages at the same addresses are the browser half.
+		mux.Handle(peoplePrefix, collection(dav.People(peoplePrefix, filesPrefix, deps.Database,
+			func() bool { return a.values(deps).Faces })))
 		// Calendars have no browser half, so nothing splits them by method.
 		// The redirect asks for no credentials: it says where to look and
 		// nothing about what is there, and it keeps the method, which is a
@@ -351,7 +359,7 @@ func (a *App) Handler(deps Deps) http.Handler {
 		// also what the Windows redirector probes before it will mount anything
 		// at all (#281).
 		mux.Handle("/", collection(dav.Root("/", dav.Searchable("/", filesPrefix, deps.Database),
-			"calendars", "contacts", "files", "music", "photos", "playlists", "trash", "videos")))
+			"calendars", "contacts", "files", "music", "people", "photos", "playlists", "trash", "videos")))
 	}
 	// The log is outside the compression so that the bytes it counts are the
 	// bytes that went out rather than the ones the handler wrote, and the

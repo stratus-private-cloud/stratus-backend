@@ -2972,7 +2972,10 @@ Restraint here is principle 3, not laziness:
   biometric data's labels and go with it. A person is addressed by
   `faces.Names` -- the name when it is theirs alone, the name and id when it
   is shared, `Person <id>` unnamed -- one segment, because `/people/<name>/`
-  is meant to be a WebDAV collection as well as the page. The models are
+  is a WebDAV collection as well as the page: `faces.Tree` is the people as
+  folders of the photographs they are in, named by internal/timeline's rule,
+  and both the mount and the pages resolve through it. It is empty rather
+  than gone while faces are off, since the root lists it either way. The models are
   OpenCV Zoo's (see the bundle paragraph above, and the README for what was
   weighed about SFace's training data).
 - **A track is transcoded when a client asks, by one ffmpeg per playback**
