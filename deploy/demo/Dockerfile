@@ -43,7 +43,9 @@ SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 RUN apk add --no-cache curl
 WORKDIR /model
 COPY internal/embed/fetch.go fetch.go
-RUN field() { sed -n "s/^\t$1: *\"\(.*\)\",$/\1/p" fetch.go | head -1; } && \
+# The fields of SigLIP2's block alone: fetch.go pins more than one bundle,
+# and a head -1 under pipefail failed the build when sed outlived it.
+RUN field() { sed -n "/^var SigLIP2 = Bundle{/,/^}/s/^\t$1: *\"\(.*\)\",$/\1/p" fetch.go; } && \
     name="$(field Name)" && url="$(field URL)" && sum="$(field SHA256)" && \
     curl -fsSL -o model.tar.gz "$url" && echo "$sum  model.tar.gz" | sha256sum -c - && \
     tar -xzf model.tar.gz && mv "$name" siglip2 && rm model.tar.gz fetch.go
