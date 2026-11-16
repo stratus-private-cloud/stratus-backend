@@ -1907,12 +1907,13 @@ a further 50 KB, which is what a page rendered by the standard library and
 served from the binary costs. The names of places are another 750 KB: GeoNames'
 towns, built in so that naming where a photograph was taken asks nobody.
 
-**`stratus-embed` is ONNX Runtime built for two models and nothing else**, in
-`build/embed`: a minimal build that reads only its own format, linked
-statically against exactly the operators SigLIP 2's two halves use, around a
-`main.cc` that reads a tensor on standard input and writes a vector back. It
-is what runs [a search by content](#web-ui), and the model it runs is a release
-asset rather than part of the image; `build/embed/model` is how that is made.
+**`stratus-embed` is ONNX Runtime built for a few models and nothing else**,
+in `build/embed`: a minimal build that reads only its own format, linked
+statically against exactly the operators SigLIP 2's two halves and the face
+models (YuNet and SFace, from OpenCV Zoo) use, around a `main.cc` that reads a
+tensor on standard input and writes the model's outputs back. It is what runs
+[a search by content](#web-ui), and the models it runs are release assets
+rather than part of the image; `build/embed/model` is how they are made.
 
 **Both FFmpeg tools are built here rather than taken off the shelf**, in
 `build/ffprobe/Dockerfile` and `build/ffmpeg/Dockerfile`. A general-purpose

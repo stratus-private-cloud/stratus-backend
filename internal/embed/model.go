@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,12 +62,7 @@ func Open(dir, helper string) (*Model, error) {
 // Image is the vector of a picture: unit length, so a dot product with a
 // query's is their similarity.
 func (m *Model) Image(ctx context.Context, img image.Image) ([]float32, error) {
-	px := Pixels(img)
-	data := make([]byte, 4*len(px))
-	for i, v := range px {
-		binary.LittleEndian.PutUint32(data[4*i:], math.Float32bits(v))
-	}
-	return m.vision.run(ctx, dtypeFloat32, []uint32{1, 3, ImageSize, ImageSize}, data)
+	return one(m.vision.run(ctx, dtypeFloat32, []uint32{1, 3, ImageSize, ImageSize}, float32s(Pixels(img))))
 }
 
 // Text is the vector of a query, in the same space as Image's.
@@ -82,7 +76,7 @@ func (m *Model) Text(ctx context.Context, query string) ([]float32, error) {
 	for i, id := range ids {
 		binary.LittleEndian.PutUint64(data[8*i:], uint64(id)) //nolint:gosec // a token id, never negative
 	}
-	return m.text.run(ctx, dtypeInt64, []uint32{1, ContextLength}, data)
+	return one(m.text.run(ctx, dtypeInt64, []uint32{1, ContextLength}, data))
 }
 
 // loadTokenizer never holds tokMu while a tower's lock is taken: the tower

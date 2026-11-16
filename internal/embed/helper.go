@@ -57,8 +57,8 @@ const (
 	dtypeInt64   = 7
 )
 
-// run sends one tensor and reads the vector back.
-func (t *tower) run(ctx context.Context, dtype byte, dims []uint32, data []byte) ([]float32, error) {
+// run sends one tensor and reads the graph's outputs back, in its order.
+func (t *tower) run(ctx context.Context, dtype byte, dims []uint32, data []byte) ([][]float32, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -95,6 +95,18 @@ func (t *tower) run(ctx context.Context, dtype byte, dims []uint32, data []byte)
 		t.stopLocked()
 		return nil, fmt.Errorf("%w: %s: %w %s", ErrUnavailable, t.model, err, msg)
 	}
+}
+
+// one is the output of a graph that has one, and a model with more is not the
+// model asked for.
+func one(outs [][]float32, err error) ([]float32, error) {
+	if err != nil {
+		return nil, err
+	}
+	if len(outs) != 1 {
+		return nil, fmt.Errorf("%w: a graph of %d outputs", ErrUnavailable, len(outs))
+	}
+	return outs[0], nil
 }
 
 func (t *tower) stopIdle() {
@@ -165,11 +177,11 @@ type answerError struct{ msg string }
 
 func (e *answerError) Error() string { return "embed: " + e.msg }
 
-// maxVector bounds what a reply may claim to carry, so a corrupt header is an
-// error and not an allocation.
-const maxVector = 1 << 16
+// maxReply bounds the floats a reply may claim to carry, so a corrupt header
+// is an error and not an allocation. YuNet's twelve outputs are 134,400.
+const maxReply = 1 << 20
 
-func (p *process) call(dtype byte, dims []uint32, data []byte) ([]float32, error) {
+func (p *process) call(dtype byte, dims []uint32, data []byte) ([][]float32, error) {
 	head := make([]byte, 2, 2+4*len(dims))
 	head[0], head[1] = dtype, byte(len(dims)) //nolint:gosec // a rank of two
 	for _, d := range dims {
@@ -184,25 +196,41 @@ func (p *process) call(dtype byte, dims []uint32, data []byte) ([]float32, error
 		return nil, err
 	}
 	status, n := binary.LittleEndian.Uint32(reply[:4]), binary.LittleEndian.Uint32(reply[4:])
-	if n > maxVector*4 {
-		return nil, fmt.Errorf("a reply of %d", n)
-	}
 	if status != 0 {
+		if n > maxReply {
+			return nil, fmt.Errorf("a message of %d", n)
+		}
 		msg := make([]byte, n)
 		if _, err := io.ReadFull(p.out, msg); err != nil {
 			return nil, err
 		}
 		return nil, &answerError{string(msg)}
 	}
-	raw := make([]byte, 4*n)
-	if _, err := io.ReadFull(p.out, raw); err != nil {
-		return nil, err
+	if n == 0 || n > 64 {
+		return nil, fmt.Errorf("a reply of %d outputs", n)
 	}
-	v := make([]float32, n)
-	for i := range v {
-		v[i] = math.Float32frombits(binary.LittleEndian.Uint32(raw[4*i:]))
+	outs := make([][]float32, n)
+	left := uint32(maxReply)
+	for o := range outs {
+		if _, err := io.ReadFull(p.out, reply[:4]); err != nil {
+			return nil, err
+		}
+		count := binary.LittleEndian.Uint32(reply[:4])
+		if count > left {
+			return nil, fmt.Errorf("a reply of more than %d", maxReply)
+		}
+		left -= count
+		raw := make([]byte, 4*count)
+		if _, err := io.ReadFull(p.out, raw); err != nil {
+			return nil, err
+		}
+		v := make([]float32, count)
+		for i := range v {
+			v[i] = math.Float32frombits(binary.LittleEndian.Uint32(raw[4*i:]))
+		}
+		outs[o] = v
 	}
-	return v, nil
+	return outs, nil
 }
 
 // tailBuffer keeps the last of what the helper said on stderr, for the error

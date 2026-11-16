@@ -83,3 +83,92 @@ func cosine(a, b []float32) float64 {
 	}
 	return dot / (math.Sqrt(na) * math.Sqrt(nb))
 }
+
+// TestTheFaceModelsGiveWhatPythonGave runs YuNet and SFace through the real
+// helper over the tensors build/embed/model/faces.py made its reference of:
+// the test picture in the top left corner of each square, unscaled. Where
+// STRATUS_TEST_FACES_MODEL names the bundle and stratus-embed is on the PATH.
+func TestTheFaceModelsGiveWhatPythonGave(t *testing.T) {
+	dir := os.Getenv("STRATUS_TEST_FACES_MODEL")
+	helper := embed.LookupHelper()
+	if dir == "" || helper == "" {
+		t.Skip("STRATUS_TEST_FACES_MODEL is not set or stratus-embed is not installed")
+	}
+	m, err := embed.OpenFaces(dir, helper)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(m.Close)
+
+	raw, err := os.ReadFile("testdata/faces_outputs.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want struct {
+		Stride int `json:"stride"`
+		YuNet  []struct {
+			Name   string    `json:"name"`
+			Size   int       `json:"size"`
+			Sample []float32 `json:"sample"`
+		} `json:"yunet"`
+		SFace []float32 `json:"sface"`
+	}
+	if err = json.Unmarshal(raw, &want); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open("testdata/pixels_src.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	img, err := png.Decode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	corner := func(side int, bgr bool) []float32 {
+		px := make([]float32, 3*side*side)
+		b := img.Bounds()
+		for y := 0; y < side && y < b.Dy(); y++ {
+			for x := 0; x < side && x < b.Dx(); x++ {
+				r, g, bl, _ := img.At(b.Min.X+x, b.Min.Y+y).RGBA()
+				c := [3]float32{float32(r >> 8), float32(g >> 8), float32(bl >> 8)}
+				if bgr {
+					c[0], c[2] = c[2], c[0]
+				}
+				for p := range 3 {
+					px[p*side*side+y*side+x] = c[p]
+				}
+			}
+		}
+		return px
+	}
+
+	ctx := context.Background()
+	outs, err := m.Detect(ctx, corner(embed.DetectSize, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outs) != len(want.YuNet) {
+		t.Fatalf("YuNet answered %d outputs, want %d", len(outs), len(want.YuNet))
+	}
+	for i, w := range want.YuNet {
+		if len(outs[i]) != w.Size {
+			t.Errorf("%s: %d values, want %d", w.Name, len(outs[i]), w.Size)
+			continue
+		}
+		var got []float32
+		for j := 0; j < len(outs[i]); j += want.Stride {
+			got = append(got, outs[i][j])
+		}
+		if c := cosine(got, w.Sample); c < 0.999 {
+			t.Errorf("%s is %.5f from Python's", w.Name, c)
+		}
+	}
+	v, err := m.Recognize(ctx, corner(embed.FaceSize, false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := cosine(v, want.SFace); c < 0.999 {
+		t.Errorf("SFace's vector is %.5f from Python's", c)
+	}
+}

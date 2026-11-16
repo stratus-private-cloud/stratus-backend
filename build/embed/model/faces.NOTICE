@@ -1,0 +1,17 @@
+YuNet (face_detection_yunet_2023mar.onnx)
+Copyright (c) 2020 Shiqi Yu
+Licensed under the MIT License (LICENSE beside this file).
+https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet
+Trained on WIDER FACE: https://github.com/ShiqiYu/libfacedetection.train
+
+SFace (face_recognition_sface_2021dec.onnx)
+Licensed under the Apache License, Version 2.0 (LICENSE beside this file).
+https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface
+OpenCV does not say which data these weights were trained on; the SFace paper
+(https://arxiv.org/abs/2205.12010) trains on CASIA-WebFace, VGGFace2 and
+MS-Celeb-1M. See https://github.com/opencv/opencv_zoo/issues/313.
+
+Modified by the Stratus project (https://github.com/stratus-private-cloud/stratus-backend):
+the weights SFace listed among its inputs were made constants, and both models
+were converted to the ONNX Runtime format. The recipe is
+build/embed/model/faces.py.

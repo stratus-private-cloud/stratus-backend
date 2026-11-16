@@ -167,9 +167,20 @@ def to_ort(bundle):
                     "--optimization_style", "Fixed", "--target_platform", "arm", str(conv)], check=True)
     for tower in ("vision", "text"):
         (bundle / f"{tower}.ort").write_bytes((conv / f"{tower}.ort").read_bytes())
-    ops = [l for l in (conv / "required_operators.config").read_text().splitlines() if not l.startswith("#")]
-    if ops != [l for l in (HERE.parent / "ops.config").read_text().splitlines() if l]:
-        sys.exit("the towers need other operators than build/embed/ops.config builds in:\n" + "\n".join(ops))
+    built = operators((HERE.parent / "ops.config").read_text())
+    for key, ops in operators((conv / "required_operators.config").read_text()).items():
+        if missing := ops - built.get(key, set()):
+            sys.exit(f"the towers need operators build/embed/ops.config does not build in: {key} {sorted(missing)}")
+
+
+def operators(config):
+    """An operator config as {(domain, opset): {op}}."""
+    out = {}
+    for line in config.splitlines():
+        if line and not line.startswith("#"):
+            domain, opset, ops = line.split(";")
+            out[(domain, int(opset))] = set(ops.split(","))
+    return out
 
 
 def tokenizer_bin(tok_json, out):

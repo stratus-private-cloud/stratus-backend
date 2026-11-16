@@ -89,10 +89,10 @@ jobs:
             --tag "${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}-${{ matrix.arch }}" \
             --load "build/${{ matrix.tool }}"
 
-      # The model is converted once, on arm64, and this is what says the same
-      # bytes give the same vectors under the helper built for each
-      # architecture: internal/embed's test, against the asset as published.
-      - name: check stratus-embed ${{ matrix.arch }} against the published model
+      # The models are converted once, on arm64, and this is what says the same
+      # bytes give the same outputs under the helper built for each
+      # architecture: internal/embed's tests, against the assets as published.
+      - name: check stratus-embed ${{ matrix.arch }} against the published models
         if: matrix.tool == 'embed'
         # bash by name, which is what brings pipefail: without it a failing
         # go test behind tee passed this step and the image was pushed.
@@ -100,20 +100,26 @@ jobs:
         env:
           IMAGE: ${{ steps.v.outputs.image }}:${{ steps.v.outputs.version }}-${{ matrix.arch }}
         run: |
-          field() { sed -n "s/^\t$1: *\"\(.*\)\",$/\1/p" internal/embed/fetch.go | head -1; }
-          name="$(field Name)"; url="$(field URL)"; sum="$(field SHA256)"
+          field() { sed -n "/^var $1 = Bundle{/,/^}/s/^\t$2: *\"\(.*\)\",$/\1/p" internal/embed/fetch.go; }
+          fetch() {
+            name="$(field "$1" Name)"; url="$(field "$1" URL)"; sum="$(field "$1" SHA256)"
+            [ -n "$name" ] && [ -n "$url" ] && [ -n "$sum" ] || { echo "cannot read the pinned $1"; exit 1; }
+            curl -fsSL -o "$1.tar.gz" "$url"
+            echo "$sum  $1.tar.gz" | sha256sum -c - >&2
+            tar -xzf "$1.tar.gz"
+            echo "$name"
+          }
+          siglip="$(fetch SigLIP2)"; faces="$(fetch Faces)"
           go="$(sed -n 's/^ARG GO_VERSION=//p' Dockerfile)"
-          [ -n "$name" ] && [ -n "$url" ] && [ -n "$sum" ] && [ -n "$go" ] || { echo "cannot read the pinned model"; exit 1; }
-          curl -fsSL -o model.tar.gz "$url"
-          echo "$sum  model.tar.gz" | sha256sum -c -
-          tar -xzf model.tar.gz
+          [ -n "$go" ] || { echo "cannot read the Go version"; exit 1; }
           docker create --name embed "$IMAGE" x >/dev/null
           docker cp embed:/stratus-embed ./stratus-embed
           docker run --rm -v "$PWD":/src -w /src \
             -v "$PWD/stratus-embed":/usr/local/bin/stratus-embed:ro \
-            -e STRATUS_TEST_EMBED_MODEL="/src/$name" -e STRATUS_TEST_TOKENIZER="/src/$name/tokenizer.bin" \
+            -e STRATUS_TEST_EMBED_MODEL="/src/$siglip" -e STRATUS_TEST_TOKENIZER="/src/$siglip/tokenizer.bin" \
+            -e STRATUS_TEST_FACES_MODEL="/src/$faces" \
             -e CGO_ENABLED=0 "golang:$go-alpine" \
-            go test -v -run 'TestTheModelGivesWhatPythonGave|TestTokenizerMatchesTheReference' ./internal/embed/ \
+            go test -v -run 'TestTheModelGivesWhatPythonGave|TestTheFaceModelsGiveWhatPythonGave|TestTokenizerMatchesTheReference' ./internal/embed/ \
             | tee test.log
           ! grep -q -- '--- SKIP' test.log
 

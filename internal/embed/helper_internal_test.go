@@ -12,9 +12,9 @@ import (
 )
 
 // The test binary is its own fake helper: run with STRATUS_FAKE_EMBED set, it
-// speaks the protocol instead of testing. "echo" answers the sum of the input
-// as a one-element vector, a negative sum as a refusal; "die" exits on the
-// first request.
+// speaks the protocol instead of testing. "echo" answers two outputs, the sum
+// of the input as a one-element vector and the input itself, and a negative
+// sum as a refusal; "die" exits on the first request.
 func TestMain(m *testing.M) {
 	switch os.Getenv("STRATUS_FAKE_EMBED") {
 	case "":
@@ -51,7 +51,11 @@ func fakeHelper() {
 			_, _ = os.Stdout.WriteString(msg)
 			continue
 		}
-		_ = binary.Write(os.Stdout, binary.LittleEndian, []uint32{0, 1, math.Float32bits(sum)})
+		reply := []uint32{0, 2, 1, math.Float32bits(sum), uint32(n)} //nolint:gosec // a test's few values
+		for _, v := range vals {
+			reply = append(reply, math.Float32bits(v))
+		}
+		_ = binary.Write(os.Stdout, binary.LittleEndian, reply)
 	}
 }
 
@@ -80,7 +84,8 @@ func TestATowerAnswersAndStaysUp(t *testing.T) {
 	ctx := context.Background()
 	for i := range 3 {
 		v, err := tw.run(ctx, dtypeFloat32, []uint32{1, 2}, floats(1, float32(i)))
-		if err != nil || len(v) != 1 || v[0] != float32(1+i) {
+		if err != nil || len(v) != 2 || len(v[0]) != 1 || v[0][0] != float32(1+i) ||
+			len(v[1]) != 2 || v[1][0] != 1 || v[1][1] != float32(i) {
 			t.Fatalf("call %d: %v %v", i, v, err)
 		}
 	}
@@ -124,7 +129,7 @@ func TestATowerStopsWhenIdleAndStartsAgain(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if v, err := tw.run(ctx, dtypeFloat32, []uint32{1}, floats(4)); err != nil || v[0] != 4 {
+	if v, err := tw.run(ctx, dtypeFloat32, []uint32{1}, floats(4)); err != nil || v[0][0] != 4 {
 		t.Fatalf("after idling: %v %v", v, err)
 	}
 	tw.mu.Lock()
@@ -151,5 +156,12 @@ func TestNoHelperIsUnavailable(t *testing.T) {
 	tw := &tower{model: "fake", idle: time.Hour}
 	if _, err := tw.run(context.Background(), dtypeFloat32, []uint32{1}, floats(1)); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("got %v, want ErrUnavailable", err)
+	}
+}
+
+func TestAModelOfOneOutputRefusesAGraphOfMore(t *testing.T) {
+	tw := fakeTower(t, "echo", time.Hour)
+	if _, err := one(tw.run(context.Background(), dtypeFloat32, []uint32{1}, floats(1))); !errors.Is(err, ErrUnavailable) {
+		t.Errorf("two outputs read as one: %v", err)
 	}
 }

@@ -1,12 +1,15 @@
 # syntax=docker/dockerfile:1
 
-# The recipe for the model bundle stratus-embed runs (#505): bundle.py, in the
+# The recipe for the model bundles stratus-embed runs (#505): bundle.py, in the
 # Python it was measured with. Run by hand when the model changes, which is
 # roughly never, and the result published as a release asset:
 #
 #   docker build -t stratus-embed-model -f build/embed/model/Dockerfile build/embed
 #   docker run --rm -v "$PWD/out":/out \
 #     -v "$PWD/internal/embed/testdata":/src/internal/embed/testdata:ro stratus-embed-model
+#
+# and faces.py the same way for the face bundle (#519), by naming it after the
+# image: `... stratus-embed-model faces.py`.
 #
 # The context is build/embed so that the operators the helper is built with
 # are what the conversion is checked against.
@@ -27,4 +30,5 @@ RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu 
 WORKDIR /src/build/embed/model
 COPY ops.config /src/build/embed/ops.config
 COPY model/ .
-ENTRYPOINT ["python", "bundle.py"]
+ENTRYPOINT ["python"]
+CMD ["bundle.py"]
