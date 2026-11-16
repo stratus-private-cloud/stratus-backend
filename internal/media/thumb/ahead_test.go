@@ -254,10 +254,13 @@ func stillPending(t *testing.T, meta db.MediaIndex, kind db.Kind) []db.File {
 // keeper is a Reader that keeps what it was handed.
 type keeper struct {
 	wants bool
+	size  int
 	got   map[int64]image.Rectangle
 }
 
 func (r *keeper) Wants(context.Context, db.File) (bool, error) { return r.wants, nil }
+
+func (r *keeper) Size() int { return r.size }
 
 func (r *keeper) Read(_ context.Context, f db.File, picture image.Image) error {
 	r.got[f.ID] = picture.Bounds()
@@ -270,8 +273,9 @@ func (r *keeper) Read(_ context.Context, f db.File, picture image.Image) error {
 func TestAReaderGetsThePassesDecode(t *testing.T) {
 	t.Parallel()
 	th, service, _, meta := thumbsOver(t)
-	wanting := &keeper{wants: true, got: map[int64]image.Rectangle{}}
-	done := &keeper{got: map[int64]image.Rectangle{}}
+	// Larger than any thumbnail, so the decode has to be made for it.
+	wanting := &keeper{wants: true, size: 500, got: map[int64]image.Rectangle{}}
+	done := &keeper{size: GridSize, got: map[int64]image.Rectangle{}}
 	th.Also(wanting)
 	th.Also(done)
 	f := writeImage(t, service, "photos/one.jpg", 600, 400)
@@ -284,8 +288,8 @@ func TestAReaderGetsThePassesDecode(t *testing.T) {
 	if state, err := th.PrepareFrom(t.Context(), f, held); err != nil || state != db.ThumbMade {
 		t.Fatalf("PrepareFrom = %v, %v", state, err)
 	}
-	if got := wanting.got[f.ID]; got.Dx() != PictureSize || got.Dy() != PictureSize*2/3 {
-		t.Errorf("the reader was handed %v, want the picture in a box of %d", got, PictureSize)
+	if got := wanting.got[f.ID]; got.Dx() != 500 || got.Dy() != 333 {
+		t.Errorf("the reader was handed %v, want the picture in a box of 500", got)
 	}
 	if len(done.got) != 0 {
 		t.Error("a reader that wanted nothing was handed the picture anyway")
@@ -293,14 +297,14 @@ func TestAReaderGetsThePassesDecode(t *testing.T) {
 
 	// And on its own, for what no thumbnail pass decodes again.
 	var looked image.Rectangle
-	if err := th.Look(t.Context(), f, func(p image.Image) error { looked = p.Bounds(); return nil }); err != nil {
+	if err := th.Look(t.Context(), f, 500, func(p image.Image) error { looked = p.Bounds(); return nil }); err != nil {
 		t.Fatalf("Look: %v", err)
 	}
 	if looked != wanting.got[f.ID] {
 		t.Errorf("Look handed %v, want what the pass handed: %v", looked, wanting.got[f.ID])
 	}
 	notes := write(t, service, "notes.txt", []byte("words"), "text/plain")
-	if err := th.Look(t.Context(), notes, func(image.Image) error { return nil }); !errors.Is(err, ErrNoThumbnail) {
+	if err := th.Look(t.Context(), notes, GridSize, func(image.Image) error { return nil }); !errors.Is(err, ErrNoThumbnail) {
 		t.Errorf("Look at what cannot be drawn = %v, want ErrNoThumbnail", err)
 	}
 	if held, err := th.Hold(t.Context(), notes); held != nil || err != nil {
@@ -310,7 +314,7 @@ func TestAReaderGetsThePassesDecode(t *testing.T) {
 	th.decoding = make(chan struct{}, 1)
 	th.decoding <- struct{}{}
 	th.inQueue.Add(1)
-	if err := th.Look(t.Context(), f, func(image.Image) error { return nil }); !errors.Is(err, media.ErrBusy) {
+	if err := th.Look(t.Context(), f, GridSize, func(image.Image) error { return nil }); !errors.Is(err, media.ErrBusy) {
 		t.Errorf("Look while a request is decoding = %v, want media.ErrBusy", err)
 	}
 }

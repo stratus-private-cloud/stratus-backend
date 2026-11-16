@@ -62,7 +62,7 @@ type pictures struct {
 	refuse  map[int64]bool
 }
 
-func (p *pictures) Look(_ context.Context, f db.File, fn func(image.Image) error) error {
+func (p *pictures) Look(_ context.Context, f db.File, _ int, fn func(image.Image) error) error {
 	if p.busy {
 		return media.ErrBusy
 	}

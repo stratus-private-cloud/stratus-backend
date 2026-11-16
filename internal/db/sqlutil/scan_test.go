@@ -290,3 +290,25 @@ func TestTheSmallerScanners(t *testing.T) {
 		}
 	}
 }
+
+func TestAFaceAndAPersonScan(t *testing.T) {
+	when := time.Date(2024, 5, 1, 9, 0, 0, 0, time.UTC)
+	f, err := sqlutil.ScanFace(row{int64(3), int64(7), "blob", float32(0.25), float32(0.5), float32(0.125), float32(0.25),
+		float32(0.9), []byte{1, 2}, int64(4), when.UnixMilli()}, sqlutil.Millis{})
+	if err != nil || f.ID != 3 || f.FileID != 7 || f.H != 0.25 || f.Person != 4 || !f.SortAt.Equal(when) {
+		t.Errorf("ScanFace = %+v, %v", f, err)
+	}
+	p, err := sqlutil.ScanPerson(row{int64(4), "Ana", int64(12), int64(3)})
+	if err != nil || p != (db.Person{ID: 4, Name: "Ana", Faces: 12, Cover: 3}) {
+		t.Errorf("ScanPerson = %+v, %v", p, err)
+	}
+}
+
+func TestAFaceOrAPersonThatWillNotScanIsAnError(t *testing.T) {
+	if _, err := sqlutil.ScanFace(refusing{}, sqlutil.Millis{}); err == nil {
+		t.Error("a face that failed to scan was not reported")
+	}
+	if _, err := sqlutil.ScanPerson(refusing{}); err == nil {
+		t.Error("a person who failed to scan was not reported")
+	}
+}

@@ -70,14 +70,18 @@ type Reader interface {
 	// Wants reports whether f still needs what this reader makes, so that a
 	// decode made for the thumbnails is handed only to who has a use for it.
 	Wants(ctx context.Context, f db.File) (bool, error)
-	// Read makes it from the picture, fitted in a box of PictureSize and
-	// turned the right way up. It holds the decoder while it runs.
+	// Size is the side of the box its picture is fitted in. A decode is made
+	// as large as the largest reader wanting it asks for, which costs ffmpeg
+	// more for a HEIC and Go nothing, since Go decodes whole anyway.
+	Size() int
+	// Read makes it from the picture, fitted in a box of Size and turned the
+	// right way up. It holds the decoder while it runs.
 	Read(ctx context.Context, f db.File, picture image.Image) error
 }
 
-// PictureSize is the box a Reader's picture fits in: the grid's, so a reader
-// sees what the grid shows, decoded rather than read back from its JPEG.
-const PictureSize = int(thumbMedium)
+// GridSize is the grid's box, for a reader that should see what the grid
+// shows, decoded rather than read back from its JPEG.
+const GridSize = int(thumbMedium)
 
 // Also hands every decode a pass makes to r as well. It is wiring, called
 // before the passes start.
@@ -143,9 +147,13 @@ func (t *Service) PrepareFrom(ctx context.Context, f db.File, held io.ReadSeeker
 	defer release()
 
 	readers := t.wanting(ctx, f)
+	size := largest(passSizes)
+	for _, r := range readers {
+		size = max(size, thumbSize(r.Size()))
+	}
 	made := make(map[thumbSize][]byte, len(passSizes))
 	err := t.read(ctx, f, held, func(body io.ReadSeeker) error {
-		pic, err := t.decode(ctx, f, body, largest(passSizes))
+		pic, err := t.decode(ctx, f, body, size)
 		if err != nil {
 			return err
 		}
@@ -154,14 +162,11 @@ func (t *Service) PrepareFrom(ctx context.Context, f db.File, held io.ReadSeeker
 				return err
 			}
 		}
-		if len(readers) > 0 {
-			picture := pic.picture(thumbMedium)
-			for _, r := range readers {
-				if err := r.Read(ctx, f, picture); err != nil {
-					// Its own pass comes round for it, at the price of the
-					// read this was saving.
-					slog.InfoContext(ctx, "reading a photograph beside its thumbnails", "path", f.Path, "err", err)
-				}
+		for _, r := range readers {
+			if err := r.Read(ctx, f, pic.picture(thumbSize(r.Size()))); err != nil {
+				// Its own pass comes round for it, at the price of the read
+				// this was saving.
+				slog.InfoContext(ctx, "reading a photograph beside its thumbnails", "path", f.Path, "err", err)
 			}
 		}
 		return nil
@@ -285,13 +290,14 @@ func (t *Service) decodeIfIdle() (func(), bool) {
 	}
 }
 
-// Look decodes f and hands fn its picture as a Reader would get it, for a
-// reader's own pass over what no thumbnail pass will decode again -- a library
-// whose thumbnails were made before the reader was switched on.
+// Look decodes f and hands fn its picture fitted in a box of size, as a Reader
+// would get it, for a reader's own pass over what no thumbnail pass will
+// decode again -- a library whose thumbnails were made before the reader was
+// switched on.
 //
 // ErrNoThumbnail for a file this build cannot draw, and media.ErrBusy when
 // somebody is looking, as Prepare. An error from fn comes back as it is.
-func (t *Service) Look(ctx context.Context, f db.File, fn func(image.Image) error) error {
+func (t *Service) Look(ctx context.Context, f db.File, size int, fn func(image.Image) error) error {
 	if !CanThumbnail(f.Path, f.Size) {
 		return fmt.Errorf("%w: %q", ErrNoThumbnail, f.Path)
 	}
@@ -303,11 +309,11 @@ func (t *Service) Look(ctx context.Context, f db.File, fn func(image.Image) erro
 
 	var picture image.Image
 	err := t.fromStore(ctx, f, func(body io.ReadSeeker) error {
-		pic, err := t.decode(ctx, f, body, thumbMedium)
+		pic, err := t.decode(ctx, f, body, thumbSize(size))
 		if err != nil {
 			return err
 		}
-		picture = pic.picture(thumbMedium)
+		picture = pic.picture(thumbSize(size))
 		return nil
 	})
 	if err != nil {

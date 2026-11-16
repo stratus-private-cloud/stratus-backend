@@ -139,6 +139,8 @@ type photoView struct {
 	// Similar are the photographs most like this one (#514), and empty for a
 	// film or with the search by content off.
 	Similar []tile
+	// People are who its faces have been put under (#519).
+	People []personTile
 }
 
 // href is the URL of a place in this library's tree.
@@ -356,6 +358,7 @@ func (h *handler) viewer(w http.ResponseWriter, r *http.Request, user string, l 
 	}
 
 	pv.Similar = h.similarTo(r, user, f)
+	pv.People = h.peopleIn(r, f)
 
 	h.render(w, http.StatusOK, pagePhoto, view{Title: pv.Name, User: user, Gallery: l.title, Photo: &pv})
 }

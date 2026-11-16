@@ -23,6 +23,7 @@ import (
 	"github.com/stratus-private-cloud/stratus-backend/internal/dav"
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
 	"github.com/stratus-private-cloud/stratus-backend/internal/embed"
+	"github.com/stratus-private-cloud/stratus-backend/internal/faces"
 	"github.com/stratus-private-cloud/stratus-backend/internal/files"
 	"github.com/stratus-private-cloud/stratus-backend/internal/incoming"
 	"github.com/stratus-private-cloud/stratus-backend/internal/lookup"
@@ -172,6 +173,11 @@ type Deps struct {
 	// on, held here to stop its processes on the way out.
 	Semantic *semantic.Service
 	Model    *embed.Lazy
+	// Faces finds faces in photographs and groups them into people (#519),
+	// and is nil without stratus-embed or without credentials. Whether the
+	// pass runs is STRATUS_FACES; FaceModels is what it runs on.
+	Faces      *faces.Service
+	FaceModels *embed.LazyFaces
 	// Settings are the settings in force (#397), and nil for Deps a test
 	// built by hand, which then run on the configuration.
 	Settings *settings.Service
@@ -193,6 +199,9 @@ func (d Deps) Close() error {
 	}
 	if d.Model != nil {
 		d.Model.Close()
+	}
+	if d.FaceModels != nil {
+		d.FaceModels.Close()
 	}
 	return errors.Join(errs...)
 }
@@ -257,6 +266,7 @@ func (a *App) Handler(deps Deps) http.Handler {
 				Index: deps.Database, Interval: a.cfg.IndexInterval, Ahead: a.cfg.ThumbsAhead,
 				Lookups: deps.Database, Lookup: a.cfg.MusicLookup,
 				Contents: contents(deps), Semantic: a.cfg.SemanticSearch,
+				People: people(deps), Faces: a.cfg.Faces,
 			},
 			Imports: imports(deps), Playback: a.playback(deps), TrashRetention: a.cfg.TrashRetention,
 			Settings:  func() config.Values { return a.values(deps) },
@@ -534,6 +544,13 @@ func davOrBrowser(dav, browser http.Handler) http.Handler {
 
 // contents is the search by content as the web UI takes it, and a nil
 // interface rather than a nil pointer in one when there is none.
+func people(deps Deps) web.People {
+	if deps.Faces == nil {
+		return nil
+	}
+	return deps.Faces
+}
+
 func contents(deps Deps) web.Contents {
 	if deps.Semantic == nil {
 		return nil

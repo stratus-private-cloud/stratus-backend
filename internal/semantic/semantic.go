@@ -56,7 +56,7 @@ type Encoder interface {
 // Pictures decodes a photograph for the pass, holding the decoder while fn
 // runs: thumb.Service.Look.
 type Pictures interface {
-	Look(ctx context.Context, f db.File, fn func(image.Image) error) error
+	Look(ctx context.Context, f db.File, size int, fn func(image.Image) error) error
 }
 
 // Pipeline is what a vector's model name carries besides the model: how the
@@ -101,7 +101,7 @@ func (s *Service) Batch(ctx context.Context, now time.Time) (int, error) {
 	}
 	done := 0
 	for _, f := range pending {
-		err := s.pictures.Look(ctx, f, func(img image.Image) error { return s.Read(ctx, f, img) })
+		err := s.pictures.Look(ctx, f, s.Size(), func(img image.Image) error { return s.Read(ctx, f, img) })
 		if errors.Is(err, thumb.ErrNoThumbnail) {
 			err = s.refuse(ctx, f, now)
 		}
@@ -119,6 +119,10 @@ func (s *Service) Batch(ctx context.Context, now time.Time) (int, error) {
 	}
 	return done, nil
 }
+
+// Size implements thumb.Reader: the grid's picture, which the model squashes
+// to 224 anyway.
+func (s *Service) Size() int { return thumb.GridSize }
 
 // Wants implements thumb.Reader: whether f is one Batch would read.
 func (s *Service) Wants(ctx context.Context, f db.File) (bool, error) {

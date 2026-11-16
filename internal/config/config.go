@@ -100,6 +100,13 @@ const (
 	SemanticSearchOff = "off"
 )
 
+// The values STRATUS_FACES takes. Off is the default because what it keeps
+// is biometric: the faces of everybody in somebody's photographs.
+const (
+	FacesOn  = "on"
+	FacesOff = "off"
+)
+
 // Config is the fully resolved configuration for one process.
 type Config struct {
 	// Addr is the listen address, in host:port form.
@@ -120,6 +127,9 @@ type Config struct {
 	// default, is the published model, fetched under the data directory the
 	// first time the setting is on.
 	EmbedModel string
+	// FacesModel is a directory holding the face models (#519), as
+	// EmbedModel is for search by content.
+	FacesModel string
 	// Values are the settings that can also be changed from the web UI
 	// (#397), as the environment set them at startup.
 	Values
@@ -185,6 +195,7 @@ func Load(getenv func(string) string) (Config, error) {
 
 	cfg.IncomingDir = getenv("STRATUS_INCOMING_DIR")
 	cfg.EmbedModel = getenv("STRATUS_EMBED_MODEL")
+	cfg.FacesModel = getenv("STRATUS_FACES_MODEL")
 	// Inside the data directory it would sweep the blob store into itself, one
 	// blob at a time, forever. Refused here rather than discovered there.
 	if cfg.IncomingDir != "" && within(cfg.IncomingDir, cfg.DataDir) {

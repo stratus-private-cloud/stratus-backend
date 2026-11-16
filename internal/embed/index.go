@@ -32,6 +32,20 @@ func Quantize(v []float32) []byte {
 	return out
 }
 
+// Dequantize is a stored vector as floats, or ErrDimension for one that is
+// not dim long.
+func Dequantize(stored []byte, dim int) ([]float32, error) {
+	if len(stored) != scaleBytes+dim {
+		return nil, ErrDimension
+	}
+	scale := math.Float32frombits(binary.LittleEndian.Uint32(stored))
+	v := make([]float32, dim)
+	for i := range v {
+		v[i] = float32(int8(stored[scaleBytes+i])) * scale //nolint:gosec // the bits of an int8, kept as one
+	}
+	return v, nil
+}
+
 // Hit is one photograph a query found, and how close it is: a cosine, since
 // both vectors have unit length.
 type Hit struct {

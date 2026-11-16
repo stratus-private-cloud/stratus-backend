@@ -1,0 +1,33 @@
+{{define "content" -}}
+{{with .People}}
+<h1 class="h4 mb-3">People</h1>
+{{if .Off}}
+<div class="card card-body text-body-secondary">
+  Faces are off. Turning them on in <a href="/settings">Settings</a> finds the faces in your photographs and groups
+  them into people, on this machine; turning them off again deletes every face and every name.
+</div>
+{{else if .Missing}}
+<div class="card card-body text-body-secondary">Faces are on, but <code>stratus-embed</code> is not installed, so nothing reads them.</div>
+{{else}}
+{{if .State}}<p class="text-body-secondary small">{{.State}}.</p>{{end}}
+{{if .People}}
+<div class="row g-2">
+  {{range .People}}
+  <div class="col-4 col-sm-3 col-md-2 text-center">
+    <a href="{{.Href}}" class="d-block text-decoration-none">
+      <img src="{{.Thumb}}" alt="" width="160" height="160" loading="lazy" class="img-fluid rounded-circle mb-1">
+      <span class="d-block small text-truncate">{{.Name}}</span>
+      <span class="d-block small text-body-secondary">{{.Faces}}</span>
+    </a>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<div class="card card-body text-body-secondary">
+  Nobody yet. Somebody appears here once their face is in three photographs, and the photographs are read in the
+  background, newest first: <a href="/status">Status</a> says how far that has got.
+</div>
+{{end}}
+{{end}}
+{{end}}
+{{- end}}

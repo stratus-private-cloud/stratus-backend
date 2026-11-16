@@ -50,6 +50,10 @@ type Values struct {
 	// (#505). Off by default, because it needs stratus-embed and a model of
 	// some 390 MB, and a first pass over a library is hours of CPU.
 	SemanticSearch bool
+	// Faces is whether photographs are read for faces, which are grouped
+	// into people (#519). Off by default, and off deletes every face, person
+	// and name: they are biometric data, kept here and nowhere else.
+	Faces bool
 	// Zone is what the calendar page draws times in (#111). Unset is UTC: a
 	// page with no script cannot ask the browser for its own.
 	Zone *time.Location
@@ -158,6 +162,14 @@ var Settings = []Setting{
 		Help: "Whether photographs are read so a search finds them by what is in them; nothing leaves the machine.",
 		apply: func(v *Values, raw string) (err error) {
 			v.SemanticSearch, err = onOff(raw)
+			return err
+		},
+	},
+	{
+		Key: "STRATUS_FACES", Section: "Indexing", Default: FacesOff, Choices: []string{FacesOn, FacesOff},
+		Help: "Whether faces are found in photographs and grouped into people; off deletes them all, names included.",
+		apply: func(v *Values, raw string) (err error) {
+			v.Faces, err = onOff(raw)
 			return err
 		},
 	},

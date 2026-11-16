@@ -138,8 +138,13 @@ internal/storage/s3:88
 internal/subsonic:100
 internal/tus:94
 internal/web:96
+internal/faces:93
 "
 
+# internal/faces starts at 93 (#519), with the store failing under every call
+# that writes; what is left is mostly a model failing halfway through a
+# photograph's faces, which the fakes answer all or nothing.
+#
 # Not gated, and why:
 #   cmd/stratus                   flags and exit codes; what it does is asserted
 #                                 by scripts/smoke.sh, which unit coverage

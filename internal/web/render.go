@@ -74,6 +74,8 @@ const (
 	pageUnevent   = "event-delete.html"
 	pageSettings  = "settings.html"
 	pageConnect   = "connect.html"
+	pagePeople    = "people.html"
+	pagePerson    = "person.html"
 )
 
 // Each page is parsed with the layout into a set of its own. One set for all of
@@ -110,6 +112,8 @@ var pages = map[string]*template.Template{
 	pageUnevent:   parse(pageUnevent),
 	pageSettings:  parse(pageSettings),
 	pageConnect:   parse(pageConnect),
+	pagePeople:    parse(pagePeople),
+	pagePerson:    parse(pagePerson, pageTile),
 }
 
 // parse builds one page's template set: the layout, the page, and whatever
@@ -233,6 +237,8 @@ type view struct {
 	// Content is the search by content's line, and nil when it is off and
 	// never ran.
 	Content *contentView
+	// Faces is the faces' line (#519), and nil while they are off.
+	Faces *facesView
 	// Shared is the signature this page was reached with, empty for a request
 	// that arrived with a session. Every link the page emits carries it, or the
 	// second click is a login form.
@@ -263,6 +269,10 @@ type view struct {
 	Photo  *photoView
 	Months []crumb
 	Empty  string
+	// People is the people page or one person's (#519), and PeopleOn
+	// whether the gallery's menu offers them: only while faces are on.
+	People   *peopleView
+	PeopleOn bool
 	// Film is the player page, and PlayerScripts the two scripts it loads
 	// when it needs HLS: hls.js and this project's own that starts it.
 	Film          *filmView
@@ -329,6 +339,7 @@ func (h *handler) render(w http.ResponseWriter, status int, page string, v view)
 // client that sends no htmx header gets the page.
 func (h *handler) renderTemplate(w http.ResponseWriter, status int, page, name string, v view) {
 	v.Assets, v.HTMX, v.Version, v.BuildDate = assetPrefix, htmxPrefix, h.version, h.buildDate
+	v.PeopleOn = h.indexingNow().Faces
 	build := "?v=" + url.QueryEscape(h.version)
 	v.Scripts = []string{
 		ownPrefix + "/copy.js" + build,

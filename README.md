@@ -415,8 +415,8 @@ and a photo grid draw — the file is already in hand, so it costs no query at
 all — and everything else the library holds is found by the same kind of query
 behind it, newest first, because what somebody opens is the roll that just
 arrived. One decode makes both sizes, and **a photograph is fetched from the
-store once** for its metadata, its pictures and — with the search by content on
-— its vector: on S3 every read is a request somebody pays for, and a new
+store once** for its metadata, its pictures and — with the search by content or
+faces on — its vector and its faces: on S3 every read is a request somebody pays for, and a new
 photograph used to cost ten of them. The gallery's viewer shows the original
 itself where every browser opens it — JPEG, PNG, GIF, WebP, AVIF — and a
 1200-pixel picture, made when it is asked for, only of what one cannot: HEIC,
@@ -1251,6 +1251,49 @@ a click away. A HEIC shows in every browser, not only Safari, because what is
 shown is a JPEG made from it. A photo appears once the indexer has read it,
 like a track in the music library.
 
+**Faces can be found and grouped into people**, which is off by default:
+`STRATUS_FACES=on` (also on the Settings page). Every photograph is looked at
+for faces — OpenCV's [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)
+finds them and [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface)
+turns each into 128 numbers — and the faces that look alike are put under one
+person, who appears at `/people/` once they are in three photographs. A person
+is unnamed until you name them on their page, which also merges two people who
+are the same one; the viewer says who is in a photograph. It all runs here and
+**nothing about a face leaves the machine**.
+
+What it keeps is biometric data about everybody in your photographs, so:
+
+- **Off deletes it.** Turning `STRATUS_FACES` off deletes every face, every
+  person and every name, and the small picture kept of each face — at once,
+  and again at every start while it stays off. Turning it back on reads the
+  library from the beginning and the names have to be given again.
+- **It is strict about who is who.** On a public set of 6,700 faces of 610
+  people it mixed two people in one group seven times in 604, and put a
+  stranger with somebody once in 250. What it gets wrong the other way —
+  somebody split in two — is what the merge form is for. A face cannot yet be
+  taken out of somebody it was put under by mistake.
+- **The models' provenance.** Both are OpenCV's, MIT and Apache 2.0, converted
+  but not retrained. OpenCV does not say what SFace was trained on, and the
+  paper behind it trained on the usual public face sets, MS-Celeb-1M among them
+  ([opencv_zoo#313](https://github.com/opencv/opencv_zoo/issues/313)). For a
+  single person's own library that was judged acceptable; it is said here so
+  you can judge it too.
+
+What turning it on costs:
+
+- **A 36 MB download, once**, from [this repository's releases](https://github.com/stratus-private-cloud/stratus-backend/releases/tag/model-faces-v1)
+  into `<data>/models/`, as the search by content's model is; with no route
+  out, unpack it somewhere and point `STRATUS_FACES_MODEL` at it. It stays
+  there after faces are turned off: it is a model, not anybody's data.
+- **A little CPU per photograph**, off the same decode the thumbnails and the
+  search by content read: a new photograph costs no extra request to the
+  store, and a library that is already there is read once more by a
+  background pass, newest first, while nobody is browsing. `/status` counts
+  photographs read, faces and people.
+- **Faces need to be big enough.** A face is looked for in the photograph
+  fitted in 640 pixels and read from it at 1,600, and one smaller than 40 of
+  those is left out: a crowd in the distance is nobody.
+
 **Music has a library of its own at `/music/`**, which is both a set of pages
 and a WebDAV collection: the artists, each one's albums with their covers, and
 an album page whose tracks play in a bar at the foot of the page, one after
@@ -1615,7 +1658,7 @@ make up STRATUS_PORT=9000 STRATUS_DATA_PATH=/srv/stratus
 **✎ can also be set on the Settings page** (the menu under your name), and so
 can `STRATUS_GC_INTERVAL`, `STRATUS_GC_GRACE`, `STRATUS_INDEX_INTERVAL`,
 `STRATUS_THUMBS_AHEAD`, `STRATUS_INCOMING_INTERVAL`, `STRATUS_VIDEO_TRANSCODE`,
-`STRATUS_MUSIC_LOOKUP` and `STRATUS_SEMANTIC_SEARCH`, described where they
+`STRATUS_MUSIC_LOOKUP`, `STRATUS_SEMANTIC_SEARCH` and `STRATUS_FACES`, described where they
 matter below, and
 `STRATUS_WEEK_START` — `monday` or `sunday`, the day the calendar page's weeks
 begin on. The page offers `TZ` from the zones the machine's own time zone
@@ -1625,8 +1668,8 @@ environment wins**: a variable that is set is shown on the page and not
 offered, so whatever an install wrote in its compose file or its platform's
 dashboard is what runs — and a value stored before somebody set the variable
 comes back if they unset it. What opens the database and the store, the
-credentials, the Sentry DSN, `STRATUS_INCOMING_DIR` and `STRATUS_EMBED_MODEL`
-are the environment's alone.
+credentials, the Sentry DSN, `STRATUS_INCOMING_DIR`, `STRATUS_EMBED_MODEL` and
+`STRATUS_FACES_MODEL` are the environment's alone.
 
 ### Blob storage
 
@@ -1998,6 +2041,8 @@ Working now:
 - A search box over names, titles, artists, albums, what a camera recorded,
   events and contacts -- and, opt-in, over what is in a photograph, with a model
   that runs here. `STRATUS_SEMANTIC_SEARCH=on`.
+- Faces found in photographs and grouped into people, opt-in and on this
+  machine, with a page per person to name and merge them. `STRATUS_FACES=on`.
 - A web UI: sign in, walk the tree, open or download a file, upload one, make a folder,
   rename and delete, see what the indexer found about a file, a gallery of every photo by date -- also served as
   folders by date over WebDAV -- and a music library to browse and play. A signed-cookie session and a CSP that allows nothing but

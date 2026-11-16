@@ -165,6 +165,17 @@
     {{end}}
     {{end}}
 
+    {{/* Faces (#519), on the same terms. Nothing is shown while they are off,
+         because off has already deleted every one of them. */}}
+    {{with .Faces}}
+    <dt class="col-sm-4 fw-normal text-body-secondary">Faces read</dt>
+    {{if .Missing}}
+    <dd class="col-sm-8" data-count="faces-read"><span class="text-body-secondary small"><code>STRATUS_FACES</code> is on, but <code>stratus-embed</code> is not installed</span></dd>
+    {{else}}
+    <dd class="col-sm-8" data-count="faces-read">{{.Scanned}} of {{.Files}}<span class="text-body-secondary small"> · {{.Faces}} faces, {{.People}} people</span>{{with .State}}<span class="text-body-secondary small"> · {{.}}</span>{{end}}</dd>
+    {{end}}
+    {{end}}
+
     {{/* Only when a folder is configured, which it is not by default: a row
          saying nothing is waiting in a folder nobody has is noise. It rides
          the same fragment as the counts, so a file dropped in appears here
