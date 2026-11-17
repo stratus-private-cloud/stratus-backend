@@ -28,7 +28,7 @@ FROM alpine:${ALPINE_VERSION} AS media
 RUN apk add --no-cache curl
 WORKDIR /media
 COPY scripts/demo/SHA256SUMS SHA256SUMS
-RUN curl -fsSLO https://github.com/stratus-private-cloud/stratus-backend/releases/download/demo-media-v2/demo-media-v2.tar.gz && \
+RUN curl -fsSLO https://github.com/stratus-private-cloud/stratus-backend/releases/download/demo-media-v3/demo-media-v3.tar.gz && \
     sha256sum -c SHA256SUMS
 
 # The model a search by content reads photographs with (#505), in the image
@@ -50,6 +50,18 @@ RUN field() { sed -n "/^var SigLIP2 = Bundle{/,/^}/s/^\t$1: *\"\(.*\)\",$/\1/p" 
     curl -fsSL -o model.tar.gz "$url" && echo "$sum  model.tar.gz" | sha256sum -c - && \
     tar -xzf model.tar.gz && mv "$name" siglip2 && rm model.tar.gz fetch.go
 
+# The faces' models (#519), for the same reason and read the same way.
+FROM alpine:${ALPINE_VERSION} AS faces
+SHELL ["/bin/ash", "-o", "pipefail", "-c"]
+# hadolint ignore=DL3018
+RUN apk add --no-cache curl
+WORKDIR /model
+COPY internal/embed/fetch.go fetch.go
+RUN field() { sed -n "/^var Faces = Bundle{/,/^}/s/^\t$1: *\"\(.*\)\",$/\1/p" fetch.go; } && \
+    name="$(field Name)" && url="$(field URL)" && sum="$(field SHA256)" && \
+    curl -fsSL -o model.tar.gz "$url" && echo "$sum  model.tar.gz" | sha256sum -c - && \
+    tar -xzf model.tar.gz && mv "$name" faces && rm model.tar.gz fetch.go
+
 # Alpine's own tree laid over distroless, rather than static builds picked one
 # by one: bash, curl and coreutils are dynamically linked against musl, and
 # copying /lib and the two bin directories is what brings their libraries with
@@ -65,8 +77,9 @@ COPY --from=tools /lib /lib
 COPY --from=tools /usr/lib /usr/lib
 COPY --from=tools /bin /bin
 COPY --from=tools /usr/bin /usr/bin
-COPY --from=media /media/demo-media-v2.tar.gz /demo/demo-media-v2.tar.gz
+COPY --from=media /media/demo-media-v3.tar.gz /demo/demo-media-v3.tar.gz
 COPY --from=model /model/siglip2 /demo/model
+COPY --from=faces /model/faces /demo/faces-model
 COPY scripts/demo/SHA256SUMS /demo/demo/SHA256SUMS
 COPY scripts/seed-demo.sh /demo/seed-demo.sh
 COPY deploy/demo/entrypoint.sh /demo/entrypoint.sh
