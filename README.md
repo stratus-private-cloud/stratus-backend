@@ -1294,7 +1294,9 @@ What turning it on costs:
   store, and a library that is already there is read once more by a
   background pass, newest first, while nobody is browsing. Turned on together
   with the search by content, or while that is still catching up, the two
-  share that read: a photograph is fetched once for both. `/status` counts
+  share that read: a photograph is fetched once for both. People appear as
+  the faces are found, a round every 256 of them, rather than when the
+  reading ends, which on a large library is days. `/status` counts
   photographs read, faces and people.
 - **Faces need to be big enough.** A face is looked for in the photograph
   fitted in 640 pixels and read from it at 1,600, and one smaller than 40 of
