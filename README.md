@@ -1860,8 +1860,8 @@ suites, the coverage floors and the container suite, so nothing reaches it that
 has not been through all of them. Anywhere `FLY_APP` is unset, including every
 fork, the job does not run.
 
-That instance is deliberately disposable, and deliberately open: a 512 MB
-machine, a disk of about 240 MB made of its memory, and **the password is
+That instance is deliberately disposable, and deliberately open: a 256 MB
+machine, a disk of about 100 MB made of its memory, and **the password is
 `stratus-private-cloud`**, written in [`deploy/demo/fly.toml`](deploy/demo/fly.toml)
 in the clear. Four things follow, and none of them is an accident:
 
@@ -1887,8 +1887,8 @@ in the clear. Four things follow, and none of them is an accident:
   cost the same.
 - **It searches photographs by what is in them**, which an install has to
   turn on: `una abeja` finds the bee. The model is in its image rather than
-  fetched, since its data directory is emptied every hour, and the machine is
-  512 MB rather than Fly's smallest so the two helpers fit beside the server.
+  fetched, since its data directory is emptied every hour. It runs on Fly's
+  smallest machine, 256 MB, with the faces on as well, leaning on swap.
 - **And it finds faces**, the same way and with its models in the image too:
   seven nineteenth-century portraits in the public domain, Lincoln and
   Douglass, come out as two people at `/people/`.
