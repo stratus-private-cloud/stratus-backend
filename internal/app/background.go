@@ -134,18 +134,28 @@ func (a *App) indexEvery(ctx context.Context, deps Deps, changed <-chan struct{}
 		if !a.indexUntilDry(ctx, deps) {
 			return false
 		}
-		wait := a.thumbsAhead(ctx, deps)
-		if wait == 0 {
-			// Pictures first, because the content is read off them and a
-			// grid is what somebody opens; the third half gets the CPU the
-			// second one has finished with, and faces what that leaves.
-			wait = a.embedAhead(ctx, deps)
-		}
-		if wait == 0 {
-			wait = a.facesAhead(ctx, deps)
-		}
-		again = after(wait)
+		again = after(a.ahead(ctx, deps))
 	}
+}
+
+// ahead runs one batch of whichever pass ahead has work, and answers how long
+// to wait before the next.
+func (a *App) ahead(ctx context.Context, deps Deps) time.Duration {
+	wait := a.thumbsAhead(ctx, deps)
+	if wait == 0 {
+		// Pictures first, because the content is read off them and a
+		// grid is what somebody opens; the third half gets the CPU the
+		// second one has finished with, and faces what that leaves.
+		wait = a.embedAhead(ctx, deps)
+	}
+	if wait != 0 {
+		// The faces of a library read for the first time are found beside
+		// the other two passes, which keep the face pass's own turn away
+		// for days, so their rounds cannot wait for it.
+		a.groupFaces(ctx, deps, false)
+		return wait
+	}
+	return a.facesAhead(ctx, deps)
 }
 
 // after is the timer a pass asks for, and nothing at all for a wait of zero:
@@ -239,12 +249,19 @@ func (a *App) facesAhead(ctx context.Context, deps Deps) time.Duration {
 	if err == nil && done < faces.Batch {
 		wait = 0
 	}
-	if deps.Faces.Grouping(wait == 0) {
-		if err := deps.Faces.Group(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			slog.Error("grouping faces", "err", err)
-		}
-	}
+	a.groupFaces(ctx, deps, wait == 0)
 	return wait
+}
+
+// groupFaces runs a round of grouping when one is due: finished is whether
+// the face pass has nothing left for now.
+func (a *App) groupFaces(ctx context.Context, deps Deps, finished bool) {
+	if !a.facesOn(deps) || !deps.Faces.Grouping(finished) {
+		return
+	}
+	if err := deps.Faces.Group(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		slog.Error("grouping faces", "err", err)
+	}
 }
 
 // forgetFaces deletes every face while the switch is off: what off promises
