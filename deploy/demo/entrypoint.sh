@@ -37,7 +37,7 @@ while [ -z "$stop" ]; do
 	done
 
 	if [ -z "$stop" ] && kill -0 "$server" 2>/dev/null; then
-		SEED_BUNDLE=/demo/demo-media-v2.tar.gz /demo/seed-demo.sh "http://localhost:$port" ||
+		SEED_BUNDLE=/demo/demo-media-v3.tar.gz /demo/seed-demo.sh "http://localhost:$port" ||
 			echo "seeding the demo failed; it is running empty" >&2
 	fi
 

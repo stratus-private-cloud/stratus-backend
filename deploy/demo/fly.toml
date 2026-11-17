@@ -81,6 +81,10 @@ swap_size_mb = 512
   # option. Set here like the rest, so a visitor cannot turn it off.
   STRATUS_SEMANTIC_SEARCH = "on"
   STRATUS_EMBED_MODEL = "/demo/model"
+  # On for the same reason (#519), over the bundle's portraits: two people
+  # dead for over a century, so the biometrics are of nobody alive.
+  STRATUS_FACES = "on"
+  STRATUS_FACES_MODEL = "/demo/faces-model"
   TZ = "UTC"
   STRATUS_WEEK_START = "monday"
   STRATUS_LOG_LEVEL = "info"

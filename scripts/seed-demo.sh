@@ -6,7 +6,8 @@
 # memory, and the machine's entrypoint starts the server again on an empty
 # directory (deploy/demo/entrypoint.sh) -- so it starts
 # with an empty tree, an indexer with nothing to read and a music library with no
-# artists in it. This fills it in again: five photographs with their EXIF, two tagged tracks with a cover, and
+# artists in it. This fills it in again: five photographs with their EXIF, seven
+# portraits of two people for the faces, two tagged tracks with a cover, and
 # fifteen seconds of video in eight containers and codecs, each there for a
 # different thing a server has to do with a film (scripts/demo/CREDITS.md).
 #
@@ -18,7 +19,7 @@
 # the way a client does, over OpenSubsonic.
 #
 # The media is a release asset rather than a directory in this repository: the
-# whole clone is 6.6 MB and the bundle is 15.6, which is not a weight to carry
+# whole clone is 6.6 MB and the bundle is 18.1, which is not a weight to carry
 # in every clone forever. scripts/demo/SHA256SUMS pins the bytes; the attribution
 # is in scripts/demo/CREDITS.md and travels inside the tarball as well.
 #
@@ -43,7 +44,7 @@ BASE="${BASE%/}"
 USER="${STRATUS_USERNAME:?set STRATUS_USERNAME}"
 PASS="${STRATUS_PASSWORD:?set STRATUS_PASSWORD}"
 
-TAG="demo-media-v2"
+TAG="demo-media-v3"
 BUNDLE="$TAG.tar.gz"
 URL="https://github.com/stratus-private-cloud/stratus-backend/releases/download/$TAG/$BUNDLE"
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -347,6 +348,22 @@ case "$found" in
 yes) ok "searching \"una abeja\" finds the bee by what is in the picture" ;;
 off) ok "search by content is off here, so it was not asked" ;;
 *) die "searching \"una abeja\" by content did not find the bee in three minutes" ;;
+esac
+
+# The portraits are two people, four photographs and three, and the faces pass
+# goes after the thumbnails too. /status counts faces only where they are on.
+people=""
+for _ in $(seq 1 60); do
+	page="$(dav "$BASE/status" 2>/dev/null || true)"
+	case "$page" in *'data-count="faces-read"'*) ;; *) people="off"; break ;; esac
+	people="$(sed -n 's/.* \([0-9][0-9]*\) people.*/\1/p' <<<"$page" | head -n 1)"
+	[ "${people:-0}" -ge 2 ] && break
+	sleep 3
+done
+case "$people" in
+off) ok "faces are off here, so nobody was looked for" ;;
+2) ok "the portraits are two people at /people/" ;;
+*) die "the portraits came to ${people:-0} people rather than two in three minutes" ;;
 esac
 
 printf '\n  %s %s\n\n' "$(green ✓)" "seeded: $BASE"

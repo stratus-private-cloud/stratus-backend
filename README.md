@@ -1879,8 +1879,8 @@ in the clear. Four things follow, and none of them is an accident:
   anything.
 - **It seeds itself whenever it starts**, because its disk is memory and any
   restart empties it — Fly moving the machine as much as the reset. Its image
-  is the published one with the demo media, the model a search by content
-  reads with, and a shell laid over it
+  is the published one with the demo media, the models a search by content
+  and the faces read with, and a shell laid over it
   ([`deploy/demo/Dockerfile`](deploy/demo/Dockerfile)), so the binary is the
   build's while the image people pull still has no shell. A restart costs
   about a minute of an empty demo, and it never sleeps, since waking would
@@ -1889,6 +1889,9 @@ in the clear. Four things follow, and none of them is an accident:
   turn on: `una abeja` finds the bee. The model is in its image rather than
   fetched, since its data directory is emptied every hour, and the machine is
   512 MB rather than Fly's smallest so the two helpers fit beside the server.
+- **And it finds faces**, the same way and with its models in the image too:
+  seven nineteenth-century portraits in the public domain, Lincoln and
+  Douglass, come out as two people at `/people/`.
 - **It wipes itself every hour**, and on every deploy. That is what makes an open
   instance not worth abusing: whatever anybody leaves there — including you — is
   gone within the hour, and the demo media is put back. The hour is the
@@ -1911,15 +1914,16 @@ in the clear. Four things follow, and none of them is an accident:
   expected.
 
 Which is why the deploy ends by seeding it: `scripts/seed-demo.sh` fetches a
-15.6 MB bundle of freely licensed media — five photographs with their EXIF, two
-tagged tracks with a cover, and the same fifteen seconds of video in eight
-shapes a library really holds: H.264 with its index at either end, HEVC Main 10
+18.1 MB bundle of freely licensed media — five photographs with their EXIF,
+seven portraits of two people for the faces, two tagged tracks with a cover,
+and the same fifteen seconds of video in eight shapes a library really holds: H.264 with its index at either end, HEVC Main 10
 at 1080p, AC-3 5.1 in Matroska, VP9 and Opus in WebM, MPEG-2 in a transport
 stream, MPEG-4 in AVI and a portrait phone recording
 ([`CREDITS.md`](scripts/demo/CREDITS.md) says what each is for) — and puts it in
 over WebDAV, then asks the server what it did with it: the files read back, the
 indexer found the artist, the album has a cover, every video but the transport
-stream has a thumbnail, and a video answers a range request.
+stream has a thumbnail, a video answers a range request and, where faces are
+on, the portraits are two people.
 
 It also makes a playlist out of that album, which is not in the bundle and
 could not be: `/playlists/` is a read-only mount over rows the database holds,

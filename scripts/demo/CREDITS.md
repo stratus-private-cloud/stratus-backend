@@ -17,6 +17,24 @@ kept on purpose: it is what the media indexer reads.
 | `Photos/bell-peppers.jpg` | Judgefloro | https://commons.wikimedia.org/wiki/File:1296Green_bell_peppers_slices_Food_ingredients_15.jpg |
 | `Photos/abay-facade.jpg` | Lijingys | https://commons.wikimedia.org/wiki/File:Abay_130_residential_complex_facade_at_Abay_Avenue_130k3_in_Almaty.jpg |
 
+## Portraits — public domain, Wikimedia Commons
+
+`Photos/Portraits/` is there for the faces (#519): two people, each in enough
+photographs to become a person at `/people/` -- three is the least that does.
+Nineteenth-century photographs, so they are in the public domain by age and
+the people in them have been dead for over a century. Resized to 1600 px and
+re-encoded at quality 82, with no EXIF: the scans had none worth keeping.
+
+| file | author | source |
+|---|---|---|
+| `Photos/Portraits/lincoln-1863-august.jpg` | Alexander Gardner | https://commons.wikimedia.org/wiki/File:Abraham_Lincoln_O-73_CDV_by_Gardner,_1863.jpg |
+| `Photos/Portraits/lincoln-1863-august-2.jpg` | Alexander Gardner | https://commons.wikimedia.org/wiki/File:Abraham_Lincoln_O-74_by_A_Gardner,_1863.jpg |
+| `Photos/Portraits/lincoln-1863-november.jpg` | Alexander Gardner | https://commons.wikimedia.org/wiki/File:Abraham_Lincoln_head_on_shoulders_photo_portrait.jpg |
+| `Photos/Portraits/lincoln-1865.jpg` | Alexander Gardner | https://commons.wikimedia.org/wiki/File:Abraham_Lincoln_O-118_by_Gardner,_1865.jpg |
+| `Photos/Portraits/douglass-1840s.jpg` | unknown | https://commons.wikimedia.org/wiki/File:Frederick_Douglass_(1840s).jpg |
+| `Photos/Portraits/douglass-1850s.jpg` | unknown | https://commons.wikimedia.org/wiki/File:Frederick_Douglass,_head-and-shoulders_portrait,_facing_right,_ca_1850-1860.jpg |
+| `Photos/Portraits/douglass-1855.jpg` | unknown (CC0, The Met) | https://commons.wikimedia.org/wiki/File:Frederick_Douglass_MET_DT1144.jpg |
+
 `Music/Kevin MacLeod/Stratus demo/cover.jpg` is a square crop of
 `Photos/bee-on-flower.jpg`, same licence and same author.
 
