@@ -13,9 +13,9 @@
 # **The data is in /dev/shm, a tmpfs**, and that is for its size rather than
 # its speed. The demo is open to anybody, and the smallest volume Fly sells is
 # a gigabyte, nine hundred megabytes of it free for whoever signs in. The
-# kernel sizes this one at half the machine's memory -- about 240 MiB here
-# since the machine went to 512 MB for the search by content, of which the
-# demo media and its thumbnails take some 20 -- and nobody can make it bigger
+# kernel sizes this one at half the machine's memory -- about 100 MiB here,
+# of which the demo media and its thumbnails take some 25 -- and nobody can
+# make it bigger
 # by uploading, since the server answers 507 once it is full.
 #
 # What that costs is that it goes with the machine: a stop, a restart, or Fly
@@ -111,9 +111,11 @@ swap_size_mb = 512
     method = "GET"
     path = "/healthz"
 
-# 512 MB for the search by content's two helpers beside the server (#505).
-# Their weights are mapped from the image's disk and can be dropped, but the
-# server, a decode and the indexer at once left no room on 256.
+# The smallest machine, with the search by content and the faces on. It was
+# 512 MB for them (#505); back on 256 the seeding passed whole, with some
+# 65 MB left and about 70 MB in the swap above -- their weights are mapped
+# from the image's disk, so the kernel can drop them. If it starts being
+# killed, this is the line to put back.
 [[vm]]
   size = "shared-cpu-1x"
-  memory = "512mb"
+  memory = "256mb"
