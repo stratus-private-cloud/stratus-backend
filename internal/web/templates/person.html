@@ -29,8 +29,19 @@
 </div>
 
 <div class="row g-1">
-  {{range .Faces}}{{template "tile" .}}{{end}}
+  {{template "faces" $}}
 </div>
-{{if .More}}<p class="mt-3"><a class="btn btn-sm btn-outline-secondary" href="{{.More}}">More</a></p>{{end}}
+{{end}}
+{{- end}}
+
+{{/* One page of the faces, and the way to the next: a link without
+     JavaScript, and what htmx swaps for the next page as it scrolls in. */}}
+{{define "faces" -}}{{with .People}}
+{{range .Faces}}{{template "tile" .}}{{end}}
+{{if .More}}
+<div class="col-12 text-center py-3" hx-get="{{.More}}" hx-trigger="revealed" hx-swap="outerHTML">
+  <a href="{{.More}}" class="link-secondary small text-decoration-none">More</a>
+</div>
+{{end}}
 {{end}}
 {{- end}}
