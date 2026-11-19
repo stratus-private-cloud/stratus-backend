@@ -2962,8 +2962,17 @@ Restraint here is principle 3, not laziness:
   average, one look-alike linked two people: at 0.45 and 0.5 that mixed 61
   groups where the average mixed 35. It only
   ever fills `person_id IS NULL`, which is what keeps a merge or a name made by
-  hand from being undone by the next round. Removing one wrong face from
-  somebody is not there yet.
+  hand from being undone by the next round.
+
+  **A wrong face is taken out of somebody, and kept out** (#525):
+  `face_exclusions` holds a face and a person it is not, which `AssignFaces`
+  refuses in SQL and `group` skips when it picks the nearest average -- so the
+  face is loose and can still join the second nearest, or seed somebody new.
+  Clearing `person_id` alone would not do, since the next round would put it
+  straight back. A table and not a column, because a face can be taken out of
+  one person and then out of whoever it joins next; it cascades from both
+  keys, so a face found again in new bytes starts clean, and a merge carries
+  `from`'s exclusions to `into`. It costs one read of the table per round.
 
   **Off means deleted**, and that is the loop's promise rather than the
   setting's: `faces.Forget` deletes the pictures and then every face, scan and

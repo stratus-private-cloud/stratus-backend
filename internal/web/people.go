@@ -42,6 +42,7 @@ type People interface {
 	FacesOf(ctx context.Context, f db.File) ([]db.Face, error)
 	Rename(ctx context.Context, person int64, name string) error
 	Merge(ctx context.Context, from, into int64) error
+	Remove(ctx context.Context, person int64, faces []int64) error
 	Crop(ctx context.Context, face int64) (io.ReadCloser, int64, error)
 }
 
@@ -178,7 +179,7 @@ func (h *handler) person(w http.ResponseWriter, r *http.Request, user string, pe
 	}
 	for _, f := range found {
 		if p, ok := paths[f.FileID]; ok {
-			pv.Faces = append(pv.Faces, tile{Href: photoByFileHref(p), Thumb: faceURL(f.ID), Name: p})
+			pv.Faces = append(pv.Faces, tile{Href: photoByFileHref(p), Thumb: faceURL(f.ID), Name: p, Face: f.ID})
 		}
 	}
 
@@ -195,8 +196,8 @@ func (h *handler) person(w http.ResponseWriter, r *http.Request, user string, pe
 	h.render(w, http.StatusOK, pagePerson, view{Title: pv.Name, User: user, Gallery: "People", People: pv})
 }
 
-// changePerson is the two forms on a person's page: a name, and somebody else
-// they are the same as.
+// changePerson is the three forms on a person's page: a name, somebody else
+// they are the same as, and the faces that are not them.
 func (h *handler) changePerson(w http.ResponseWriter, r *http.Request, user string) {
 	ix := h.indexingNow()
 	if !ix.Faces || ix.People == nil {
@@ -230,6 +231,21 @@ func (h *handler) changePerson(w http.ResponseWriter, r *http.Request, user stri
 		}
 		err = ix.People.Merge(r.Context(), person.ID, into.ID)
 		person = into
+	case "remove":
+		var ids []int64
+		for _, v := range r.PostForm["face"] {
+			id, perr := strconv.ParseInt(v, 10, 64)
+			if perr != nil {
+				h.badRequest(w, user, "That is not a face.")
+				return
+			}
+			ids = append(ids, id)
+		}
+		if len(ids) == 0 {
+			h.badRequest(w, user, "Tick the faces that are not this person.")
+			return
+		}
+		err = ix.People.Remove(r.Context(), person.ID, ids)
 	default:
 		h.badRequest(w, user, "Nothing was asked for.")
 		return

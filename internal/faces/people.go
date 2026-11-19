@@ -119,7 +119,20 @@ func (s *Service) Merge(ctx context.Context, from, into int64) error {
 	if from == into {
 		return nil
 	}
-	return s.store.MergePeople(ctx, from, into)
+	return s.store.Tx(ctx, func(r db.Repo) error { return r.MergePeople(ctx, from, into) })
+}
+
+// Remove takes faces out of person for good (#525): the other correction,
+// somebody else's face in their folder. They are loose again, so the next
+// round, which this makes due, can put them with whoever they belong to.
+func (s *Service) Remove(ctx context.Context, person int64, faces []int64) error {
+	if err := s.store.Tx(ctx, func(r db.Repo) error { return r.RemoveFaces(ctx, person, faces) }); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.found += len(faces)
+	s.mu.Unlock()
+	return nil
 }
 
 // Crop is the picture of one face.

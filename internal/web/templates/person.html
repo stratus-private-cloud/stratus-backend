@@ -26,6 +26,11 @@
     </div>
   </form>
   {{end}}
+  <form method="post" id="not-them" class="col-12">
+    <input type="hidden" name="do" value="remove">
+    <button class="btn btn-sm btn-outline-danger" type="submit">Not this person</button>
+    <span class="form-text ms-2">Tick the faces that are somebody else. They are not put with {{.Name}} again.</span>
+  </form>
 </div>
 
 <div class="row g-1">

@@ -1274,8 +1274,10 @@ What it keeps is biometric data about everybody in your photographs, so:
 - **It is strict about who is who.** On a public set of 6,700 faces of 610
   people it mixed two people in one group seven times in 604, and put a
   stranger with somebody once in 250. What it gets wrong the other way —
-  somebody split in two — is what the merge form is for. A face cannot yet be
-  taken out of somebody it was put under by mistake.
+  somebody split in two — is what the merge form is for. A face put under
+  somebody by mistake is ticked on their page and taken out with **Not this
+  person**: it is never put back under them, and the next round can put it
+  with whoever it does belong to.
 - **The models' provenance.** Both are OpenCV's, MIT and Apache 2.0, converted
   but not retrained. OpenCV does not say what SFace was trained on, and the
   paper behind it trained on the usual public face sets, MS-Celeb-1M among them

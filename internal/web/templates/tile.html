@@ -4,7 +4,7 @@
      shared -- the row around it and the way to the next page are each page's
      own. */}}
 {{define "tile" -}}
-<div class="col-4 col-sm-3 col-md-2">
+<div class="col-4 col-sm-3 col-md-2{{if .Face}} position-relative{{end}}">
   {{/* The square is one level in, because `.ratio > *` stretches every direct
        child to the whole box and the badge below is not a picture. */}}
   <a href="{{.Href}}" class="d-block position-relative bg-body-secondary rounded overflow-hidden"
@@ -23,5 +23,10 @@
          a style attribute. */}}
     {{if .Duration}}<span class="position-absolute bottom-0 end-0 m-1 badge text-bg-dark opacity-75">{{.Duration}}</span>{{end}}
   </a>
+  {{/* Beside the link and not in it, since a link holds nothing
+       interactive; it joins the form by name, as the listing's boxes do,
+       because htmx brings later pages of faces in outside it. */}}
+  {{if .Face}}<input class="form-check-input position-absolute top-0 start-0 m-2" type="checkbox" name="face"
+    value="{{.Face}}" form="not-them" aria-label="Not this person: {{.Name}}">{{end}}
 </div>
 {{- end}}

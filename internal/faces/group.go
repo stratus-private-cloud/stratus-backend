@@ -1,6 +1,9 @@
 package faces
 
-import "math"
+import (
+	"math"
+	"slices"
+)
 
 // JoinFloor is the least similarity to somebody's average face a loose face
 // joins them at, and SeedFloor the least two loose faces are linked at to
@@ -14,18 +17,19 @@ import "math"
 // not two. Against the nearest face rather than an average, 0.45 and 0.5
 // mixed 61 groups where the average mixed 35: one look-alike is enough to
 // link two people.
-// Strict on purpose, because merging two groups is a form on a page and
-// pulling a stranger out of one is not yet.
+// Strict on purpose: merging two groups and taking a stranger out of one are
+// both forms on a page, but a stranger also drags the average they are in.
 const (
 	JoinFloor = 0.5
 	SeedFloor = 0.55
 	MinGroup  = 3
 )
 
-// face is one face as grouping sees it.
+// face is one face as grouping sees it, and not is who it was taken out of.
 type face struct {
 	id, person int64
 	v          []float32
+	not        []int64
 }
 
 // grouping is what one round decided: loose faces joining somebody who
@@ -67,6 +71,9 @@ func group(all []face) grouping {
 		}
 		best, at := float32(JoinFloor), int64(0)
 		for _, p := range people {
+			if slices.Contains(f.not, p) {
+				continue
+			}
 			if s := dot(f.v, sums[p]); s >= best {
 				best, at = s, p
 			}

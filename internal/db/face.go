@@ -66,21 +66,32 @@ type Faces interface {
 
 	// AssignFaces puts the faces given that belong to nobody under person.
 	// A face somebody already has is left where it is, which is what keeps a
-	// grouping that runs again from undoing one made by hand.
+	// grouping that runs again from undoing one made by hand, and so is a
+	// face taken out of person (#525).
 	AssignFaces(ctx context.Context, person int64, faces []int64) error
+
+	// RemoveFaces takes the faces given that person has out of them and keeps
+	// them out: they belong to nobody, and no AssignFaces puts them back
+	// under person. A face person does not have is left alone.
+	RemoveFaces(ctx context.Context, person int64, faces []int64) error
+
+	// EachFaceExclusion hands fn every face and a person it was taken out of.
+	EachFaceExclusion(ctx context.Context, fn func(face, person int64) error) error
 
 	// RenamePerson names somebody; an empty name unnames them.
 	RenamePerson(ctx context.Context, id int64, name string) error
 
-	// MergePeople moves every face of from to into and forgets from.
+	// MergePeople moves every face of from to into and forgets from, and a
+	// face kept out of from is kept out of into: they are the same person.
 	MergePeople(ctx context.Context, from, into int64) error
 
 	// DeleteEmptyPeople forgets everybody without a name who has no faces
 	// left, and answers how many.
 	DeleteEmptyPeople(ctx context.Context) (int64, error)
 
-	// ForgetFaces deletes every face, scan and person: what turning faces off
-	// means. The pictures of the faces are the caller's to delete first.
+	// ForgetFaces deletes every face, scan, person and exclusion: what
+	// turning faces off means. The pictures of the faces are the caller's to
+	// delete first.
 	ForgetFaces(ctx context.Context) error
 
 	// FaceCounts says how much of the library model has looked at, for
