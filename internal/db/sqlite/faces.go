@@ -193,15 +193,56 @@ func (r *repo) AssignFaces(ctx context.Context, person int64, faces []int64) err
 	if len(faces) == 0 {
 		return nil
 	}
-	query := `UPDATE faces SET person_id = ? WHERE person_id IS NULL AND id IN (?` +
-		strings.Repeat(", ?", len(faces)-1) + `)`
-	args := make([]any, 0, len(faces)+1)
-	args = append(args, person)
+	query := `UPDATE faces SET person_id = ? WHERE person_id IS NULL
+		AND NOT EXISTS (SELECT 1 FROM face_exclusions x WHERE x.face_id = faces.id AND x.person_id = ?)
+		AND id IN (?` + strings.Repeat(", ?", len(faces)-1) + `)`
+	args := make([]any, 0, len(faces)+2)
+	args = append(args, person, person)
 	for _, id := range faces {
 		args = append(args, id)
 	}
 	if _, err := r.q.ExecContext(ctx, query, args...); err != nil {
 		return fmt.Errorf("assign faces to person %d: %w", person, mapErr(err))
+	}
+	return nil
+}
+
+// RemoveFaces implements db.Faces.
+func (r *repo) RemoveFaces(ctx context.Context, person int64, faces []int64) error {
+	if len(faces) == 0 {
+		return nil
+	}
+	ids := `id IN (?` + strings.Repeat(", ?", len(faces)-1) + `)`
+	args := make([]any, 0, len(faces)+1)
+	args = append(args, person)
+	for _, id := range faces {
+		args = append(args, id)
+	}
+	if _, err := r.q.ExecContext(ctx, `INSERT OR IGNORE INTO face_exclusions (face_id, person_id)
+		SELECT id, person_id FROM faces WHERE person_id = ? AND `+ids, args...); err != nil {
+		return fmt.Errorf("keep faces out of person %d: %w", person, mapErr(err))
+	}
+	if _, err := r.q.ExecContext(ctx, `UPDATE faces SET person_id = NULL WHERE person_id = ? AND `+ids, args...); err != nil {
+		return fmt.Errorf("take faces out of person %d: %w", person, mapErr(err))
+	}
+	return nil
+}
+
+// EachFaceExclusion implements db.Faces.
+func (r *repo) EachFaceExclusion(ctx context.Context, fn func(face, person int64) error) error {
+	type exclusion struct{ face, person int64 }
+	scan := func(rows *sql.Rows) (exclusion, error) {
+		var e exclusion
+		return e, rows.Scan(&e.face, &e.person)
+	}
+	query := `SELECT face_id, person_id FROM face_exclusions ORDER BY face_id, person_id`
+	for e, err := range sqlutil.Seq(ctx, r.q, scan, query) {
+		if err != nil {
+			return fmt.Errorf("read face exclusions: %w", mapErr(err))
+		}
+		if err := fn(e.face, e.person); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -223,6 +264,10 @@ func (r *repo) MergePeople(ctx context.Context, from, into int64) error {
 	if _, err := r.q.ExecContext(ctx, `UPDATE faces SET person_id = ? WHERE person_id = ?`, into, from); err != nil {
 		return fmt.Errorf("merge person %d into %d: %w", from, into, mapErr(err))
 	}
+	// What into already has stays behind, and goes with from below.
+	if _, err := r.q.ExecContext(ctx, `UPDATE OR IGNORE face_exclusions SET person_id = ? WHERE person_id = ?`, into, from); err != nil {
+		return fmt.Errorf("merge person %d into %d: %w", from, into, mapErr(err))
+	}
 	result, err := r.q.ExecContext(ctx, `DELETE FROM people WHERE id = ?`, from)
 	if err != nil {
 		return fmt.Errorf("merge person %d into %d: %w", from, into, mapErr(err))
@@ -242,7 +287,7 @@ func (r *repo) DeleteEmptyPeople(ctx context.Context) (int64, error) {
 
 // ForgetFaces implements db.Faces.
 func (r *repo) ForgetFaces(ctx context.Context) error {
-	for _, table := range []string{"faces", "people", "face_scans"} {
+	for _, table := range []string{"face_exclusions", "faces", "people", "face_scans"} {
 		if _, err := r.q.ExecContext(ctx, `DELETE FROM `+table); err != nil {
 			return fmt.Errorf("forget faces: %w", mapErr(err))
 		}

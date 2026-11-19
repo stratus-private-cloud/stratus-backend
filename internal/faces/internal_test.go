@@ -195,6 +195,22 @@ func TestGroupingJoinsSeedsAndLeavesAlone(t *testing.T) {
 	}
 }
 
+func TestAFaceTakenOutOfSomebodyGoesToTheNextBest(t *testing.T) {
+	all := []face{
+		{id: 1, person: 100, v: unit(0, 0)},
+		{id: 2, person: 200, v: unit(0, 0.3)},
+		{id: 3, v: unit(0, 0.05), not: []int64{100}}, // nearest 100, but not them
+		{id: 4, v: unit(0, 0.05), not: []int64{100, 200}},
+	}
+	g := group(all)
+	if got := g.joins[200]; len(got) != 1 || got[0] != 3 {
+		t.Errorf("joins to 200 = %v, want [3]", got)
+	}
+	if len(g.joins[100]) != 0 {
+		t.Errorf("joins to 100 = %v, want none", g.joins[100])
+	}
+}
+
 func TestNamesAreOneSegmentEach(t *testing.T) {
 	people := []db.Person{{ID: 1, Name: "Ana"}, {ID: 2, Name: "ana"}, {ID: 3, Name: "Bea"}, {ID: 4}}
 	names := Names(people)

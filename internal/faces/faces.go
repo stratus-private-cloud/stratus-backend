@@ -282,15 +282,23 @@ func (s *Service) Group(ctx context.Context) error {
 	s.found = 0
 	s.mu.Unlock()
 
+	excluded := map[int64][]int64{}
+	err := s.store.EachFaceExclusion(ctx, func(face, person int64) error {
+		excluded[face] = append(excluded[face], person)
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("read the faces taken out of people: %w", err)
+	}
 	var all []face
-	err := s.store.EachFace(ctx, s.model, func(f db.Face) error {
-		v, err := embed.Dequantize(f.Vector, Dimensions)
-		if err != nil {
-			slog.WarnContext(ctx, "a stored face does not fit", "face", f.ID, "err", err)
+	err = s.store.EachFace(ctx, s.model, func(f db.Face) error {
+		v, derr := embed.Dequantize(f.Vector, Dimensions)
+		if derr != nil {
+			slog.WarnContext(ctx, "a stored face does not fit", "face", f.ID, "err", derr)
 			return nil
 		}
 		normalize(v)
-		all = append(all, face{id: f.ID, person: f.Person, v: v})
+		all = append(all, face{id: f.ID, person: f.Person, v: v, not: excluded[f.ID]})
 		return nil
 	})
 	if err != nil {

@@ -120,6 +120,9 @@ type tile struct {
 	// library's kind rather than "has a duration": a recording nothing has
 	// read yet has no duration and is still a film.
 	Film bool
+	// Face is the face a person's page shows, which a box beside it can
+	// take out of them; 0 everywhere else.
+	Face int64
 }
 
 // photoView is the viewer's photograph and what is known about it.

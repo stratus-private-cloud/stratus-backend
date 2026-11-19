@@ -3,6 +3,7 @@ package dbtest
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -26,6 +27,9 @@ func RunFaces(t *testing.T, newRepo func(t *testing.T) db.Repo) {
 		{"people are named first and counted by their current faces", facesPeople},
 		{"a person's faces are paged newest photograph first", facesPersonPages},
 		{"merging moves the faces and forgets the person", facesMerge},
+		{"a face taken out of somebody is kept out of them", facesRemove},
+		{"merging keeps a face out of whoever it was kept out of", facesMergeExclusions},
+		{"an exclusion goes with its face and its person", facesExclusionsCascade},
 		{"forgetting deletes every face, scan and person", facesForget},
 		{"the counts are the photographs, the scans and what they found", facesCounted},
 		{"a walk stops at its callback's error", facesFnErrors},
@@ -312,6 +316,124 @@ func facesMerge(t *testing.T, s db.Repo) {
 	}
 }
 
+// exclusions is every face and who it is kept out of, as "face:person".
+func exclusions(t *testing.T, s db.Repo) []string {
+	t.Helper()
+	var out []string
+	err := s.EachFaceExclusion(t.Context(), func(face, person int64) error {
+		out = append(out, fmt.Sprintf("%d:%d", face, person))
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("EachFaceExclusion: %v", err)
+	}
+	return out
+}
+
+func facesRemove(t *testing.T, s db.Repo) {
+	photo := photoAt(t, s, "photo.jpg", time.Now())
+	ana, bea := newPerson(t, s, "Ana"), newPerson(t, s, "Bea")
+	stranger := addFace(t, s, photo, 0.9, ana)
+	kept := addFace(t, s, photo, 0.9, ana)
+	beas := addFace(t, s, photo, 0.9, bea)
+
+	if err := s.RemoveFaces(t.Context(), ana, []int64{stranger.ID, beas.ID}); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[int64]int64{stranger.ID: 0, kept.ID: ana, beas.ID: bea} {
+		if f, err := s.Face(t.Context(), id); err != nil || f.Person != want {
+			t.Errorf("face %d belongs to %d (%v), want %d", id, f.Person, err, want)
+		}
+	}
+	if got, want := exclusions(t, s), []string{fmt.Sprintf("%d:%d", stranger.ID, ana)}; !slices.Equal(got, want) {
+		t.Errorf("exclusions = %v, want %v: Bea's face was never Ana's", got, want)
+	}
+
+	if err := s.AssignFaces(t.Context(), ana, []int64{stranger.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if f, _ := s.Face(t.Context(), stranger.ID); f.Person != 0 {
+		t.Errorf("AssignFaces put a face back under the person it was taken out of: %d", f.Person)
+	}
+	if err := s.AssignFaces(t.Context(), bea, []int64{stranger.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if f, _ := s.Face(t.Context(), stranger.ID); f.Person != bea {
+		t.Errorf("a face taken out of Ana could not join Bea: %d", f.Person)
+	}
+	if err := s.RemoveFaces(t.Context(), bea, []int64{stranger.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if got := exclusions(t, s); len(got) != 2 {
+		t.Errorf("exclusions after a second removal = %v, want one per person", got)
+	}
+	if err := s.RemoveFaces(t.Context(), ana, nil); err != nil {
+		t.Errorf("RemoveFaces of nothing = %v", err)
+	}
+}
+
+func facesMergeExclusions(t *testing.T, s db.Repo) {
+	photo := photoAt(t, s, "photo.jpg", time.Now())
+	from, into := newPerson(t, s, "Ana"), newPerson(t, s, "Ana María")
+	onlyFrom := addFace(t, s, photo, 0.9, from)
+	both := addFace(t, s, photo, 0.9, from)
+	if err := s.RemoveFaces(t.Context(), from, []int64{onlyFrom.ID, both.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AssignFaces(t.Context(), into, []int64{both.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveFaces(t.Context(), into, []int64{both.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.MergePeople(t.Context(), from, into); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{fmt.Sprintf("%d:%d", onlyFrom.ID, into), fmt.Sprintf("%d:%d", both.ID, into)}
+	if got := exclusions(t, s); !slices.Equal(got, want) {
+		t.Errorf("exclusions after a merge = %v, want %v", got, want)
+	}
+}
+
+func facesExclusionsCascade(t *testing.T, s db.Repo) {
+	photo := photoAt(t, s, "photo.jpg", time.Now())
+	scanned(t, s, photo, db.EmbeddingMade, time.Now())
+	ana, bea := newPerson(t, s, ""), newPerson(t, s, "Bea")
+	gone := addFace(t, s, photo, 0.9, bea)
+	unnamed := addFace(t, s, photo, 0.9, ana)
+	if err := s.RemoveFaces(t.Context(), bea, []int64{gone.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveFaces(t.Context(), ana, []int64{unnamed.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	if n, err := s.DeleteEmptyPeople(t.Context()); err != nil || n != 1 {
+		t.Fatalf("DeleteEmptyPeople = %d, %v", n, err)
+	}
+	if got, want := exclusions(t, s), []string{fmt.Sprintf("%d:%d", gone.ID, bea)}; !slices.Equal(got, want) {
+		t.Errorf("exclusions after forgetting an unnamed person = %v, want %v", got, want)
+	}
+	if err := s.DeleteFacesOf(t.Context(), photo.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := exclusions(t, s); len(got) != 0 {
+		t.Errorf("exclusions after the photograph's faces went = %v", got)
+	}
+
+	again := addFace(t, s, photo, 0.9, bea)
+	if err := s.RemoveFaces(t.Context(), bea, []int64{again.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ForgetFaces(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if got := exclusions(t, s); len(got) != 0 {
+		t.Errorf("exclusions after ForgetFaces = %v", got)
+	}
+}
+
 func facesForget(t *testing.T, s db.Repo) {
 	photo := photoAt(t, s, "photo.jpg", time.Now())
 	scanned(t, s, photo, db.EmbeddingMade, time.Now())
@@ -380,6 +502,8 @@ func FacesOnAClosedStore(t *testing.T, store db.Store) {
 		"AssignFaces":       func() error { return store.AssignFaces(ctx, 1, []int64{1}) },
 		"RenamePerson":      func() error { return store.RenamePerson(ctx, 1, "x") },
 		"MergePeople":       func() error { return store.MergePeople(ctx, 1, 2) },
+		"RemoveFaces":       func() error { return store.RemoveFaces(ctx, 1, []int64{1}) },
+		"EachFaceExclusion": func() error { return store.EachFaceExclusion(ctx, func(int64, int64) error { return nil }) },
 		"DeleteEmptyPeople": func() error { _, err := store.DeleteEmptyPeople(ctx); return err },
 		"ForgetFaces":       func() error { return store.ForgetFaces(ctx) },
 		"FaceCounts":        func() error { _, err := store.FaceCounts(ctx, faceModel); return err },
@@ -403,5 +527,13 @@ func facesFnErrors(t *testing.T, s db.Repo) {
 	}
 	if err := s.EachFaceCrop(t.Context(), func(int64, string) error { return stop }); !errors.Is(err, stop) {
 		t.Errorf("EachFaceCrop = %v, want the callback's error", err)
+	}
+	person := newPerson(t, s, "")
+	face := addFace(t, s, photo, 0.9, person)
+	if err := s.RemoveFaces(t.Context(), person, []int64{face.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EachFaceExclusion(t.Context(), func(int64, int64) error { return stop }); !errors.Is(err, stop) {
+		t.Errorf("EachFaceExclusion = %v, want the callback's error", err)
 	}
 }

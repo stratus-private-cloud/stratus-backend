@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -104,6 +105,18 @@ func (p *people) Merge(_ context.Context, from, into int64) error {
 	for i := range p.faces {
 		if p.faces[i].Person == from {
 			p.faces[i].Person = into
+		}
+	}
+	return nil
+}
+
+func (p *people) Remove(_ context.Context, person int64, faces []int64) error {
+	if p.failing == "Remove" {
+		return errBroken
+	}
+	for i := range p.faces {
+		if p.faces[i].Person == person && slices.Contains(faces, p.faces[i].ID) {
+			p.faces[i].Person = 0
 		}
 	}
 	return nil
@@ -219,6 +232,31 @@ func TestAPersonIsNamedAndMerged(t *testing.T) {
 	}
 	if rec := post(t, h, "/people/Nobody", url.Values{"do": {"rename"}, "name": {"x"}}, cookie); rec.Code != http.StatusNotFound {
 		t.Errorf("renaming nobody = %d, want 404", rec.Code)
+	}
+}
+
+func TestAFaceIsTakenOutOfAPerson(t *testing.T) {
+	t.Parallel()
+	p, h, cookie, _ := withFaces(t, true)
+
+	page := get(t, h, "/people/Person%201", cookie).Body.String()
+	has(t, page, `id="not-them"`, `value="10" form="not-them"`, `value="12" form="not-them"`)
+
+	rec := post(t, h, "/people/Person%201", url.Values{"do": {"remove"}, "face": {"10", "11"}}, cookie)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/people/Person%201" {
+		t.Fatalf("remove = %d to %q", rec.Code, rec.Header().Get("Location"))
+	}
+	if p.faces[0].Person != 0 || p.faces[1].Person != 2 || p.faces[2].Person != 1 {
+		t.Errorf("after taking 10 out of Person 1: %+v; 11 is Ana's and stays", p.faces)
+	}
+
+	for _, form := range []url.Values{{"do": {"remove"}}, {"do": {"remove"}, "face": {"ten"}}} {
+		if rec := post(t, h, "/people/Person%201", form, cookie); rec.Code != http.StatusBadRequest {
+			t.Errorf("%v = %d, want 400", form, rec.Code)
+		}
+	}
+	if strings.Contains(get(t, h, "/photos/", cookie).Body.String(), `form="not-them"`) {
+		t.Error("the gallery's tiles carry a box for taking a face out")
 	}
 }
 
@@ -345,6 +383,7 @@ func TestWhatFailsUnderThePeoplePagesIsAnError(t *testing.T) {
 		{"Crop", http.MethodGet, "/face/10", nil},
 		{"People", http.MethodPost, "/people/Ana", url.Values{"do": {"rename"}, "name": {"x"}}},
 		{"Merge", http.MethodPost, "/people/Ana", url.Values{"do": {"merge"}, "into": {"Person 1"}}},
+		{"Remove", http.MethodPost, "/people/Ana", url.Values{"do": {"remove"}, "face": {"11"}}},
 	} {
 		p, h, cookie, _ := withFaces(t, true)
 		p.failing = c.failing

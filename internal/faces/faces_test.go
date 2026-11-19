@@ -291,6 +291,26 @@ func TestFacesAreGroupedNamedMergedAndForgotten(t *testing.T) {
 		t.Errorf("People = %+v, want Ana with four", people)
 	}
 
+	// A face of Ana's taken out of her is loose, a round is due, and the
+	// round does not put it back.
+	page, err := fx.service.PersonFaces(t.Context(), people[0].ID, db.FaceCursor{}, 10)
+	if err != nil || len(page) != 4 {
+		t.Fatalf("PersonFaces = %d, %v", len(page), err)
+	}
+	if err = fx.service.Remove(t.Context(), people[0].ID, []int64{page[0].ID}); err != nil {
+		t.Fatal(err)
+	}
+	if !fx.service.Grouping(true) {
+		t.Error("a face taken out of somebody makes no round due")
+	}
+	if err = fx.service.Group(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	people, _ = fx.service.People(t.Context())
+	if people[0].Faces != 3 {
+		t.Errorf("People after taking a face out = %+v, want Ana with three", people)
+	}
+
 	if err = fx.service.Merge(t.Context(), people[1].ID, people[1].ID); err != nil {
 		t.Errorf("merging somebody into themselves = %v", err)
 	}
@@ -298,11 +318,11 @@ func TestFacesAreGroupedNamedMergedAndForgotten(t *testing.T) {
 		t.Fatal(err)
 	}
 	people, _ = fx.service.People(t.Context())
-	if len(people) != 1 || people[0].Faces != 7 {
-		t.Errorf("People after a merge = %+v, want one of seven", people)
+	if len(people) != 1 || people[0].Faces != 6 {
+		t.Errorf("People after a merge = %+v, want one of six", people)
 	}
-	page, err := fx.service.PersonFaces(t.Context(), people[0].ID, db.FaceCursor{}, 10)
-	if err != nil || len(page) != 7 {
+	page, err = fx.service.PersonFaces(t.Context(), people[0].ID, db.FaceCursor{}, 10)
+	if err != nil || len(page) != 6 {
 		t.Errorf("PersonFaces = %d, %v", len(page), err)
 	}
 
