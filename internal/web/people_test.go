@@ -304,6 +304,14 @@ func TestAPersonsPhotographsArePaged(t *testing.T) {
 		t.Error("the sixty-first is on the first page")
 	}
 	has(t, get(t, h, "/people/Ana?after=1704067201000-101", cookie).Body.String(), "IMG_0000.jpg")
+	more := htmx(t, h, "/people/Ana?after=1704067201000-101", cookie).Body.String()
+	has(t, more, "IMG_0000.jpg")
+	if strings.Contains(more, "<html") || strings.Contains(more, "Merge") {
+		t.Error("the next faces come with the page around them")
+	}
+	if !strings.Contains(body, `hx-trigger="revealed"`) {
+		t.Error("the first page does not ask for the next as it scrolls")
+	}
 	for _, bad := range []string{"12", "x-1", "12-x", "12-0"} {
 		if rec := get(t, h, "/people/Ana?after="+bad, cookie); rec.Code != http.StatusBadRequest {
 			t.Errorf("after=%s = %d, want 400", bad, rec.Code)

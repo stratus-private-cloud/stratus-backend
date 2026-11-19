@@ -29,6 +29,9 @@ const (
 // next ones.
 const personPage = 60
 
+// facesFragment is what htmx asks for when it extends a person's faces.
+const facesFragment = "faces"
+
 // People is the faces as a page uses them.
 type People interface {
 	Counts(ctx context.Context) (db.FaceCounts, error)
@@ -179,6 +182,10 @@ func (h *handler) person(w http.ResponseWriter, r *http.Request, user string, pe
 		}
 	}
 
+	if r.Header.Get("HX-Request") == "true" {
+		h.renderTemplate(w, http.StatusOK, pagePerson, facesFragment, view{People: pv})
+		return
+	}
 	pv.Name, pv.Segment, pv.Unnamed = names[person.ID], names[person.ID], person.Name == ""
 	for _, p := range all {
 		if p.ID != person.ID {
