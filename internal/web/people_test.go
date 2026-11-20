@@ -175,7 +175,7 @@ func TestThePeoplePageShowsEverybodyByTheirName(t *testing.T) {
 	_, h, cookie, _ := withFaces(t, true)
 
 	body := get(t, h, "/people/", cookie).Body.String()
-	has(t, body, `href="/people/Person%201"`, `href="/people/Ana"`, `src="/face/`, `href="/people/">People</a>`)
+	has(t, body, `href="/people/Person%201"`, `href="/people/Ana"`, `src="/people/Ana/?cover"`, `href="/people/">People</a>`)
 
 	page := get(t, h, "/people/Person%201", cookie)
 	if page.Code != http.StatusOK {
@@ -202,6 +202,47 @@ func TestThePeoplePageShowsEverybodyByTheirName(t *testing.T) {
 		if rec := get(t, h, missing, cookie); rec.Code != http.StatusNotFound {
 			t.Errorf("%s = %d, want 404", missing, rec.Code)
 		}
+	}
+}
+
+// TestAPersonsCoverIsTheirFolderAsked: the face a person's tile shows, at
+// their own address, which a WebDAV client reaches with Basic and no cookie.
+func TestAPersonsCoverIsTheirFolderAsked(t *testing.T) {
+	t.Parallel()
+	p, h, _, _ := withFaces(t, true)
+
+	ask := func(target, etag string) *httptest.ResponseRecorder {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, target, nil)
+		req.SetBasicAuth(username, examplePassword)
+		if etag != "" {
+			req.Header.Set("If-None-Match", etag)
+		}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	rec := ask("/people/Ana/?cover=300", "")
+	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/jpeg" || rec.Body.String() != "jpeg" {
+		t.Fatalf("a person's cover = %d %v", rec.Code, rec.Header())
+	}
+	etag := rec.Header().Get("ETag")
+	if strings.Contains(rec.Header().Get("Cache-Control"), "immutable") || etag == "" {
+		t.Errorf("a cover a merge can change is cached as %q with ETag %q", rec.Header().Get("Cache-Control"), etag)
+	}
+	if again := ask("/people/Ana/?cover", etag); again.Code != http.StatusNotModified {
+		t.Errorf("asked again with its ETag = %d, want 304", again.Code)
+	}
+
+	// Ana's faces become Person 1's, whose cover is now another face.
+	if err := p.Merge(t.Context(), 2, 1); err != nil {
+		t.Fatal(err)
+	}
+	if moved := ask("/people/Person%201/?cover", etag); moved.Code != http.StatusOK || moved.Header().Get("ETag") == etag {
+		t.Errorf("a merged person's cover = %d with ETag %q, the old one was %q", moved.Code, moved.Header().Get("ETag"), etag)
+	}
+	if gone := ask("/people/Nobody/?cover", ""); gone.Code != http.StatusNotFound {
+		t.Errorf("the cover of nobody = %d, want 404", gone.Code)
 	}
 }
 

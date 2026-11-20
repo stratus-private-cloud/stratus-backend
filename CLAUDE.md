@@ -2983,7 +2983,12 @@ Restraint here is principle 3, not laziness:
   is shared, `Person <id>` unnamed -- one segment, because `/people/<name>/`
   is a WebDAV collection as well as the page: `faces.Tree` is the people as
   folders of the photographs they are in, named by internal/timeline's rule,
-  and both the mount and the pages resolve through it. It is empty rather
+  and both the mount and the pages resolve through it. **A person's picture
+  is `?cover` on that address**, an album's cover's twin and for its reason
+  -- derived, so not a name in the folder -- which is what lets a WebDAV
+  client draw a person without `/face/<id>`, and what the pages' tiles use
+  too. Not immutable like a face's crop, since a merge changes which face it
+  is; the ETag names the face. It is empty rather
   than gone while faces are off, since the root lists it either way. The models are
   OpenCV Zoo's (see the bundle paragraph above, and the README for what was
   weighed about SFace's training data).

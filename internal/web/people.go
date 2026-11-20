@@ -72,6 +72,8 @@ type peopleView struct {
 
 func personHref(segment string) string { return peoplePrefix + url.PathEscape(segment) }
 
+func personCoverURL(segment string) string { return personHref(segment) + "/?" + coverParam }
+
 func faceURL(id int64) string { return facePrefix + strconv.FormatInt(id, 10) }
 
 // people is the page of everybody, and every person's page under it.
@@ -98,7 +100,7 @@ func (h *handler) people(w http.ResponseWriter, r *http.Request, user string) {
 	if segment == "" {
 		for _, p := range all {
 			pv.People = append(pv.People, personTile{
-				Name: names[p.ID], Href: personHref(names[p.ID]), Thumb: faceURL(p.Cover), Faces: p.Faces,
+				Name: names[p.ID], Href: personHref(names[p.ID]), Thumb: personCoverURL(names[p.ID]), Faces: p.Faces,
 			})
 		}
 		h.render(w, http.StatusOK, pagePeople, view{Title: "People", User: user, Gallery: "People", People: &pv})
@@ -122,6 +124,10 @@ func (h *handler) people(w http.ResponseWriter, r *http.Request, user string) {
 	person, err := faces.Resolve(all, segment)
 	if err != nil {
 		h.notFound(w, r)
+		return
+	}
+	if r.URL.Query().Has(coverParam) {
+		h.personCover(w, r, user, ix.People, person)
 		return
 	}
 	h.person(w, r, user, ix.People, &pv, person, all, names)
@@ -272,7 +278,28 @@ func (h *handler) face(w http.ResponseWriter, r *http.Request, user string) {
 		http.NotFound(w, r)
 		return
 	}
-	body, length, err := ix.People.Crop(r.Context(), id)
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	h.crop(w, r, user, ix.People, id)
+}
+
+// personCover is a person's picture, the face their tiles show, at
+// `?cover` on their own address: the page's to a browser and the folder's to a
+// WebDAV client, which is how a client gets it without an address of ours, as
+// an album's cover is got. Not immutable, because a merge or a face taken out
+// changes which face it is; the ETag is that face, so asking again is a 304.
+func (h *handler) personCover(w http.ResponseWriter, r *http.Request, user string, people People, person db.Person) {
+	etag := `"face-` + strconv.FormatInt(person.Cover, 10) + `"`
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "private, no-cache")
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	h.crop(w, r, user, people, person.Cover)
+}
+
+func (h *handler) crop(w http.ResponseWriter, r *http.Request, user string, people People, id int64) {
+	body, length, err := people.Crop(r.Context(), id)
 	switch {
 	case errors.Is(err, db.ErrNotFound), errors.Is(err, storage.ErrNotFound):
 		http.NotFound(w, r)
@@ -284,7 +311,6 @@ func (h *handler) face(w http.ResponseWriter, r *http.Request, user string) {
 	defer func() { _ = body.Close() }()
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
-	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	_, _ = io.Copy(w, body)
 }
 
