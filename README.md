@@ -981,7 +981,9 @@ What is not there yet, and it is better to know before installing a client:
   setting off is nothing.** `getLyricsBySongId` is the `songLyrics` extension,
   advertised, and answers the words LRCLIB had for the track — the synced form
   with a time on every line, and the plain one — or an empty list. The
-  `getLyrics` of the old API, by artist and title, is not there.
+  `getLyrics` of the old API answers the same words by artist and title,
+  matched whole and ignoring case, as one block of text with no times; it is
+  what Substreamer asks for.
   `getAlbumInfo2` answers the album's MusicBrainz id and nothing else: no
   notes, no images, and no `getArtistInfo2`, because the only source of a
   biography is Wikipedia and that is a second decision.

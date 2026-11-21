@@ -181,3 +181,41 @@ func TestCoverArtOfAnAlbumInAFlatFolderIsItsOwn(t *testing.T) {
 		t.Errorf("the album with no cover of its own = %d %q, want error 70 rather than its neighbour's picture", rec.Code, rec.Body.String())
 	}
 }
+
+// TestGetLyricsByName: the base protocol's call, which is the one Substreamer
+// makes, answered from the same rows.
+func TestGetLyricsByName(t *testing.T) {
+	t.Parallel()
+	l := newLibrary(t)
+	hunter := l.add(t, "music/Homogenic/01 Hunter.flac", song("Björk", "Homogenic", "Hunter", 1))
+	joga := l.add(t, "music/Homogenic/02 Joga.flac", song("Björk", "Homogenic", "Joga", 2))
+	l.add(t, "music/Other/Hunter.flac", song("Somebody Else", "Other", "Hunter", 1))
+	for _, row := range []db.Lyrics{
+		{FileID: hunter.ID, ETag: hunter.ETag, FetchedAt: time.Now(), Plain: "If travel is searching\nAnd home what's been found"},
+		{FileID: joga.ID, ETag: joga.ETag, FetchedAt: time.Now(), Synced: "[ar: Björk]\n[00:20.00] All these accidents\n[00:24.00] That happen"},
+	} {
+		if err := l.meta.PutLyrics(t.Context(), row); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cases := []struct{ artist, title, want string }{
+		{"björk", "hunter", "If travel is searching\nAnd home what's been found"},
+		{"Björk", "Joga", "All these accidents\nThat happen"},
+		{"", "Hunter", "If travel is searching\nAnd home what's been found"},
+		{"Somebody Else", "Hunter", ""},
+		{"Björk", "Hunt", ""},
+		{"Björk", "", ""},
+	}
+	for _, c := range cases {
+		env := mustOK(t, l, "getLyrics", "artist", c.artist, "title", c.title)
+		got, ok := env["lyrics"].(map[string]any)
+		if !ok {
+			t.Errorf("getLyrics(%q, %q): lyrics = %v, want an object", c.artist, c.title, env["lyrics"])
+			continue
+		}
+		if value, _ := got["value"].(string); value != c.want {
+			t.Errorf("getLyrics(%q, %q) = %q, want %q", c.artist, c.title, value, c.want)
+		}
+	}
+}

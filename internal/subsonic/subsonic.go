@@ -127,6 +127,7 @@ func Handler(prefix, serverVersion string, v Verifier, lib Library, tree Tree, l
 	// What outside sources said about the library (#217): the words of a
 	// song, which is the songLyrics extension, and an album's identity.
 	mux.HandleFunc("GET /getLyricsBySongId", h.authed(h.lyricsBySong))
+	mux.HandleFunc("GET /getLyrics", h.authed(h.lyricsByName))
 	mux.HandleFunc("GET /getAlbumInfo2", h.authed(h.albumInfo2))
 
 	// A method this server does not implement gets an envelope with an error,

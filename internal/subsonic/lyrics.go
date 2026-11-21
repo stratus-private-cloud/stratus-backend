@@ -86,6 +86,72 @@ func (h *handler) lyricsBySong(w http.ResponseWriter, r *http.Request, username 
 	h.write(w, r, env)
 }
 
+// lyrics is getLyrics' payload: the base protocol's one block of text, which
+// is what Substreamer asks for even from a server advertising songLyrics.
+type lyrics struct {
+	Artist string `xml:"artist,attr,omitempty" json:"artist,omitempty"`
+	Title  string `xml:"title,attr,omitempty" json:"title,omitempty"`
+	Value  string `xml:",chardata" json:"value"`
+}
+
+// lyricsSearch bounds the tracks read to find the one a name means: a title
+// shared by more songs than this is a title with no one answer anyway.
+const lyricsSearch = 50
+
+// lyricsByName is getLyrics: the words of a song named by its artist and its
+// title, both matched whole and ignoring case. The plain form, or the synced
+// one with its times taken off; nothing known is an empty element, not an
+// error, as it is for getLyricsBySongId.
+func (h *handler) lyricsByName(w http.ResponseWriter, r *http.Request, username string) {
+	q := r.URL.Query()
+	artist, title := strings.TrimSpace(q.Get("artist")), strings.TrimSpace(q.Get("title"))
+	answer := lyrics{}
+	if title != "" {
+		found, err := h.lib.Search(r.Context(), username, db.SearchFilter{Text: title, Tracks: db.Page{Limit: lyricsSearch}})
+		if err != nil {
+			h.fail(w, r, h.internal(r, "search", err))
+			return
+		}
+		var ids []int64
+		var tracks []db.Track
+		for _, t := range found.Tracks {
+			if strings.EqualFold(titleOf(t), title) && (artist == "" ||
+				strings.EqualFold(t.Media.Artist, artist) || strings.EqualFold(t.Media.AlbumArtist, artist)) {
+				ids = append(ids, t.File.ID)
+				tracks = append(tracks, t)
+			}
+		}
+		if len(ids) > 0 {
+			rows, err := h.lib.LyricsOf(r.Context(), ids)
+			if err != nil {
+				h.fail(w, r, h.internal(r, "read lyrics", err))
+				return
+			}
+			for _, t := range tracks {
+				if text := lyricsText(rows[t.File.ID]); text != "" {
+					answer = lyrics{Artist: t.Media.Artist, Title: titleOf(t), Value: text}
+					break
+				}
+			}
+		}
+	}
+	env := h.ok()
+	env.Lyrics = &answer
+	h.write(w, r, env)
+}
+
+func lyricsText(l db.Lyrics) string {
+	if l.Plain != "" {
+		return l.Plain
+	}
+	lines := parseLRC(l.Synced)
+	words := make([]string, 0, len(lines))
+	for _, line := range lines {
+		words = append(words, line.Value)
+	}
+	return strings.Join(words, "\n")
+}
+
 func lyricsOf(t db.Track, lines []lyricLine, synced bool) structuredLyrics {
 	return structuredLyrics{
 		DisplayArtist: t.Media.Artist, DisplayTitle: titleOf(t),
