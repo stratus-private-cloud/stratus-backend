@@ -175,7 +175,7 @@ func TestThePeoplePageShowsEverybodyByTheirName(t *testing.T) {
 	_, h, cookie, _ := withFaces(t, true)
 
 	body := get(t, h, "/people/", cookie).Body.String()
-	has(t, body, `href="/people/Person%201"`, `href="/people/Ana"`, `src="/people/Ana/?cover&amp;face=`, `href="/people/">People</a>`)
+	has(t, body, `href="/people/Person%201"`, `href="/people/Ana"`, `src="/people/Ana/?cover&amp;face=`)
 
 	page := get(t, h, "/people/Person%201", cookie)
 	if page.Code != http.StatusOK {
@@ -310,6 +310,26 @@ func TestAFaceIsTakenOutOfAPerson(t *testing.T) {
 	}
 }
 
+func TestThePhotosPageBeginsWithAFewFaces(t *testing.T) {
+	t.Parallel()
+	_, h, cookie, _ := withFaces(t, true)
+	body := get(t, h, "/photos/", cookie).Body.String()
+	has(t, body, `href="/people/" class="ms-2 small text-nowrap">People</a>`, `src="/people/Ana/?cover&amp;face=`)
+	if ana, other := strings.Index(body, `href="/people/Ana"`), strings.Index(body, `href="/people/Person%201"`); ana < 0 || other < ana {
+		t.Errorf("somebody with a name is not before somebody without one: %d, %d", ana, other)
+	}
+}
+
+func TestPeopleThatCannotBeListedLeaveThePhotosPage(t *testing.T) {
+	t.Parallel()
+	p, h, cookie, _ := withFaces(t, true)
+	p.failing = "People"
+	rec := get(t, h, "/photos/", cookie)
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "rounded-circle") {
+		t.Errorf("photos with people broken = %d, banner shown: %v", rec.Code, strings.Contains(rec.Body.String(), "rounded-circle"))
+	}
+}
+
 func TestThePhotoViewerSaysWhoIsInIt(t *testing.T) {
 	t.Parallel()
 	_, h, cookie, photos := withFaces(t, true)
@@ -326,8 +346,8 @@ func TestFacesOffShowNobody(t *testing.T) {
 
 	body := get(t, h, "/people/", cookie).Body.String()
 	has(t, body, "Faces are off")
-	if strings.Contains(body, `href="/people/">People</a>`) {
-		t.Error("the gallery's menu offers people with faces off")
+	if photos := get(t, h, "/photos/", cookie).Body.String(); strings.Contains(photos, `href="/people/"`) {
+		t.Error("the photos page leads to people with faces off")
 	}
 	for _, target := range []string{"/people/Ana", "/face/10"} {
 		if rec := get(t, h, target, cookie); rec.Code != http.StatusNotFound {

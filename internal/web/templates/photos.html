@@ -1,6 +1,16 @@
 {{define "content" -}}
 {{if .Crumbs}}{{template "crumbs" .}}{{end}}
 <h1 class="h4 mb-3">{{.Title}}</h1>
+{{if .PeopleOn}}{{if .Banner}}
+<div class="d-flex align-items-center gap-2 mb-3 overflow-hidden">
+  {{range .Banner}}
+  <a href="{{.Href}}" class="flex-shrink-0" title="{{.Name}}">
+    <img src="{{.Thumb}}" alt="{{.Name}}" width="64" height="64" class="rounded-circle">
+  </a>
+  {{end}}
+  <a href="/people/" class="ms-2 small text-nowrap">People</a>
+</div>
+{{end}}{{end}}
 {{if .Tiles}}
 <div class="row g-1">
   {{template "tiles" .}}

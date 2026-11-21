@@ -256,8 +256,12 @@ func (h *handler) grid(w http.ResponseWriter, r *http.Request, user string, l li
 			view{Tiles: cells, NextPage: next})
 		return
 	}
+	var banner []personTile
+	if l.kind == db.KindImage && after.AtStart() {
+		banner = h.banner(r.Context())
+	}
 	h.render(w, http.StatusOK, pagePhotos,
-		view{Title: l.title, User: user, Gallery: l.title, Tiles: cells, NextPage: next, Empty: l.empty})
+		view{Title: l.title, User: user, Gallery: l.title, Tiles: cells, NextPage: next, Empty: l.empty, Banner: banner})
 }
 
 // photoYear is the months of one year.
