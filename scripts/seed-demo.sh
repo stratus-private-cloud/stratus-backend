@@ -317,12 +317,20 @@ esac
 # one but the transport stream: .ts is left off that list by name, because it
 # is as often TypeScript as it is a recording. Each is made on first request,
 # so this is the check that the image can decode every codec in the bundle.
+# A 503 is the decoders busy with the passes ahead of it and is asked again
+# (#536); anything else that is not a picture is the answer.
+deadline=$((SECONDS + 150))
 while read -r f; do
 	case "$f" in Video/*.ts) continue ;; Video/*) ;; *) continue ;; esac
-	type="$(curl -s -o /dev/null -w '%{content_type}' -u "$USER:$PASS" "$BASE/thumb/$(encode "$f")?size=96")"
+	while :; do
+		answer="$(curl -s -o /dev/null -w '%{http_code} %{content_type}' -u "$USER:$PASS" "$BASE/thumb/$(encode "$f")?size=96")"
+		case "$answer" in 503\ *) [ $SECONDS -lt $deadline ] && sleep 2 && continue ;; esac
+		break
+	done
+	type="${answer#* }"
 	case "$type" in
 	image/jpeg*) ;;
-	*) die "no thumbnail for $f: the server answered $type" ;;
+	*) die "no thumbnail for $f: the server answered $answer" ;;
 	esac
 done <<<"$files"
 ok "every video but the transport stream has a thumbnail"
