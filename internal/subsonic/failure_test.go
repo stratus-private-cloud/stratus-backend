@@ -309,6 +309,8 @@ func TestABrokenBackendIsNotANotFound(t *testing.T) {
 		{name: "scrobbling", call: "RecordPlay", method: "scrobble", id: theTrack},
 		{name: "reading lyrics", call: "LyricsOf", method: "getLyricsBySongId", id: theTrack},
 		{name: "finding the song whose lyrics are asked for", call: "TrackByFile", method: "getLyricsBySongId", id: theTrack},
+		{name: "searching for the song whose lyrics are asked for by name", call: "Search", method: "getLyrics", extra: []string{"artist", "Björk", "title", "Hunter"}},
+		{name: "reading lyrics asked for by name", call: "LyricsOf", method: "getLyrics", extra: []string{"artist", "Björk", "title", "Hunter"}},
 		{name: "reading an album's identity", call: "AlbumLookup", method: "getAlbumInfo2", extra: []string{"id", albumIDOf("Björk", "Homogenic")}},
 		{name: "finding the album whose identity is asked for", call: "Albums", method: "getAlbumInfo2", extra: []string{"id", albumIDOf("Björk", "Homogenic")}},
 		{name: "listing playlists", call: "Playlists", method: "getPlaylists"},
