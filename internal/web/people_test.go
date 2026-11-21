@@ -330,7 +330,7 @@ func TestThePhotosPageBeginsWithAFewFaces(t *testing.T) {
 	t.Parallel()
 	_, h, cookie, _ := withFaces(t, true)
 	body := get(t, h, "/photos/", cookie).Body.String()
-	has(t, body, `href="/people/" class="ms-2 small text-nowrap">People</a>`, `src="/people/Ana/?cover&amp;face=`)
+	has(t, body, `href="/people/" class="flex-shrink-0 small text-nowrap">People</a>`, `src="/people/Ana/?cover&amp;face=`)
 	if ana, other := strings.Index(body, `href="/people/Ana"`), strings.Index(body, `href="/people/Person%201"`); ana < 0 || other < ana {
 		t.Errorf("somebody with a name is not before somebody without one: %d, %d", ana, other)
 	}
