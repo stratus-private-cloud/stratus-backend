@@ -1262,7 +1262,8 @@ person, who appears at `/people/` once they are in three photographs. A person
 is unnamed until you name them on their page, which also merges two people who
 are the same one; the viewer says who is in a photograph. The same address is
 a folder per person over WebDAV, holding the photographs they are in, so a
-client that mounts the server finds them too. It all runs here and **nothing
+client that mounts the server finds them too; a person's face is `?cover` on
+that folder's address, the way an album's cover is. It all runs here and **nothing
 about a face leaves the machine**.
 
 What it keeps is biometric data about everybody in your photographs, so:
