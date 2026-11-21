@@ -171,8 +171,16 @@ esac
 # what a client does with it too.
 cover="$(tr '<' '\n' <<<"$albums" | grep 'name="Stratus demo"' | sed -n 's/.*coverArt="\([^"]*\)".*/\1/p' | head -1)"
 [ -n "$cover" ] || die "the album carries no coverArt id"
-type="$(curl -s -o /dev/null -w '%{content_type}' \
-	"$BASE/rest/getCoverArt.view?c=seed-demo&u=$(encode "$USER")&t=$TOKEN&s=$SALT&id=$(encode "$cover")&size=300")"
+# Just after a seed the decoders are busy with the passes ahead, and a cover
+# asked for then is a Subsonic error rather than a picture (#536).
+deadline=$((SECONDS + 150))
+type=""
+while [ $SECONDS -lt $deadline ]; do
+	type="$(curl -s -o /dev/null -w '%{content_type}' \
+		"$BASE/rest/getCoverArt.view?c=seed-demo&u=$(encode "$USER")&t=$TOKEN&s=$SALT&id=$(encode "$cover")&size=300")"
+	case "$type" in image/jpeg*) break ;; esac
+	sleep 2
+done
 case "$type" in
 image/jpeg*) ok "getCoverArt answers a JPEG for the album" ;;
 *) die "getCoverArt answered $type" ;;
