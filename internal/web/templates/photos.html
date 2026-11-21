@@ -2,13 +2,17 @@
 {{if .Crumbs}}{{template "crumbs" .}}{{end}}
 <h1 class="h4 mb-3">{{.Title}}</h1>
 {{if .PeopleOn}}{{if .Banner}}
-<div class="d-flex align-items-center gap-2 mb-3 overflow-hidden">
-  {{range .Banner}}
-  <a href="{{.Href}}" class="flex-shrink-0" title="{{.Name}}">
-    <img src="{{.Thumb}}" alt="{{.Name}}" width="64" height="64" class="rounded-circle">
-  </a>
-  {{end}}
-  <a href="/people/" class="ms-2 small text-nowrap">People</a>
+{{/* The faces scroll and the link does not, so a phone narrower than eight
+     faces still shows the way to everybody. */}}
+<div class="d-flex align-items-center gap-2 mb-3">
+  <div class="d-flex gap-2 flex-grow-1 overflow-x-auto">
+    {{range .Banner}}
+    <a href="{{.Href}}" class="flex-shrink-0" title="{{.Name}}">
+      <img src="{{.Thumb}}" alt="{{.Name}}" width="64" height="64" class="rounded-circle">
+    </a>
+    {{end}}
+  </div>
+  <a href="/people/" class="flex-shrink-0 small text-nowrap">People</a>
 </div>
 {{end}}{{end}}
 {{if .Tiles}}
