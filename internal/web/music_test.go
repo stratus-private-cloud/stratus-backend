@@ -304,4 +304,7 @@ func TestAnAlbumHasItsFoldersCover(t *testing.T) {
 	if rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/jpeg" {
 		t.Errorf("the folder's cover = %d %q", rec.Code, rec.Header().Get("Content-Type"))
 	}
+	if got := rec.Header().Get("Cache-Control"); got != "private, max-age=259200" {
+		t.Errorf("the folder's cover is cached as %q, want days and by the browser alone", got)
+	}
 }

@@ -47,6 +47,9 @@ func TestGetCoverArt(t *testing.T) {
 	if got := rec.Header().Get("Content-Length"); got != strconv.Itoa(rec.Body.Len()) {
 		t.Errorf("Content-Length = %q for a body of %d bytes", got, rec.Body.Len())
 	}
+	if got := rec.Header().Get("Cache-Control"); got != "private, max-age=259200" {
+		t.Errorf("Cache-Control = %q, want days and by the client alone", got)
+	}
 
 	// It decodes, and it is the size that was asked for rather than the size it
 	// was stored at.

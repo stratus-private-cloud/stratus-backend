@@ -89,6 +89,9 @@ func (h *handler) coverArt(w http.ResponseWriter, r *http.Request, username stri
 	// cover was stored in.
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
+	// Days in the client and nothing in between: an id names an album or a
+	// track, not the picture, so a cover found later changes under it.
+	w.Header().Set("Cache-Control", "private, max-age=259200")
 	if _, err := io.Copy(w, body); err != nil {
 		slog.WarnContext(r.Context(), "writing cover art", "err", err)
 	}

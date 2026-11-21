@@ -22,6 +22,12 @@ const thumbPrefix = "/thumb/"
 // keeps the two from drifting.
 const listThumb = 96
 
+// pictureCache is how long a browser keeps a picture whose address does not
+// change when it does -- an album's cover, a person's face -- before it asks
+// again: days, since a stale one costs a picture and not a fact. Private, so
+// only the browser keeps it.
+const pictureCache = "private, max-age=259200"
+
 // thumbnail serves a picture of a file, making it on the first ask.
 //
 // The URL carries the file's ETag and the answer is cached for a year: every
@@ -64,7 +70,9 @@ func (h *handler) thumbnail(w http.ResponseWriter, r *http.Request, user string)
 
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	// Private: it is a picture of somebody's photograph, which a browser may
+	// keep and a cache between it and here may not.
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	// Ignored deliberately: the response has started, so a client that hung up
 	// has already been told everything there is to tell it.
 	_, _ = io.Copy(w, body)

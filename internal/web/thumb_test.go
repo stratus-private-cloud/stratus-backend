@@ -49,8 +49,8 @@ func TestThumbnailOfAPhoto(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); got != "image/jpeg" {
 		t.Errorf("Content-Type = %q, want image/jpeg", got)
 	}
-	if got := rec.Header().Get("Cache-Control"); !strings.Contains(got, "immutable") {
-		t.Errorf("Cache-Control = %q, want it cacheable forever: the URL carries the ETag", got)
+	if got := rec.Header().Get("Cache-Control"); got != "private, max-age=31536000, immutable" {
+		t.Errorf("Cache-Control = %q, want it kept forever by the browser alone: the URL carries the ETag", got)
 	}
 	if _, _, err := image.Decode(bytes.NewReader(rec.Body.Bytes())); err != nil {
 		t.Errorf("what came back does not decode as an image: %v", err)
