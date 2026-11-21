@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
@@ -69,8 +71,22 @@ func CleanName(name string) (string, error) {
 	return name, nil
 }
 
+// peopleFor is how long a listing of everybody is answered again. What
+// changes it from outside -- a photograph deleted or overwritten -- moves a
+// count by one, and a few seconds of that is nothing to anybody.
+const peopleFor = 10 * time.Second
+
 // People is everybody with a face, for the pages.
 func (s *Service) People(ctx context.Context) ([]db.Person, error) {
+	s.mu.Lock()
+	if s.listed != nil && time.Since(s.listedAt) < peopleFor {
+		out := slices.Clone(s.listed)
+		s.mu.Unlock()
+		return out, nil
+	}
+	era := s.era
+	s.mu.Unlock()
+
 	all, err := s.store.People(ctx)
 	if err != nil {
 		return nil, err
@@ -81,7 +97,20 @@ func (s *Service) People(ctx context.Context) ([]db.Person, error) {
 			out = append(out, p)
 		}
 	}
+	s.mu.Lock()
+	if s.era == era {
+		s.listed, s.listedAt = slices.Clone(out), time.Now()
+	}
+	s.mu.Unlock()
 	return out, nil
+}
+
+// changed throws away the listing People keeps.
+func (s *Service) changed() {
+	s.mu.Lock()
+	s.listed = nil
+	s.era++
+	s.mu.Unlock()
 }
 
 // PersonFaces is a page of one person's faces.
@@ -110,6 +139,7 @@ func (s *Service) Rename(ctx context.Context, person int64, name string) error {
 	if err != nil {
 		return err
 	}
+	defer s.changed()
 	return s.store.RenamePerson(ctx, person, name)
 }
 
@@ -119,6 +149,7 @@ func (s *Service) Merge(ctx context.Context, from, into int64) error {
 	if from == into {
 		return nil
 	}
+	defer s.changed()
 	return s.store.Tx(ctx, func(r db.Repo) error { return r.MergePeople(ctx, from, into) })
 }
 
@@ -126,6 +157,7 @@ func (s *Service) Merge(ctx context.Context, from, into int64) error {
 // somebody else's face in their folder. They are loose again, so the next
 // round, which this makes due, can put them with whoever they belong to.
 func (s *Service) Remove(ctx context.Context, person int64, faces []int64) error {
+	defer s.changed()
 	if err := s.store.Tx(ctx, func(r db.Repo) error { return r.RemoveFaces(ctx, person, faces) }); err != nil {
 		return err
 	}
