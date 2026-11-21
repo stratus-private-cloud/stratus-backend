@@ -113,9 +113,9 @@ func shuffle(people []db.Person) {
 	rand.Shuffle(len(people), func(i, j int) { people[i], people[j] = people[j], people[i] }) //nolint:gosec // an order to look at, not a secret
 }
 
-// faceParam names the face a page expects a person's cover to be, so the
-// page's address changes when a merge changes the face and can be kept for
-// good; an address without it is kept for days.
+// faceParam names the face a page draws as a person's cover, so the page's
+// address changes when a merge changes the face and can be kept for good; an
+// address without it is kept for days.
 const faceParam = "face"
 
 func faceURL(id int64) string { return facePrefix + strconv.FormatInt(id, 10) }
@@ -134,6 +134,9 @@ func (h *handler) people(w http.ResponseWriter, r *http.Request, user string) {
 		return
 	}
 	pv.State = ix.People.State()
+	if h.namedFace(w, r, user, ix.People, segment) {
+		return
+	}
 
 	all, err := ix.People.People(r.Context())
 	if err != nil {
@@ -336,16 +339,46 @@ func (h *handler) personCover(w http.ResponseWriter, r *http.Request, user strin
 	face := strconv.FormatInt(person.Cover, 10)
 	etag := `"face-` + face + `"`
 	w.Header().Set("ETag", etag)
-	if r.URL.Query().Get(faceParam) == face {
-		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
-	} else {
-		w.Header().Set("Cache-Control", pictureCache)
-	}
+	w.Header().Set("Cache-Control", pictureCache)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
 	h.crop(w, r, user, people, person.Cover)
+}
+
+// namedFace answers a cover whose address names its face, which is every one
+// a page draws, from that face alone: listing everybody to find whose it is
+// cost a page of people a listing per picture. The face's bytes never change,
+// so it is kept for good. Whether it is still the cover is the page's to
+// know; a face that is gone falls back to asking the person.
+func (h *handler) namedFace(w http.ResponseWriter, r *http.Request, user string, people People, segment string) bool {
+	q := r.URL.Query()
+	id, err := strconv.ParseInt(q.Get(faceParam), 10, 64)
+	if !q.Has(coverParam) || err != nil || id <= 0 || segment == "" || strings.Contains(segment, "/") {
+		return false
+	}
+	etag := `"face-` + strconv.FormatInt(id, 10) + `"`
+	if r.Header.Get("If-None-Match") == etag {
+		w.Header().Set("ETag", etag)
+		w.WriteHeader(http.StatusNotModified)
+		return true
+	}
+	body, length, err := people.Crop(r.Context(), id)
+	switch {
+	case errors.Is(err, db.ErrNotFound), errors.Is(err, storage.ErrNotFound):
+		return false
+	case err != nil:
+		h.fail(w, r, user, err)
+		return true
+	}
+	defer func() { _ = body.Close() }()
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
+	_, _ = io.Copy(w, body)
+	return true
 }
 
 func (h *handler) crop(w http.ResponseWriter, r *http.Request, user string, people People, id int64) {

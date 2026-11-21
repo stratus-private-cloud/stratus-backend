@@ -236,9 +236,25 @@ func TestAPersonsCoverIsTheirFolderAsked(t *testing.T) {
 	if got := ask("/people/Ana/?cover&face="+face, "").Header().Get("Cache-Control"); got != "private, max-age=31536000, immutable" {
 		t.Errorf("the cover at the address naming its face is cached as %q", got)
 	}
-	if got := ask("/people/Ana/?cover&face=0", "").Header().Get("Cache-Control"); strings.Contains(got, "immutable") {
-		t.Errorf("the cover at an address naming another face is cached as %q", got)
+	for _, gone := range []string{"0", "999"} {
+		rec := ask("/people/Ana/?cover&face="+gone, "")
+		if got := rec.Header().Get("Cache-Control"); rec.Code != http.StatusOK || strings.Contains(got, "immutable") {
+			t.Errorf("the cover at an address naming face %s = %d, cached as %q", gone, rec.Code, got)
+		}
 	}
+	// Answered from the face alone: a people listing that would fail is not asked.
+	p.failing = "People"
+	if rec := ask("/people/Ana/?cover&face="+face, ""); rec.Code != http.StatusOK || rec.Body.String() != "jpeg" {
+		t.Errorf("a cover naming its face asked for a listing: %d", rec.Code)
+	}
+	if rec := ask("/people/Ana/?cover&face="+face, `"face-`+face+`"`); rec.Code != http.StatusNotModified {
+		t.Errorf("a cover naming its face asked again with its ETag = %d, want 304", rec.Code)
+	}
+	p.failing = "Crop"
+	if rec := ask("/people/Ana/?cover&face="+face, ""); rec.Code != http.StatusInternalServerError {
+		t.Errorf("a face that cannot be read = %d, want 500", rec.Code)
+	}
+	p.failing = ""
 	if again := ask("/people/Ana/?cover", etag); again.Code != http.StatusNotModified {
 		t.Errorf("asked again with its ETag = %d, want 304", again.Code)
 	}
