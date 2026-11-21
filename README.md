@@ -1260,7 +1260,8 @@ like a track in the music library.
 for faces — OpenCV's [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)
 finds them and [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface)
 turns each into 128 numbers — and the faces that look alike are put under one
-person, who appears at `/people/` once they are in three photographs. A person
+person, who appears at `/people/` once they are in three photographs -- a few
+of them, shuffled, at the top of the photos page, which is the way there. A person
 is unnamed until you name them on their page, which also merges two people who
 are the same one; the viewer says who is in a photograph. The same address is
 a folder per person over WebDAV, holding the photographs they are in, so a

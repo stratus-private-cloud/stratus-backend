@@ -5,9 +5,11 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -74,6 +76,41 @@ func personHref(segment string) string { return peoplePrefix + url.PathEscape(se
 
 func personCoverURL(segment string, face int64) string {
 	return personHref(segment) + "/?" + coverParam + "&" + faceParam + "=" + strconv.FormatInt(face, 10)
+}
+
+// bannerPeople is how many faces the top of the photos page shows.
+const bannerPeople = 8
+
+// banner is a few people for the top of the photos page: the named before
+// the rest, each half shuffled so it is not the same faces every visit. A
+// failure is no banner rather than no photos.
+func (h *handler) banner(ctx context.Context) []personTile {
+	ix := h.indexingNow()
+	if !ix.Faces || ix.People == nil {
+		return nil
+	}
+	all, err := ix.People.People(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "listing people for the photos page", "err", err)
+		return nil
+	}
+	named := slices.DeleteFunc(slices.Clone(all), func(p db.Person) bool { return p.Name == "" })
+	unnamed := slices.DeleteFunc(slices.Clone(all), func(p db.Person) bool { return p.Name != "" })
+	shuffle(named)
+	shuffle(unnamed)
+	names := faces.Names(all)
+	var out []personTile
+	for _, p := range append(named, unnamed...) {
+		if len(out) == bannerPeople {
+			break
+		}
+		out = append(out, personTile{Name: names[p.ID], Href: personHref(names[p.ID]), Thumb: personCoverURL(names[p.ID], p.Cover)})
+	}
+	return out
+}
+
+func shuffle(people []db.Person) {
+	rand.Shuffle(len(people), func(i, j int) { people[i], people[j] = people[j], people[i] }) //nolint:gosec // an order to look at, not a secret
 }
 
 // faceParam names the face a page expects a person's cover to be, so the

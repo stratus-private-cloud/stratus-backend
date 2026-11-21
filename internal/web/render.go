@@ -270,9 +270,11 @@ type view struct {
 	Months []crumb
 	Empty  string
 	// People is the people page or one person's (#519), and PeopleOn
-	// whether the gallery's menu offers them: only while faces are on.
+	// whether the photos page leads to them: only while faces are on. Banner
+	// is the few faces it shows on the way.
 	People   *peopleView
 	PeopleOn bool
+	Banner   []personTile
 	// Film is the player page, and PlayerScripts the two scripts it loads
 	// when it needs HLS: hls.js and this project's own that starts it.
 	Film          *filmView
