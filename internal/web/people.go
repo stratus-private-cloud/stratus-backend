@@ -72,7 +72,14 @@ type peopleView struct {
 
 func personHref(segment string) string { return peoplePrefix + url.PathEscape(segment) }
 
-func personCoverURL(segment string) string { return personHref(segment) + "/?" + coverParam }
+func personCoverURL(segment string, face int64) string {
+	return personHref(segment) + "/?" + coverParam + "&" + faceParam + "=" + strconv.FormatInt(face, 10)
+}
+
+// faceParam names the face a page expects a person's cover to be, so the
+// page's address changes when a merge changes the face and can be kept for
+// good; an address without it is kept for days.
+const faceParam = "face"
 
 func faceURL(id int64) string { return facePrefix + strconv.FormatInt(id, 10) }
 
@@ -100,7 +107,7 @@ func (h *handler) people(w http.ResponseWriter, r *http.Request, user string) {
 	if segment == "" {
 		for _, p := range all {
 			pv.People = append(pv.People, personTile{
-				Name: names[p.ID], Href: personHref(names[p.ID]), Thumb: personCoverURL(names[p.ID]), Faces: p.Faces,
+				Name: names[p.ID], Href: personHref(names[p.ID]), Thumb: personCoverURL(names[p.ID], p.Cover), Faces: p.Faces,
 			})
 		}
 		h.render(w, http.StatusOK, pagePeople, view{Title: "People", User: user, Gallery: "People", People: &pv})
@@ -286,11 +293,17 @@ func (h *handler) face(w http.ResponseWriter, r *http.Request, user string) {
 // `?cover` on their own address: the page's to a browser and the folder's to a
 // WebDAV client, which is how a client gets it without an address of ours, as
 // an album's cover is got. Not immutable, because a merge or a face taken out
-// changes which face it is; the ETag is that face, so asking again is a 304.
+// changes which face it is: kept for days, or for good when the address names
+// the face it is; the ETag is that face, so asking again is a 304.
 func (h *handler) personCover(w http.ResponseWriter, r *http.Request, user string, people People, person db.Person) {
-	etag := `"face-` + strconv.FormatInt(person.Cover, 10) + `"`
+	face := strconv.FormatInt(person.Cover, 10)
+	etag := `"face-` + face + `"`
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "private, no-cache")
+	if r.URL.Query().Get(faceParam) == face {
+		w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	} else {
+		w.Header().Set("Cache-Control", pictureCache)
+	}
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return

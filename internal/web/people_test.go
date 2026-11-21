@@ -175,7 +175,7 @@ func TestThePeoplePageShowsEverybodyByTheirName(t *testing.T) {
 	_, h, cookie, _ := withFaces(t, true)
 
 	body := get(t, h, "/people/", cookie).Body.String()
-	has(t, body, `href="/people/Person%201"`, `href="/people/Ana"`, `src="/people/Ana/?cover"`, `href="/people/">People</a>`)
+	has(t, body, `href="/people/Person%201"`, `href="/people/Ana"`, `src="/people/Ana/?cover&amp;face=`, `href="/people/">People</a>`)
 
 	page := get(t, h, "/people/Person%201", cookie)
 	if page.Code != http.StatusOK {
@@ -227,8 +227,17 @@ func TestAPersonsCoverIsTheirFolderAsked(t *testing.T) {
 		t.Fatalf("a person's cover = %d %v", rec.Code, rec.Header())
 	}
 	etag := rec.Header().Get("ETag")
-	if strings.Contains(rec.Header().Get("Cache-Control"), "immutable") || etag == "" {
-		t.Errorf("a cover a merge can change is cached as %q with ETag %q", rec.Header().Get("Cache-Control"), etag)
+	if got := rec.Header().Get("Cache-Control"); got != "private, max-age=259200" || etag == "" {
+		t.Errorf("a cover a merge can change is cached as %q with ETag %q, want days and privately", got, etag)
+	}
+	// The address the page draws names the face, so it is kept for good --
+	// and one naming a face that is no longer the cover is not.
+	face := strings.TrimSuffix(strings.TrimPrefix(etag, `"face-`), `"`)
+	if got := ask("/people/Ana/?cover&face="+face, "").Header().Get("Cache-Control"); got != "private, max-age=31536000, immutable" {
+		t.Errorf("the cover at the address naming its face is cached as %q", got)
+	}
+	if got := ask("/people/Ana/?cover&face=0", "").Header().Get("Cache-Control"); strings.Contains(got, "immutable") {
+		t.Errorf("the cover at an address naming another face is cached as %q", got)
 	}
 	if again := ask("/people/Ana/?cover", etag); again.Code != http.StatusNotModified {
 		t.Errorf("asked again with its ETag = %d, want 304", again.Code)

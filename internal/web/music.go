@@ -326,6 +326,7 @@ func (h *handler) cover(w http.ResponseWriter, r *http.Request, user string, n m
 
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
+	w.Header().Set("Cache-Control", pictureCache)
 	_, _ = io.Copy(w, body)
 }
 
