@@ -2843,7 +2843,8 @@ Restraint here is principle 3, not laziness:
   hangs off the file like `track_annotations`, and carries the etag the words
   were fetched against so a replaced file is asked about again and a
   re-index is not. Both are read by the Subsonic adapter (`getLyricsBySongId`
-  as the `songLyrics` extension, `getAlbumInfo2` with the id and nothing
+  as the `songLyrics` extension and the old `getLyrics` by artist and title,
+  which Substreamer asks for despite the extension, `getAlbumInfo2` with the id and nothing
   else) and by the album page, and written by nothing but the pass.
 - **A photograph is found by what is in it, by a model that runs here**
   (#505). Google's SigLIP 2 base, chosen on a spike over 500 COCO photographs
