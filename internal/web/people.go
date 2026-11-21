@@ -96,8 +96,8 @@ func (h *handler) banner(ctx context.Context) []personTile {
 	}
 	named := slices.DeleteFunc(slices.Clone(all), func(p db.Person) bool { return p.Name == "" })
 	unnamed := slices.DeleteFunc(slices.Clone(all), func(p db.Person) bool { return p.Name != "" })
-	rand.Shuffle(len(named), func(i, j int) { named[i], named[j] = named[j], named[i] }) //nolint:gosec // an order to look at, not a secret
-	rand.Shuffle(len(unnamed), func(i, j int) { unnamed[i], unnamed[j] = unnamed[j], unnamed[i] }) //nolint:gosec // an order to look at, not a secret
+	shuffle(named)
+	shuffle(unnamed)
 	names := faces.Names(all)
 	var out []personTile
 	for _, p := range append(named, unnamed...) {
@@ -107,6 +107,10 @@ func (h *handler) banner(ctx context.Context) []personTile {
 		out = append(out, personTile{Name: names[p.ID], Href: personHref(names[p.ID]), Thumb: personCoverURL(names[p.ID], p.Cover)})
 	}
 	return out
+}
+
+func shuffle(people []db.Person) {
+	rand.Shuffle(len(people), func(i, j int) { people[i], people[j] = people[j], people[i] }) //nolint:gosec // an order to look at, not a secret
 }
 
 // faceParam names the face a page expects a person's cover to be, so the
