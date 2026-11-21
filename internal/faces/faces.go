@@ -91,6 +91,13 @@ type Service struct {
 	// found is how many faces have been found since the last grouping.
 	mu    sync.Mutex
 	found int
+	// listed is the last listing of everybody, kept for peopleFor so a page
+	// of pictures, each asked for by its person's name, is one listing and
+	// not one per picture. Every change made here throws it away; era says
+	// whether one has happened since a listing in flight began.
+	listed   []db.Person
+	listedAt time.Time
+	era      uint64
 }
 
 // New wires the service for the models named model.
@@ -281,6 +288,7 @@ func (s *Service) Group(ctx context.Context) error {
 	s.mu.Lock()
 	s.found = 0
 	s.mu.Unlock()
+	defer s.changed()
 
 	excluded := map[int64][]int64{}
 	err := s.store.EachFaceExclusion(ctx, func(face, person int64) error {

@@ -401,3 +401,50 @@ func TestAStoreThatFailsLeavesNothingHalfDone(t *testing.T) {
 		t.Errorf("Size %d, Model %q, State %q", fx.service.Size(), fx.service.Model(), fx.service.State())
 	}
 }
+
+// counting is a store that says how many times everybody was listed.
+type counting struct {
+	faces.Store
+	listings int
+}
+
+func (c *counting) People(ctx context.Context) ([]db.Person, error) {
+	c.listings++
+	return c.Store.People(ctx)
+}
+
+// TestAPageOfPicturesListsEverybodyOnce: each picture on a page of people is
+// asked for by its person's name, so the listing that resolves it is kept a
+// moment -- and thrown away by anything that changes who is who.
+func TestAPageOfPicturesListsEverybodyOnce(t *testing.T) {
+	fx := newFixture(t)
+	for _, name := range []string{"a1.jpg", "a2.jpg", "a3.jpg"} {
+		fx.read(t, fx.photo(t, name, red))
+	}
+	store := &counting{Store: fx.store}
+	s := faces.New(store, fx.blobs, fx.pictures, fx.models, "fake-1")
+	if err := s.Group(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	for range 20 {
+		if people, err := s.People(t.Context()); err != nil || len(people) != 1 {
+			t.Fatalf("People = %+v, %v", people, err)
+		}
+	}
+	if store.listings != 1 {
+		t.Errorf("twenty pictures listed everybody %d times, want once", store.listings)
+	}
+
+	people, _ := s.People(t.Context())
+	people[0].Name = "changed by a caller"
+	if again, _ := s.People(t.Context()); again[0].Name != "" {
+		t.Error("a caller's change reached the kept listing")
+	}
+
+	if err := s.Rename(t.Context(), people[0].ID, "Ana"); err != nil {
+		t.Fatal(err)
+	}
+	if renamed, _ := s.People(t.Context()); renamed[0].Name != "Ana" || store.listings != 2 {
+		t.Errorf("after a rename People = %+v in %d listings, want Ana in two", renamed, store.listings)
+	}
+}
