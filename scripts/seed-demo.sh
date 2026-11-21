@@ -161,7 +161,15 @@ case "$artists" in
 *) die "getArtists never showed the artist; the indexer may be off or still working" ;;
 esac
 
-albums="$(rest getAlbumList2 "type=alphabeticalByName")"
+# The artist is there once one track is read, which is not the same moment as
+# the album list having it, so that is waited for too.
+deadline=$((SECONDS + 150))
+albums=""
+while [ $SECONDS -lt $deadline ]; do
+	albums="$(rest getAlbumList2 "type=alphabeticalByName")"
+	case "$albums" in *"Stratus demo"*) break ;; esac
+	sleep 2
+done
 case "$albums" in
 *"Stratus demo"*) ok "getAlbumList2 has the album" ;;
 *) die "getAlbumList2 does not list the album" ;;
