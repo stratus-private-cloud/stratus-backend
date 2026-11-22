@@ -653,7 +653,7 @@ func (r *repo) Artists(ctx context.Context, owner string) ([]db.Artist, error) {
 // would show a user two numbers for one album, and nobody would find out why.
 const (
 	albumSelect = `SELECT m.album_artist, m.album, COUNT(*), COALESCE(SUM(m.duration_ms), 0),
-			MAX(m.year), MAX(m.genre), MIN(f.mtime)
+			MAX(m.year), MAX(m.genre), MIN(f.mtime), MIN(f.id)
 		FROM media m JOIN files f ON f.id = m.file_id`
 	albumGroup = ` GROUP BY m.album_artist, m.album`
 )
@@ -889,7 +889,7 @@ const (
 		  AND m.album_artist <> '' AND m.album <> ''`
 
 	indexedAlbums = `SELECT m.album_artist, m.album, COUNT(*), COALESCE(SUM(m.duration_ms), 0),
-			MAX(m.year), MAX(m.genre), MIN(f.mtime)
+			MAX(m.year), MAX(m.genre), MIN(f.mtime), MIN(f.id)
 		FROM media_fts
 		CROSS JOIN media m ON m.file_id = media_fts.rowid
 		CROSS JOIN files f ON f.id = m.file_id
@@ -1291,7 +1291,7 @@ func (r *repo) Find(ctx context.Context, owner string, f db.FindFilter) (db.Find
 
 	albums, albumArgs := foundIn(indexed, "search_album", term,
 		`SELECT m.album_artist, m.album, COUNT(*), COALESCE(SUM(m.duration_ms), 0),
-			MAX(m.year), MAX(m.genre), MIN(f.mtime)`)
+			MAX(m.year), MAX(m.genre), MIN(f.mtime), MIN(f.id)`)
 	albums += `
 		  AND m.album <> '' AND (m.album_artist, m.album) > (?, ?)` + scope + albumGroup + `
 		ORDER BY m.album_artist, m.album LIMIT ?`

@@ -155,7 +155,7 @@ func ScanMediaState(s Scanner, t Times) (int64, db.MediaState, error) {
 // earliest arrival.
 func ScanAlbum(s Scanner, t Times) (db.Album, error) {
 	var a db.Album
-	if err := s.Scan(&a.Artist, &a.Name, &a.SongCount, &a.DurationMS, &a.Year, &a.Genre, t.Dest(&a.Created)); err != nil {
+	if err := s.Scan(&a.Artist, &a.Name, &a.SongCount, &a.DurationMS, &a.Year, &a.Genre, t.Dest(&a.Created), &a.Track); err != nil {
 		return db.Album{}, err
 	}
 	return a, nil

@@ -39,6 +39,10 @@ type Album struct {
 	// Created is when the earliest of its tracks arrived, which is the "added
 	// to the library" date a client sorts by.
 	Created time.Time
+	// Track is the file id of one of its tracks, the lowest, so that a page
+	// can name the album's cover by it instead of resolving the album again
+	// for every picture (#556).
+	Track int64
 }
 
 // Track is a file and its metadata together, which is the only shape that can

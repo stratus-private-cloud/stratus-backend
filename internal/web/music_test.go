@@ -85,7 +85,7 @@ func TestAnAlbumCanBeOpenedAndPlayed(t *testing.T) {
 	}
 
 	artist := get(t, h, "/music/AC_DC/", cookie).Body.String()
-	for _, want := range []string{`href="/music/AC_DC/High%20Voltage/"`, `src="/music/AC_DC/High%20Voltage/?cover=300"`, "1976"} {
+	for _, want := range []string{`href="/music/AC_DC/High%20Voltage/"`, `src="/music/AC_DC/High%20Voltage/?cover=300&amp;file=` + strconv.FormatInt(one.ID, 10) + `"`, "1976"} {
 		if !strings.Contains(artist, want) {
 			t.Errorf("the artist page has no %q:\n%s", want, artist)
 		}
@@ -131,7 +131,7 @@ func TestThePlayerBarWalksTheAlbum(t *testing.T) {
 		`<div id="player"`, `src="/music/AC_DC/High%20Voltage/01.flac"`, "autoplay", "It's a Long Way",
 		`hx-get="/music/AC_DC/High%20Voltage/?track=2" hx-trigger="ended"`,
 		`hx-get="/rest/scrobble?c=stratus-web&id=tr-` + strconv.FormatInt(one.ID, 10) + `&submission=true" hx-trigger="ended from:previous audio"`,
-		`src="/music/AC_DC/High%20Voltage/?cover=300"`, `href="/music/AC_DC/High%20Voltage/"`, `aria-label="Next"`,
+		`src="/music/AC_DC/High%20Voltage/?cover=300&file=` + strconv.FormatInt(one.ID, 10) + `"`, `href="/music/AC_DC/High%20Voltage/"`, `aria-label="Next"`,
 	} {
 		if !strings.Contains(first, want) {
 			t.Errorf("the first bar has no %q:\n%s", want, first)
@@ -306,5 +306,57 @@ func TestAnAlbumHasItsFoldersCover(t *testing.T) {
 	}
 	if got := rec.Header().Get("Cache-Control"); got != "private, max-age=259200" {
 		t.Errorf("the folder's cover is cached as %q, want days and by the browser alone", got)
+	}
+}
+
+// TestACoverNamedByItsTrackDoesNotListTheLibrary is #556: every cover on an
+// artist's page resolved its album from the address, which lists every artist
+// there is -- with Artists broken, that cover still answers.
+func TestACoverNamedByItsTrackDoesNotListTheLibrary(t *testing.T) {
+	t.Parallel()
+	blobs, meta := backends(t)
+	s := files.New(blobs, meta)
+	one, _ := homework(t, s, meta)
+	write(t, s, "cover.jpg", photoJPEG(t))
+
+	broken := dbtest.FailOn(t, meta, "Artists")
+	creds := credentials()
+	h := web.Handler(web.Deps{
+		Version:   version,
+		BuildDate: buildDate,
+		Verifier:  creds,
+		Sessions:  auth.NewSessions(creds, auth.DefaultSessionTTL),
+		Shares:    auth.NewShares(creds),
+		Files:     s,
+		Thumbs:    thumb.New(blobs, s, meta, "ffmpeg", t.TempDir()),
+		Index:     broken,
+		Playlists: playlistsOf(broken),
+		Indexing:  indexing(meta),
+		Playback:  web.Playback{},
+	})
+	cookie := signIn(t, h)
+
+	target := "/music/AC_DC/High%20Voltage/?cover=96&file=" + strconv.FormatInt(one.ID, 10)
+	if rec := get(t, h, target, cookie); rec.Code != http.StatusOK || rec.Header().Get("Content-Type") != "image/jpeg" {
+		t.Errorf("a cover named by its track with Artists broken = %d %q", rec.Code, rec.Header().Get("Content-Type"))
+	}
+	// A track that is not there is the address asked the long way, which is
+	// the one that needs the artists.
+	if rec := get(t, h, "/music/AC_DC/High%20Voltage/?cover=96&file=999", cookie); rec.Code != http.StatusInternalServerError {
+		t.Errorf("a cover naming no track = %d, want the long way (and its failure)", rec.Code)
+	}
+}
+
+// TestNoCoverIsKeptAnHour: half a library has none, and a page of them was
+// asked again on every visit; an hour lets one fetched since show up.
+func TestNoCoverIsKeptAnHour(t *testing.T) {
+	t.Parallel()
+	h, s, meta := browserOver(t)
+	cookie := signIn(t, h)
+	addTrack(t, s, meta, "Bare.flac", db.Media{AlbumArtist: "Nobody", Album: "Bare", Title: "One"})
+
+	rec := get(t, h, "/music/Nobody/Bare/?cover=96", cookie)
+	if rec.Code != http.StatusNotFound || rec.Header().Get("Cache-Control") != "private, max-age=3600" {
+		t.Errorf("an album with no picture = %d, cached as %q", rec.Code, rec.Header().Get("Cache-Control"))
 	}
 }
