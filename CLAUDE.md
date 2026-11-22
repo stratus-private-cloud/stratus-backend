@@ -820,8 +820,8 @@ Hard constraints, in the same spirit as the rest of the project:
   **People are a third, the same way** (#526): everybody named at
   `/people/`, matched by name with the same words, shown above the rest and
   only when there is somebody -- faces are opt-in, and nobody unnamed, since
-  "Person 3" is a placeholder. All of them and no narrowed page: a library
-  has a few hundred people at most.
+  "Person 3" is a placeholder. Twenty and a link to the rest, as the other
+  two.
 - **What the indexer found is a page of its own, `/info/<path>`** (#249): the
   file row's half -- type, size, modified, validator -- and the extracted half
   by kind, each field dropped when it is unknown rather than printed as a zero,

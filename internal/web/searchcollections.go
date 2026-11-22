@@ -128,8 +128,7 @@ func (h *handler) findEvents(ctx context.Context, user, term string) []foundEven
 
 // findPeople is everybody named at /people/ whose name holds the term, by
 // name (#526): nothing with faces off, and nobody unnamed, since "Person 3"
-// is a placeholder and not something anybody types. A few hundred people at
-// most, so all of them rather than a first page.
+// is a placeholder and not something anybody types.
 func (h *handler) findPeople(ctx context.Context, term string) []personTile {
 	ix := h.indexingNow()
 	if !ix.Faces || ix.People == nil {

@@ -200,6 +200,7 @@ type view struct {
 	// when there is somebody: faces are opt-in, and a line saying nobody is
 	// called that already belongs to the contacts.
 	FoundPeople      []personTile
+	MorePeople       string
 	FoundContacts    []foundContact
 	MoreEvents       string
 	MoreContacts     string

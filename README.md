@@ -1186,8 +1186,9 @@ link under them opens all of them; a repeating event is one line, not one per
 time it happens.
 
 **And, with faces on, a person by their name**: everybody named at `/people/`
-whose name has the words, above the rest and leading to their page. Nobody
-unnamed, and nothing at all with faces off.
+whose name has the words, above the rest and leading to their page, twenty
+beside the rest like events and contacts. Nobody unnamed, and nothing at all
+with faces off.
 
 Each part shows fifty at a time and offers the rest, which opens that part on
 its own: `/search?q=sunset&in=files`. What is not in it yet is a place: a
