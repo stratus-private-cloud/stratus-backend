@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"path"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // versionTable is the only piece of SQL shared by the drivers. It is portable
@@ -92,9 +94,14 @@ func Migrate(ctx context.Context, sqlDB *sql.DB, dir fs.FS, lock MigrationLocker
 		if m.Version <= current {
 			continue
 		}
+		// Logged on the way in as well as out: a migration over a large table
+		// is a server that does not listen yet, and this is the only sign of why.
+		slog.Info("applying migration", "version", m.Version, "name", m.Name)
+		began := time.Now()
 		if err := apply(ctx, sqlDB, m); err != nil {
 			return err
 		}
+		slog.Info("migration applied", "version", m.Version, "took", time.Since(began).Round(time.Millisecond))
 	}
 	return nil
 }

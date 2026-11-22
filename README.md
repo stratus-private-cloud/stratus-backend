@@ -1744,6 +1744,12 @@ and MySQL the first takes the engine's own lock and the second waits its turn
 rather than failing to start. That is for the seconds a rolling deploy overlaps
 two containers, which is the only time this server is two processes.
 
+**A migration has no time limit.** One that rewrites a large table can take
+minutes, during which the server does not listen yet and a health check fails;
+the log says `applying migration` with its number when it starts and how long
+it took when it ends, so a slow start is visible as one. Every other startup
+step that waits on the network gives up after 30 seconds.
+
 **It runs as one instance, by design.** One user does not need a second, and
 several things here are written in the knowledge that there is not one: locks
 live in memory, the login throttle counts per process, the indexer and the

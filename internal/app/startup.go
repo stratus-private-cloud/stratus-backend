@@ -46,10 +46,17 @@ const probeFile = ".stratus-write-probe"
 // on every backend, and it never survives startup.
 const probeKey = "stratus-write-probe"
 
-// startupTimeout bounds opening and probing the blob store. An S3 endpoint that
-// accepts a connection and then says nothing would otherwise hang the process
-// before it ever listens, which looks identical to a hung container.
-const startupTimeout = 30 * time.Second
+// startupTimeout bounds each step of startup that waits on the network --
+// opening and probing the blob store, opening the database, reading the
+// settings -- one step at a time. An S3 endpoint that accepts a connection and
+// then says nothing would otherwise hang the process before it ever listens,
+// which looks identical to a hung container.
+//
+// Migrating is not one of them (#567): a migration that rewrites a large table
+// takes as long as it takes, and one cut off at a deadline fails at every start
+// -- on MySQL, where DDL is not transactional, half applied. A variable so a
+// test can make it shorter than a migration.
+var startupTimeout = 30 * time.Second
 
 // open runs every startup check and returns the backends they proved usable.
 //
@@ -72,31 +79,19 @@ func (a *App) open(ctx context.Context) (deps Deps, err error) {
 		return deps, err
 	}
 
-	startupCtx, cancel := context.WithTimeout(ctx, startupTimeout)
-	defer cancel()
-
-	if deps.Storage, err = openStorage(startupCtx, a.cfg.Storage); err != nil {
-		return deps, err
-	}
-	if err = probeStorage(startupCtx, deps.Storage); err != nil {
+	if err = step(ctx, func(ctx context.Context) (err error) {
+		if deps.Storage, err = openStorage(ctx, a.cfg.Storage); err != nil {
+			return err
+		}
+		return probeStorage(ctx, deps.Storage)
+	}); err != nil {
 		return deps, err
 	}
 	slog.Info("storage ready", "scheme", a.cfg.Storage.Scheme, "dsn", a.cfg.Storage)
 
-	if deps.Database, err = openDatabase(startupCtx, a.cfg.Database); err != nil {
+	deps.Database, deps.Settings, err = a.openMetadata(ctx, openDatabase)
+	if err != nil {
 		return deps, err
-	}
-	// Migrating is also the write probe: a database user that cannot create a
-	// table fails here rather than on the first upload.
-	if err = deps.Database.Migrate(startupCtx); err != nil {
-		return deps, fmt.Errorf("migrate the database: %w", err)
-	}
-	slog.Info("database ready", "scheme", a.cfg.Database.Scheme, "dsn", a.cfg.Database)
-
-	// What the web UI stored, under whatever the environment fixed (#397).
-	// Read before anything else is built, since what is built next reads it.
-	if deps.Settings, err = settings.New(startupCtx, func(key string) string { return a.cfg.Fixed[key] }, deps.Database); err != nil {
-		return deps, fmt.Errorf("read the settings: %w", err)
 	}
 	if a.level != nil {
 		a.level.Set(deps.Settings.Values().LogLevel)
@@ -201,6 +196,43 @@ func (a *App) open(ctx context.Context) (deps Deps, err error) {
 	}
 
 	return deps, nil
+}
+
+// step runs one startup step under its own startupTimeout.
+func step(ctx context.Context, fn func(context.Context) error) error {
+	ctx, cancel := context.WithTimeout(ctx, startupTimeout)
+	defer cancel()
+	return fn(ctx)
+}
+
+// openMetadata opens and migrates the database and reads the settings from
+// it. The store comes back even when a later half fails, so the caller can
+// close it.
+func (a *App) openMetadata(ctx context.Context, open func(context.Context, config.DatabaseDSN) (db.Store, error)) (store db.Store, set *settings.Service, err error) {
+	if err = step(ctx, func(ctx context.Context) (err error) {
+		store, err = open(ctx, a.cfg.Database)
+		return err
+	}); err != nil {
+		return store, nil, err
+	}
+	// Migrating is also the write probe: a database user that cannot create a
+	// table fails here rather than on the first upload. Under the process's
+	// context and no deadline, so a SIGTERM still stops it (#567).
+	if err = store.Migrate(ctx); err != nil {
+		return store, nil, fmt.Errorf("migrate the database: %w", err)
+	}
+	slog.Info("database ready", "scheme", a.cfg.Database.Scheme, "dsn", a.cfg.Database)
+
+	// What the web UI stored, under whatever the environment fixed (#397).
+	// Read before anything else is built, since what is built next reads it.
+	err = step(ctx, func(ctx context.Context) (err error) {
+		set, err = settings.New(ctx, func(key string) string { return a.cfg.Fixed[key] }, store)
+		return err
+	})
+	if err != nil {
+		return store, nil, fmt.Errorf("read the settings: %w", err)
+	}
+	return store, set, nil
 }
 
 // credentials is the single user, as configured. It is built here rather than
