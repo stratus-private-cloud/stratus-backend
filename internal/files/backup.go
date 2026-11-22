@@ -171,27 +171,13 @@ func (s *Service) BackUp(ctx context.Context, owner, dir, scratch string, now ti
 // back, and every one written before backups were files. One that is in the
 // trash is somebody's decision and stays there.
 func (s *Service) AdoptBackups(ctx context.Context, owner, dir string) (int, error) {
-	claimed := make(map[string]struct{})
-	for key, err := range s.meta.BlobKeys(ctx) {
-		if err != nil {
-			return 0, fmt.Errorf("read the referenced keys: %w", err)
-		}
-		claimed[key] = struct{}{}
-	}
-	for key, err := range s.meta.TrashKeys(ctx) {
-		if err != nil {
-			return 0, fmt.Errorf("read the trashed keys: %w", err)
-		}
-		claimed[key] = struct{}{}
-	}
-
+	// The listing first and the database asked about what it found (#566):
+	// a handful of keys, where reading every key either table holds was the
+	// whole library at every start of a machine that stops when idle.
 	var rows []db.File
 	for info, err := range s.blobs.List(ctx, BackupPrefix) {
 		if err != nil {
 			return 0, fmt.Errorf("list the backups: %w", err)
-		}
-		if _, ok := claimed[info.Key]; ok {
-			continue
 		}
 		if _, ok := backupTime(info.Key); !ok {
 			continue
@@ -201,6 +187,26 @@ func (s *Service) AdoptBackups(ctx context.Context, owner, dir string) (int, err
 			Size: info.Size, MTime: info.ModTime, MIMEType: backupType,
 		})
 	}
+	claimed := map[string]struct{}{}
+	for start := 0; start < len(rows); start += heldChunk {
+		end := min(start+heldChunk, len(rows))
+		keys := make([]string, 0, end-start)
+		for _, row := range rows[start:end] {
+			keys = append(keys, row.BlobKey)
+		}
+		held, err := s.meta.HeldKeys(ctx, keys)
+		if err != nil {
+			return 0, fmt.Errorf("read the referenced keys: %w", err)
+		}
+		trashed, err := s.meta.HeldInTrash(ctx, keys)
+		if err != nil {
+			return 0, fmt.Errorf("read the trashed keys: %w", err)
+		}
+		for _, key := range slices.Concat(held, trashed) {
+			claimed[key] = struct{}{}
+		}
+	}
+	rows = slices.DeleteFunc(rows, func(f db.File) bool { _, ok := claimed[f.BlobKey]; return ok })
 	if len(rows) == 0 {
 		return 0, nil
 	}

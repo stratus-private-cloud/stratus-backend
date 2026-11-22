@@ -71,9 +71,16 @@ type Index struct {
 // is a bundle and a table that disagree.
 var ErrDimension = errors.New("embed: a vector of another dimension")
 
-// NewIndex is an empty index for vectors of dim dimensions.
-func NewIndex(dim int) *Index {
-	return &Index{dim: dim, pos: map[int64]int{}}
+// NewIndex is an empty index for vectors of dim dimensions, with room for
+// size of them before it grows: built by append, the last growth held the
+// old array and one twice its size at once, about 150 MB at a hundred
+// thousand photographs (#566).
+func NewIndex(dim, size int) *Index {
+	size = max(size, 0)
+	return &Index{
+		dim: dim, pos: make(map[int64]int, size),
+		ids: make([]int64, 0, size), scales: make([]float32, 0, size), values: make([]int8, 0, size*dim),
+	}
 }
 
 // Put adds a stored vector, or replaces the one the file had.

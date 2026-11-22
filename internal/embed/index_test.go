@@ -32,7 +32,7 @@ func dot(a, b []float32) float32 {
 
 func TestAStoredVectorScoresAsTheFloatsDo(t *testing.T) {
 	r := rand.New(rand.NewPCG(1, 2))
-	x := embed.NewIndex(768)
+	x := embed.NewIndex(768, 0)
 	q := unit(r, 768)
 	for id := range int64(50) {
 		v := unit(r, 768)
@@ -51,7 +51,7 @@ func TestAStoredVectorScoresAsTheFloatsDo(t *testing.T) {
 }
 
 func TestSearchIsClosestFirstAboveTheFloor(t *testing.T) {
-	x := embed.NewIndex(2)
+	x := embed.NewIndex(2, 0)
 	for id, v := range map[int64][]float32{1: {1, 0}, 2: {0.6, 0.8}, 3: {0, 1}, 4: {-1, 0}} {
 		if err := x.Put(id, embed.Quantize(v)); err != nil {
 			t.Fatal(err)
@@ -67,7 +67,7 @@ func TestSearchIsClosestFirstAboveTheFloor(t *testing.T) {
 }
 
 func TestPutReplacesAndRemoveForgets(t *testing.T) {
-	x := embed.NewIndex(2)
+	x := embed.NewIndex(2, 0)
 	for id, v := range map[int64][]float32{1: {1, 0}, 2: {0, 1}, 3: {-1, 0}} {
 		if err := x.Put(id, embed.Quantize(v)); err != nil {
 			t.Fatal(err)
@@ -91,7 +91,7 @@ func TestPutReplacesAndRemoveForgets(t *testing.T) {
 }
 
 func TestAVectorOfAnotherSizeIsRefused(t *testing.T) {
-	x := embed.NewIndex(768)
+	x := embed.NewIndex(768, 0)
 	if err := x.Put(1, embed.Quantize(make([]float32, 512))); !errors.Is(err, embed.ErrDimension) {
 		t.Errorf("Put = %v, want ErrDimension", err)
 	}
@@ -99,7 +99,7 @@ func TestAVectorOfAnotherSizeIsRefused(t *testing.T) {
 
 func BenchmarkSearch50k(b *testing.B) {
 	r := rand.New(rand.NewPCG(3, 4))
-	x := embed.NewIndex(768)
+	x := embed.NewIndex(768, 0)
 	for id := range int64(50_000) {
 		_ = x.Put(id, embed.Quantize(unit(r, 768)))
 	}
@@ -111,7 +111,7 @@ func BenchmarkSearch50k(b *testing.B) {
 }
 
 func TestAVectorComesBackAsItWasStored(t *testing.T) {
-	x := embed.NewIndex(3)
+	x := embed.NewIndex(3, 0)
 	if _, ok := x.Vector(1); ok {
 		t.Fatal("a vector for a file with none")
 	}

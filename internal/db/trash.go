@@ -95,6 +95,12 @@ type Trash interface {
 	// trash.
 	TrashKeys(ctx context.Context) iter.Seq2[string, error]
 
+	// HeldInTrash is which of keys a trash row names, HeldKeys' twin: for a
+	// caller that has a handful of keys to test rather than the whole trash
+	// to read (#566). The caller keeps the list short enough for one
+	// statement.
+	HeldInTrash(ctx context.Context, keys []string) ([]string, error)
+
 	// ExpiredTrash yields everything deleted before a time, for the pass that
 	// empties it. Not scoped to an owner either, and ordered oldest first so a
 	// pass that stops halfway has made progress.

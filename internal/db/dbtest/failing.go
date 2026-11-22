@@ -35,7 +35,7 @@ var ErrInjected = errors.New("dbtest: injected failure")
 // test asking for one would silently never fail.
 var repoMethods = []string{
 	"PutFile", "CreateDir", "FileByPath", "ListFiles", "FilesNamed", "ListFilesPage", "MoveFile", "DeleteFile",
-	"BlobKeys", "PutMedia", "MediaByFile", "MediaCounts", "MediaStates", "PendingThumbs", "PendingEmbeddings", "WantsEmbedding", "FilesByID",
+	"BlobKeys", "HeldKeys", "HeldInTrash", "PutMedia", "MediaByFile", "MediaCounts", "MediaStates", "PendingThumbs", "PendingEmbeddings", "WantsEmbedding", "FilesByID",
 	"PutUpload", "UploadByID", "DeleteUpload", "ExpiredUploads",
 	"Find", "TrackByFile", "CreatePlaylist", "Playlists", "PlaylistByID", "LockPlaylist", "PlaylistTracks",
 	"UpdatePlaylist", "SetPlaylistTracks", "Timeline", "Around", "Months",
@@ -103,6 +103,22 @@ func (f *failingRepo) Trash(ctx context.Context, batch string, rows []db.File, a
 		return err
 	}
 	return f.Repo.Trash(ctx, batch, rows, at)
+}
+
+// HeldKeys implements db.Repo.
+func (f *failingRepo) HeldKeys(ctx context.Context, keys []string) ([]string, error) {
+	if err := f.fails("HeldKeys"); err != nil {
+		return nil, err
+	}
+	return f.Repo.HeldKeys(ctx, keys)
+}
+
+// HeldInTrash implements db.Repo.
+func (f *failingRepo) HeldInTrash(ctx context.Context, keys []string) ([]string, error) {
+	if err := f.fails("HeldInTrash"); err != nil {
+		return nil, err
+	}
+	return f.Repo.HeldInTrash(ctx, keys)
 }
 
 // TrashTree implements db.Repo.

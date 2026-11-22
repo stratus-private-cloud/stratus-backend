@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"iter"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
@@ -118,6 +120,28 @@ func (r *repo) TrashKeys(ctx context.Context) iter.Seq2[string, error] {
 	const query = `SELECT blob_key FROM trash WHERE is_dir = false`
 
 	return sqlutil.Label(sqlutil.Seq(ctx, r.q, sqlutil.ScanOne[string], query), "list trashed keys")
+}
+
+// HeldInTrash implements db.Trash.
+func (r *repo) HeldInTrash(ctx context.Context, keys []string) ([]string, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	var places strings.Builder
+	args := make([]any, 0, len(keys))
+	for i, key := range keys {
+		if i > 0 {
+			places.WriteString(", ")
+		}
+		places.WriteString("$" + strconv.Itoa(i+1))
+		args = append(args, key)
+	}
+	query := `SELECT DISTINCT blob_key FROM trash WHERE is_dir = FALSE AND blob_key IN (` + places.String() + `)`
+	out, err := sqlutil.Collect(ctx, r.q, sqlutil.ScanOne[string], query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read trashed keys: %w", mapErr(err))
+	}
+	return out, nil
 }
 
 // ExpiredTrash implements db.Trash.
