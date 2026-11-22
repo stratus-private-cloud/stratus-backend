@@ -260,7 +260,10 @@ jobs:
     needs: publish
     if: vars.FLY_APP != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # Twenty: the seed waits for the indexer, the thumbnails, the vectors and
+    # the faces of a fresh instance, and at ten it was cut a few seconds after
+    # it had passed.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7.0.1
 
