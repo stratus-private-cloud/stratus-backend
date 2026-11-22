@@ -200,7 +200,9 @@ how many it will make at once in its startup log.
 
 **A `404` is the other answer, and it is remembered for a week.** Some files
 cannot be turned into pixels here at all — a recording in a codec this image's
-ffmpeg was not built with, a photograph that is truncated — and the only way to
+ffmpeg was not built with, a photograph that is truncated, a JPEG or PNG that
+would take more than 128 MB to decode (a phone's JPEG past about 85 megapixels,
+read off its header before anything is allocated) — and the only way to
 find out is to try, which costs a decode and a place in that queue. So the
 refusal is written down beside where the picture would have been kept, and the
 next request is answered from it without either. In the browser none of this
