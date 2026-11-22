@@ -183,6 +183,10 @@
     {{with .Incoming}}
     <dt class="col-sm-4 fw-normal text-body-secondary">Waiting on disk</dt>
     <dd class="col-sm-8" data-count="incoming">{{.Waiting}}<span class="text-body-secondary small"> in <code>{{.Dir}}</code></span></dd>
+    {{if .Stuck}}
+    <dt class="col-sm-4 fw-normal text-body-secondary">Imported, not removed</dt>
+    <dd class="col-sm-8" data-count="incoming-stuck">{{.Stuck}}<span class="text-body-secondary small"> · in the library already, and the folder will not let them be deleted</span></dd>
+    {{end}}
 
     <dt class="col-sm-4 fw-normal text-body-secondary">Imported</dt>
     <dd class="col-sm-8" data-count="imported">{{.Imported}}{{with .LastRun}}<span class="text-body-secondary small"> · last looked at {{.}}</span>{{end}}</dd>

@@ -532,6 +532,17 @@ func etag(h hash.Hash) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// ETagOf is the validator a write of these bytes would be given, for a caller
+// that has to know whether the library already holds them -- the import
+// folder, about a file it stored and could not delete (#552).
+func ETagOf(r io.Reader) (string, error) {
+	digest := sha256.New()
+	if _, err := io.Copy(digest, r); err != nil {
+		return "", err
+	}
+	return etag(digest), nil
+}
+
 // blobReader turns the storage port's ranged reads into an io.ReadSeekCloser,
 // which is the shape http.ServeContent needs. Nothing is fetched until the
 // first Read, so a Seek to the end -- which is how ServeContent asks for the

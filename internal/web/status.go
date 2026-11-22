@@ -352,6 +352,7 @@ func (h *handler) incomingOf() *importsView {
 	v := importsView{
 		Dir:      h.imports.Dir(),
 		Waiting:  state.Waiting,
+		Stuck:    state.Stuck,
 		Imported: state.Imported,
 		Error:    state.LastError,
 	}
@@ -365,6 +366,7 @@ func (h *handler) incomingOf() *importsView {
 type importsView struct {
 	Dir      string
 	Waiting  int
+	Stuck    int
 	Imported int64
 	LastRun  string
 	// Error is why the last pass did not empty the folder. The page shows it

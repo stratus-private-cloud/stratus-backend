@@ -632,7 +632,10 @@ Four things worth knowing before pointing anything at it:
 - **Anything that fails stays on disk.** A file that cannot be read, a store
   that will not answer, a disk that fills: it is left exactly where it is and
   tried again on the next sweep, the rest of the folder is still imported, and
-  `/status` says how many are waiting and what the last failure was.
+  `/status` says how many are waiting and what the last failure was. A file
+  that was imported and then could not be deleted — a share this server may
+  read and not write — stays too, and is **not copied again** while it is
+  unchanged, a restart included; `/status` counts those apart.
 
 Hidden names are skipped, directories included — `.part`, `.crdownload`,
 `.DS_Store` — and so is anything that is not a regular file. **A symlink is
