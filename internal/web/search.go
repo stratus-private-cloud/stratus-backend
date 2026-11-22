@@ -113,6 +113,9 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request, user string) {
 		filter.Albums = db.TagWindow{After: afterTag, Limit: searchPageSize + 1}
 	}
 	v.Only = only
+	if only == "" {
+		v.FoundPeople = h.findPeople(r.Context(), term)
+	}
 	if only == "" || only == inEvents {
 		v.FoundEvents = h.findEvents(r.Context(), user, term)
 		v.SearchesEvents = h.calendars != nil

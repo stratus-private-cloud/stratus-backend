@@ -6,8 +6,9 @@
   <div class="card-body text-body-secondary">
     Type into the box above to find a file or a folder by its name, a track by
     its title, an artist, an album or a photograph by what the tags and the
-    camera say, an event by its title, place or description, or a contact by
-    name, company, email or note. Whole words, and several of them mean those
+    camera say, an event by its title, place or description, a contact by
+    name, company, email or note, or a person by the name given them on the
+    People page. Whole words, and several of them mean those
     words in that order.
   </div>
 </div>
@@ -18,6 +19,19 @@
      only tracks would look like a search that found only half an answer -- but
      the three music ones say it once between them, since five lines of "no"
      around one answer is a page that reads as a failure. */}}
+{{with .FoundPeople}}
+<h2 class="h6 text-body-secondary">People</h2>
+<div class="list-group mb-4">
+  {{range .}}
+  <a class="list-group-item list-group-item-action d-flex align-items-center gap-3" href="{{.Href}}">
+    <img src="{{.Thumb}}" alt="" width="48" height="48" class="rounded-circle flex-shrink-0">
+    <span class="text-break">{{.Name}}</span>
+    <span class="ms-auto small text-body-secondary text-nowrap">{{.Faces}} photo{{if ne .Faces 1}}s{{end}}</span>
+  </a>
+  {{end}}
+</div>
+{{end}}
+
 {{if .Shows "files"}}
 <h2 class="h6 text-body-secondary">Files</h2>
 {{if .Entries}}

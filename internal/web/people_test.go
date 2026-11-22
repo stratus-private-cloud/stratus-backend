@@ -549,3 +549,26 @@ func TestAPhotographInSomebodysFolderIsTheFile(t *testing.T) {
 		t.Errorf("a photograph whose row cannot be read = %d, want 500", rec.Code)
 	}
 }
+
+// TestTheSearchFindsAPersonByName is #526: a named person is an answer to
+// their name, accents ignored, leading to their page; nobody unnamed is, and
+// with faces off nobody at all.
+func TestTheSearchFindsAPersonByName(t *testing.T) {
+	t.Parallel()
+	p, h, cookie, _ := withFaces(t, true)
+	p.everybody[1].Name = "Ána María"
+
+	body := get(t, h, "/search?q=ana+maria", cookie).Body.String()
+	has(t, body, "People", `href="/people/%C3%81na%20Mar%C3%ADa"`, "Ána María", "1 photo<")
+	if body := get(t, h, "/search?q=person", cookie).Body.String(); strings.Contains(body, `href="/people/Person%201"`) {
+		t.Error("an unnamed person was found by their placeholder")
+	}
+	if body := get(t, h, "/search?q=maria&in=files", cookie).Body.String(); strings.Contains(body, "/people/") {
+		t.Error("a search narrowed to files shows people")
+	}
+
+	_, off, offCookie, _ := withFaces(t, false)
+	if body := get(t, off, "/search?q=ana", offCookie).Body.String(); strings.Contains(body, "/people/") {
+		t.Error("the search finds people with faces off")
+	}
+}
