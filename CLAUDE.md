@@ -3105,7 +3105,7 @@ Restraint here is principle 3, not laziness:
   every thumbnail, vector and face already stored was made by x/image's, and a
   test compares the two pixel for pixel; x/image stays a test dependency for
   that and is no longer linked. JPEG and PNG are decoded and encoded by the
-  stdlib; HEIC and video frames need the ffmpeg above, so a format is either
+  stdlib, and GIF decoded; HEIC and video frames need the ffmpeg above, so a format is either
   read in-process or refused honestly, never read badly.
 - **litmus is the canary, and it is the only test here that did not come from
   our own understanding** (#173). Everything else in this repository was
