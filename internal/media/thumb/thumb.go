@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/jpeg"
 	"io"
 	"log/slog"
@@ -83,10 +84,9 @@ func snapSize(px int) thumbSize {
 // artefacts start showing above.
 const thumbQuality = 82
 
-// maxThumbSource bounds what will be decoded. A decoded image is four bytes a
-// pixel whatever the file compressed to, so a 100 MP photo is 400 MB of memory
-// -- and a malformed header claiming that is the cheapest way to exhaust a
-// server. Nothing a camera produces comes close to this.
+// maxThumbSource bounds the bytes of what will be read to be decoded. It is a
+// bound on the file and not on the picture: what a decode costs in memory is
+// the pixels, which decodedCost reads off the header first (#558).
 const maxThumbSource = 50_000_000
 
 // ErrNoThumbnail means the file is not something this build can turn into
@@ -299,6 +299,15 @@ func (t *Service) decodeInto(ctx context.Context, f db.File, sizes []thumbSize, 
 // next ask reads the derived blob.
 func (t *Service) decode(ctx context.Context, f db.File, body io.ReadSeeker, size thumbSize) (decoded, error) {
 	if decodableInGo(f.Path) {
+		// The pixels before the decode, because image.Decode allocates all of
+		// them up front: a 200 MP photograph from a phone is twenty megabytes
+		// on disk and six hundred in memory, and a PNG whose header claims
+		// twenty thousand pixels a side is a few bytes and a gigabyte and a
+		// half. Either killed the process -- which wrote no verdict, so the
+		// restart offered the same file again (#558). Refused with one now.
+		if cost, ok := decodedCost(body); ok && cost > decodeBudget {
+			return decoded{}, fmt.Errorf("%w: %q would take %d MB to decode", ErrNoThumbnail, f.Path, cost>>20)
+		}
 		return decodeInGo(body, f.Path)
 	}
 
@@ -621,6 +630,82 @@ func decodeInGo(r io.ReadSeeker, name string) (decoded, error) {
 		return decoded{}, fmt.Errorf("%w: decoding %q: %w", ErrNoThumbnail, name, err)
 	}
 	return decoded{src: src, name: name, rotation: rotation}, nil
+}
+
+// decodedCost is about how many bytes decoding r would allocate, read off its
+// header, and leaves the reader where it found it. Not ok when the header does
+// not parse, which the decode itself is left to say.
+//
+// Bytes a pixel by what the decoder hands back: a JPEG is planes of YCbCr,
+// three at most when nothing is subsampled, and a PNG is its colour model --
+// eight for sixteen bits a channel.
+func decodedCost(r io.ReadSeeker) (int64, bool) {
+	defer func() { _, _ = r.Seek(0, io.SeekStart) }()
+	cfg, format, err := image.DecodeConfig(r)
+	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 {
+		return 0, false
+	}
+	if format == "jpeg" {
+		if _, err := r.Seek(0, io.SeekStart); err != nil {
+			return 0, false
+		}
+		head, _ := io.ReadAll(io.LimitReader(r, jpegHeaderPeek))
+		return int64(float64(cfg.Width) * float64(cfg.Height) * jpegBytesPerPixel(head)), true
+	}
+	perPixel := int64(4)
+	switch {
+	case cfg.ColorModel == color.GrayModel:
+		perPixel = 1
+	case cfg.ColorModel == color.Gray16Model:
+		perPixel = 2
+	case cfg.ColorModel == color.RGBA64Model, cfg.ColorModel == color.NRGBA64Model:
+		perPixel = 8
+	case func() bool { _, ok := cfg.ColorModel.(color.Palette); return ok }():
+		perPixel = 1
+	}
+	return int64(cfg.Width) * int64(cfg.Height) * perPixel, true
+}
+
+// jpegHeaderPeek is how far into a JPEG its frame header is looked for: past
+// the EXIF and the embedded preview a phone writes in front of it.
+const jpegHeaderPeek = 256 << 10
+
+// jpegBytesPerPixel is what Go's decoder holds per pixel, from the frame
+// header's sampling factors: a plane per component, each as big as its share
+// of the picture -- 1.5 for the 4:2:0 every phone writes, 3 when nothing is
+// subsampled, 4 for CMYK. Three when the header cannot be read, which is the
+// worst a three-component JPEG can be.
+func jpegBytesPerPixel(head []byte) float64 {
+	for i := 0; i+1 < len(head); i++ {
+		if head[i] != 0xFF || head[i+1] < 0xC0 || head[i+1] > 0xC2 {
+			continue
+		}
+		// FFCn, length (2), precision (1), height (2), width (2), count (1),
+		// then per component an id, the sampling factors and a table.
+		if i+10 > len(head) {
+			break
+		}
+		n := int(head[i+9])
+		if n == 0 || i+10+3*n > len(head) {
+			break
+		}
+		var hmax, vmax int
+		factors := make([][2]int, n)
+		for c := range n {
+			hv := head[i+11+3*c]
+			factors[c] = [2]int{int(hv >> 4), int(hv & 0x0F)}
+			hmax, vmax = max(hmax, factors[c][0]), max(vmax, factors[c][1])
+		}
+		if hmax == 0 || vmax == 0 {
+			break
+		}
+		var total float64
+		for _, f := range factors {
+			total += float64(f[0]*f[1]) / float64(hmax*vmax)
+		}
+		return total
+	}
+	return 3
 }
 
 // orientationOf reads the EXIF rotation and leaves the reader where it found
