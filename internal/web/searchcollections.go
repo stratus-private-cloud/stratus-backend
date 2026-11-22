@@ -1,7 +1,6 @@
 package web
 
 import (
-	"cmp"
 	"context"
 	"log/slog"
 	"slices"
@@ -11,10 +10,10 @@ import (
 
 	"github.com/emersion/go-ical"
 	"github.com/emersion/go-vcard"
-	"golang.org/x/text/unicode/norm"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/calendar"
 	"github.com/stratus-private-cloud/stratus-backend/internal/contacts"
+	"github.com/stratus-private-cloud/stratus-backend/internal/db"
 )
 
 // Events and contacts in the search box: matched here, in Go, over every
@@ -43,18 +42,10 @@ type foundContact struct {
 	Href, Name, Detail string
 }
 
-// words is text as a search compares it: lower case, without the marks a
-// letter carries once it is decomposed -- so é is e -- and split wherever a
-// letter or a digit is not. Not a transform.Chain held in a variable: a chain
-// keeps state between calls, and two searches at once tore it.
+// words is text as a search compares it: folded as a name is -- lower case,
+// so é is e -- and split wherever a letter or a digit is not.
 func words(text string) []string {
-	var folded strings.Builder
-	for _, r := range norm.NFD.String(strings.ToLower(text)) {
-		if !unicode.Is(unicode.Mn, r) {
-			folded.WriteRune(r)
-		}
-	}
-	return strings.FieldsFunc(folded.String(), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsNumber(r) })
+	return strings.FieldsFunc(db.FoldName(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsNumber(r) })
 }
 
 // matches is whether any of texts holds the term's words, in order and
@@ -175,7 +166,7 @@ func (h *handler) findContacts(ctx context.Context, user, term string) []foundCo
 		}
 	}
 	slices.SortStableFunc(out, func(a, b foundContact) int {
-		return cmp.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+		return db.CompareNames(a.Name, b.Name)
 	})
 	return out
 }
