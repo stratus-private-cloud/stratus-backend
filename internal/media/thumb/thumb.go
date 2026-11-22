@@ -185,13 +185,16 @@ func (t *Service) File(ctx context.Context, owner, path string, px int) (io.Read
 // because a folder holding several albums -- a flat library -- has one first
 // track and they are not all its.
 func (t *Service) Cover(ctx context.Context, owner, dir string, px int) (io.ReadCloser, int64, error) {
+	picture, ok, err := FindFolderCover(ctx, t.files, owner, dir)
+	if err != nil {
+		return nil, 0, err
+	}
+	if ok {
+		return t.open(ctx, picture, px)
+	}
 	entries, err := t.files.List(ctx, owner, dir)
 	if err != nil {
 		return nil, 0, fmt.Errorf("look for cover art in %q: %w", dir, err)
-	}
-
-	if picture, ok := FolderCover(entries); ok {
-		return t.open(ctx, picture, px)
 	}
 	if track, ok := firstTrack(entries); ok {
 		return t.trackCover(ctx, track, px)
@@ -206,12 +209,11 @@ func (t *Service) Cover(ctx context.Context, owner, dir string, px int) (io.Read
 // is the difference between an album's cover and a folder's when the two are
 // not the same thing.
 func (t *Service) CoverOf(ctx context.Context, owner string, f db.File, px int) (io.ReadCloser, int64, error) {
-	dir := db.ParentOf(f.Path)
-	entries, err := t.files.List(ctx, owner, dir)
+	picture, ok, err := FindFolderCover(ctx, t.files, owner, db.ParentOf(f.Path))
 	if err != nil {
-		return nil, 0, fmt.Errorf("look for cover art in %q: %w", dir, err)
+		return nil, 0, err
 	}
-	if picture, ok := FolderCover(entries); ok {
+	if ok {
 		return t.open(ctx, picture, px)
 	}
 	return t.trackCover(ctx, f, px)
@@ -807,6 +809,29 @@ var coverNames = []string{
 // coverExtensions are what a cover is stored as, and both are what Go decodes
 // without help. A cover.webp exists in the wild and waits for that decoder.
 var coverExtensions = []string{".jpg", ".jpeg", ".png"}
+
+// coverFiles is every name a cover goes by, for asking a folder by name.
+var coverFiles = func() []string {
+	out := make([]string, 0, len(coverNames)*len(coverExtensions))
+	for _, name := range coverNames {
+		for _, ext := range coverExtensions {
+			out = append(out, name+ext)
+		}
+	}
+	return out
+}()
+
+// FindFolderCover is dir's artwork, asked for by the names it can go by rather
+// than found by reading the folder: a folder of ten thousand tracks was read
+// whole for it, on every page of its listing (#568).
+func FindFolderCover(ctx context.Context, fs *files.Service, owner, dir string) (db.File, bool, error) {
+	found, err := fs.Named(ctx, owner, dir, coverFiles)
+	if err != nil {
+		return db.File{}, false, fmt.Errorf("look for cover art in %q: %w", dir, err)
+	}
+	f, ok := FolderCover(found)
+	return f, ok, nil
+}
 
 // FolderCover picks the artwork out of a directory listing.
 //

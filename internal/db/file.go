@@ -158,6 +158,15 @@ func ParentOf(path string) string {
 	return path[:i]
 }
 
+// JoinPath is the path of name inside dir, ParentOf's inverse: the root is
+// "", and a child of it has no slash in front.
+func JoinPath(dir, name string) string {
+	if dir == "" {
+		return name
+	}
+	return dir + "/" + name
+}
+
 // ValidateMove reports whether from can be renamed to to, for the two ways that
 // question has an answer before any row is read.
 //

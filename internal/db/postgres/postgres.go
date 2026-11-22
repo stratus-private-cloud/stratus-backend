@@ -227,6 +227,29 @@ func listPageArgs(order db.FileOrder, owner, dir string, isDir bool, after db.Cu
 	return append(args, limit)
 }
 
+// FilesNamed implements db.Files.
+func (r *repo) FilesNamed(ctx context.Context, owner, dir string, names []string) ([]db.File, error) {
+	if err := db.ValidateDir(dir); err != nil {
+		return nil, err
+	}
+	if len(names) == 0 {
+		return nil, nil
+	}
+	args := []any{owner, dir}
+	marks := make([]string, len(names))
+	for i, name := range names {
+		args = append(args, strings.ToLower(db.JoinPath(dir, name)))
+		marks[i] = "$" + strconv.Itoa(i+3)
+	}
+	query := `SELECT ` + fileColumns + ` FROM files
+		WHERE owner_id = $1 AND parent_path = $2 AND NOT is_dir AND LOWER(path) IN (` + strings.Join(marks, ", ") + `)`
+	out, err := sqlutil.Collect(ctx, r.q, scanFileRow, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("look in %q by name: %w", dir, mapErr(err))
+	}
+	return out, nil
+}
+
 // ListFilesPage implements db.Repo.
 //
 // One statement per group, so two on the page that crosses the seam between the

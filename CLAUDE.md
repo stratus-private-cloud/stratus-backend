@@ -155,9 +155,11 @@ Hard constraints, in the same spirit as the rest of the project:
   the same 32, since a `div` could only be held at that size by a style
   attribute.
   **A track's note is under its folder's cover**: the cover file's own row
-  thumbnail, found once per page by `folderCover` -- the whole folder is read,
-  because the cover need not be on the page, and only when the page holds a
-  track -- so a folder of tracks is one picture fetched once. A cover inside
+  thumbnail, found once per page by `folderCover` -- asked of the whole folder
+  by the names a cover goes by (`db.Files.FilesNamed`, #568), because the cover
+  need not be on the page and reading a folder of ten thousand tracks on every
+  page was the alternative, and only when the page holds a track -- so a folder
+  of tracks is one picture fetched once. A cover inside
   the tags is the album pages' and not the listing's: it is a ranged read per
   row. The glyph carries `width` and
   `height` attributes for it -- there is no `.ratio` there to take a size
