@@ -84,11 +84,17 @@ type Files interface {
 	//
 	// "Bounded by what the caller asked for" is exactly as true as it was and
 	// no longer the whole story: PROPFIND, the two Subsonic browse calls and
-	// the folder-cover lookup each need a directory entire and take it here,
+	// a folder's cover when it has no picture beside the tracks each need a
+	// directory entire and take it here,
 	// while a browser rendering one takes ListFilesPage instead. Which of the
 	// two a caller wants is a property of the caller, which is why this is two
 	// methods rather than one with a limit nobody would pass.
 	ListFiles(ctx context.Context, owner, dir string) ([]File, error)
+
+	// FilesNamed returns the files directly in dir whose names, ignoring ASCII
+	// case, are among names -- given in lower case. For asking a folder of ten
+	// thousand tracks whether it has a cover.jpg without reading it (#568).
+	FilesNamed(ctx context.Context, owner, dir string, names []string) ([]File, error)
 
 	// ListFilesPage returns at most limit children of dir, resuming after the
 	// row named by the cursor -- a keyset page rather than LIMIT with an

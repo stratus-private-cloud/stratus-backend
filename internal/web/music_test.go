@@ -251,7 +251,7 @@ func TestABrokenIndexIsNotAnEmptyLibrary(t *testing.T) {
 		{"Albums", "/music/AC_DC/"},
 		{"Tracks", "/music/AC_DC/High%20Voltage/"},
 		{"AnnotationsOf", "/music/AC_DC/High%20Voltage/"},
-		{"ListFiles", "/music/AC_DC/High%20Voltage/?cover=96"},
+		{"FilesNamed", "/music/AC_DC/High%20Voltage/?cover=96"},
 	} {
 		t.Run(tc.call+tc.target, func(t *testing.T) {
 			t.Parallel()

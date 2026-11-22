@@ -268,24 +268,22 @@ func rowThumb(f db.File, token string) string {
 //
 // The URL is the cover file's own row thumbnail, so a folder of twelve tracks
 // is one picture the browser fetches once, and nothing the server makes per
-// track. It reads the whole folder because the cover need not be on this page:
-// a listing is paged and ordered, and cover.jpg sorts after "01 Intro.mp3".
-// Only when there is a track to draw it for, which keeps a folder of ten
-// thousand photographs from being read whole on every page. A track with no
+// track. Asked of the whole folder by name, because the cover need not be on
+// this page: a listing is paged and ordered, and cover.jpg sorts after
+// "01 Intro.mp3". Only when there is a track to draw it for. A track with no
 // cover beside it is the note alone: one picked out of its tag is a ranged
 // read per row, which is what this was written to avoid.
 func (h *handler) folderCover(ctx context.Context, owner, dir string, children []db.File, token string) string {
 	if !slices.ContainsFunc(children, func(f db.File) bool { return !f.IsDir && media.IsAudio(f.Path) }) {
 		return ""
 	}
-	all, err := h.files.List(ctx, owner, dir)
+	cover, ok, err := thumb.FindFolderCover(ctx, h.files, owner, dir)
 	if err != nil {
 		// A cover is decoration: the rows still draw the note, and the
 		// listing that failed is the next page's to report.
 		slog.WarnContext(ctx, "look for a folder's cover", "dir", dir, "err", err)
 		return ""
 	}
-	cover, ok := thumb.FolderCover(all)
 	if !ok || !thumb.CanThumbnail(cover.Path, cover.Size) {
 		return ""
 	}

@@ -28,6 +28,7 @@ func RunFiles(t *testing.T, newFiles func(t *testing.T) db.Files) {
 		fn   func(t *testing.T, s db.Files)
 	}{
 		{"put and get round trip", putGetRoundTrip},
+		{"files are found by name, ignoring case, in one folder", filesNamed},
 		{"every column of a file survives a round trip", fileEveryColumn},
 		{"put replaces the file at that path", putReplaces},
 		{"a missing file is ErrNotFound", missingFile},
@@ -1038,5 +1039,40 @@ func blobKeys(t *testing.T, s db.Files) {
 	}
 	if got["blobs/replacement"] != 1 {
 		t.Error("the new blob key is not referenced")
+	}
+}
+
+// filesNamed is the cover lookup's half of the port (#568): a name in any case,
+// only in the folder asked about, never a directory.
+func filesNamed(t *testing.T, s db.Files) {
+	ctx := t.Context()
+	for _, dir := range []string{"Album", "Other", "Album/cover.png"} {
+		if _, err := s.CreateDir(ctx, owner, dir); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, p := range []string{"Album/Cover.JPG", "Album/folder.png", "Album/01 Intro.mp3", "Other/cover.jpg", "cover.jpg"} {
+		put(t, s, file(p))
+	}
+
+	got, err := s.FilesNamed(ctx, owner, "Album", []string{"cover.jpg", "cover.png", "folder.png", "front.jpg"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, len(got))
+	for _, f := range got {
+		names = append(names, f.Path)
+	}
+	slices.Sort(names)
+	if want := []string{"Album/Cover.JPG", "Album/folder.png"}; !slices.Equal(names, want) {
+		t.Errorf("FilesNamed(Album) = %q, want %q", names, want)
+	}
+
+	root, err := s.FilesNamed(ctx, owner, "", []string{"cover.jpg"})
+	if err != nil || len(root) != 1 || root[0].Path != "cover.jpg" {
+		t.Errorf("FilesNamed at the root = %+v, %v", root, err)
+	}
+	if none, err := s.FilesNamed(ctx, owner, "Album", nil); err != nil || len(none) != 0 {
+		t.Errorf("FilesNamed with no names = %+v, %v", none, err)
 	}
 }

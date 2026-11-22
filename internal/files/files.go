@@ -115,6 +115,12 @@ func (s *Service) List(ctx context.Context, owner, dir string) ([]db.File, error
 	return s.meta.ListFiles(ctx, owner, dir)
 }
 
+// Named returns the files directly in dir called one of names, ignoring
+// case; names are lower case.
+func (s *Service) Named(ctx context.Context, owner, dir string, names []string) ([]db.File, error) {
+	return s.meta.FilesNamed(ctx, owner, dir, names)
+}
+
 // ListPage returns at most limit children of dir, resuming after the cursor,
 // and reports whether there is another page behind it.
 //
