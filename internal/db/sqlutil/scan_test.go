@@ -1,6 +1,7 @@
 package sqlutil_test
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
 	"reflect"
@@ -294,9 +295,14 @@ func TestTheSmallerScanners(t *testing.T) {
 func TestAFaceAndAPersonScan(t *testing.T) {
 	when := time.Date(2024, 5, 1, 9, 0, 0, 0, time.UTC)
 	f, err := sqlutil.ScanFace(row{int64(3), int64(7), "blob", float32(0.25), float32(0.5), float32(0.125), float32(0.25),
-		float32(0.9), []byte{1, 2}, int64(4), when.UnixMilli()}, sqlutil.Millis{})
-	if err != nil || f.ID != 3 || f.FileID != 7 || f.H != 0.25 || f.Person != 4 || !f.SortAt.Equal(when) {
+		float32(0.9), int64(4), when.UnixMilli()}, sqlutil.Millis{})
+	if err != nil || f.ID != 3 || f.FileID != 7 || f.H != 0.25 || f.Person != 4 || !f.SortAt.Equal(when) || f.Vector != nil {
 		t.Errorf("ScanFace = %+v, %v", f, err)
+	}
+	v, err := sqlutil.ScanFaceVector(row{int64(3), int64(7), "blob", float32(0.25), float32(0.5), float32(0.125), float32(0.25),
+		float32(0.9), int64(4), when.UnixMilli(), []byte{1, 2}}, sqlutil.Millis{})
+	if err != nil || v.Person != 4 || !bytes.Equal(v.Vector, []byte{1, 2}) {
+		t.Errorf("ScanFaceVector = %+v, %v", v, err)
 	}
 	p, err := sqlutil.ScanPerson(row{int64(4), "Ana", int64(12), int64(3)})
 	if err != nil || p != (db.Person{ID: 4, Name: "Ana", Faces: 12, Cover: 3}) {
@@ -307,6 +313,9 @@ func TestAFaceAndAPersonScan(t *testing.T) {
 func TestAFaceOrAPersonThatWillNotScanIsAnError(t *testing.T) {
 	if _, err := sqlutil.ScanFace(refusing{}, sqlutil.Millis{}); err == nil {
 		t.Error("a face that failed to scan was not reported")
+	}
+	if _, err := sqlutil.ScanFaceVector(refusing{}, sqlutil.Millis{}); err == nil {
+		t.Error("a face with its vector that failed to scan was not reported")
 	}
 	if _, err := sqlutil.ScanPerson(refusing{}); err == nil {
 		t.Error("a person who failed to scan was not reported")

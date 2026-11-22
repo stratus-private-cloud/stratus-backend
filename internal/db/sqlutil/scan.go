@@ -373,14 +373,28 @@ func EachVector(ctx context.Context, q Querier, query string, model string, fn f
 }
 
 // FaceColumns is a face's row, over faces as fa and media as m.
-const FaceColumns = `fa.id, fa.file_id, fa.blob_key, fa.x, fa.y, fa.w, fa.h, fa.score, fa.vector,
+const FaceColumns = `fa.id, fa.file_id, fa.blob_key, fa.x, fa.y, fa.w, fa.h, fa.score,
 	COALESCE(fa.person_id, 0), m.sort_at`
+
+// FaceVectorColumns is FaceColumns and the vector, which only grouping reads:
+// a page of sixty faces or the one behind a crop carried it for nothing (#565).
+const FaceVectorColumns = FaceColumns + `, fa.vector`
 
 // ScanFace reads one row of FaceColumns.
 func ScanFace(s Scanner, t Times) (db.Face, error) {
 	var f db.Face
-	if err := s.Scan(&f.ID, &f.FileID, &f.BlobKey, &f.X, &f.Y, &f.W, &f.H, &f.Score, &f.Vector,
+	if err := s.Scan(&f.ID, &f.FileID, &f.BlobKey, &f.X, &f.Y, &f.W, &f.H, &f.Score,
 		&f.Person, t.NullDest(&f.SortAt)); err != nil {
+		return db.Face{}, err
+	}
+	return f, nil
+}
+
+// ScanFaceVector reads one row of FaceVectorColumns.
+func ScanFaceVector(s Scanner, t Times) (db.Face, error) {
+	var f db.Face
+	if err := s.Scan(&f.ID, &f.FileID, &f.BlobKey, &f.X, &f.Y, &f.W, &f.H, &f.Score,
+		&f.Person, t.NullDest(&f.SortAt), &f.Vector); err != nil {
 		return db.Face{}, err
 	}
 	return f, nil

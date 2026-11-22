@@ -33,20 +33,23 @@ func (s *slowMigration) Migrate(ctx context.Context) error {
 // and the settings read after it would have found the deadline spent.
 // Not parallel: it shortens a package variable.
 func TestAMigrationOutlastsTheStartupTimeout(t *testing.T) {
-	was := startupTimeout
-	startupTimeout = 50 * time.Millisecond
-	t.Cleanup(func() { startupTimeout = was })
-
 	cfg := config.Config{Database: config.DatabaseDSN{
 		Scheme: config.SchemeSQLite,
 		Path:   filepath.Join(t.TempDir(), "stratus.db"),
 	}}
-	slow := &slowMigration{took: 4 * startupTimeout}
-	open := func(ctx context.Context, dsn config.DatabaseDSN) (db.Store, error) {
-		store, err := openDatabase(ctx, dsn)
-		slow.Store = store
-		return slow, err
+	// Opened before the timeout shrinks: on a loaded runner opening SQLite
+	// alone has outlasted a short one.
+	inner, err := openDatabase(t.Context(), cfg.Database)
+	if err != nil {
+		t.Fatal(err)
 	}
+
+	was := startupTimeout
+	startupTimeout = 250 * time.Millisecond
+	t.Cleanup(func() { startupTimeout = was })
+
+	slow := &slowMigration{Store: inner, took: 4 * startupTimeout}
+	open := func(context.Context, config.DatabaseDSN) (db.Store, error) { return slow, nil }
 
 	store, set, err := New(cfg, "test", "").openMetadata(t.Context(), open)
 	if store != nil {

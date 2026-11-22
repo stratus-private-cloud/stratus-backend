@@ -118,7 +118,9 @@ type Face struct {
 	// turned the right way up, so they hold at any size it is shown at.
 	X, Y, W, H float32
 	Score      float32
-	Vector     []byte
+	// Vector is filled by EachFace alone, which is what groups; every other
+	// read leaves it nil (#565).
+	Vector []byte
 	// Person is 0 for a face nobody has.
 	Person int64
 	// SortAt is the photograph's date, as the gallery orders by, which is what
