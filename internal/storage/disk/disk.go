@@ -17,6 +17,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/storage"
@@ -37,6 +38,10 @@ const (
 // Store is a storage.Storage backed by a directory tree.
 type Store struct {
 	root *os.Root
+	// dirs keeps a Delete pruning an empty directory from removing it between
+	// a write making it and renaming into it (#570): publish holds it shared,
+	// pruneParents exclusive.
+	dirs sync.RWMutex
 }
 
 var _ storage.Storage = (*Store)(nil)
@@ -101,17 +106,24 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, size int64) (s
 		return storage.ObjectInfo{}, err
 	}
 
-	if dir := path.Dir(key); dir != "." {
-		if err := s.root.MkdirAll(dir, dirMode); err != nil {
-			_ = s.root.Remove(tmp)
-			return storage.ObjectInfo{}, fmt.Errorf("create parents of %q: %w", key, err)
-		}
-	}
-	if err := s.root.Rename(tmp, key); err != nil {
+	if err := s.publish(tmp, key); err != nil {
 		_ = s.root.Remove(tmp)
 		return storage.ObjectInfo{}, fmt.Errorf("publish %q: %w", key, err)
 	}
 	return s.Stat(ctx, key)
+}
+
+// publish renames from to key, making key's parents first, with no prune in
+// between.
+func (s *Store) publish(from, key string) error {
+	s.dirs.RLock()
+	defer s.dirs.RUnlock()
+	if dir := path.Dir(key); dir != "." {
+		if err := s.root.MkdirAll(dir, dirMode); err != nil {
+			return err
+		}
+	}
+	return s.root.Rename(from, key)
 }
 
 // writeTemp drains r into a file under tmpDir and returns its name. The caller
@@ -233,6 +245,8 @@ func (s *Store) Delete(ctx context.Context, key string) error {
 // photo library reorganised over the years does not accumulate an empty tree.
 // Best effort: the first non-empty directory, or any error, stops it.
 func (s *Store) pruneParents(dir string) {
+	s.dirs.Lock()
+	defer s.dirs.Unlock()
 	for dir != "." && dir != "/" {
 		if err := s.root.Remove(dir); err != nil {
 			return
@@ -409,14 +423,9 @@ func (s *Store) CompleteUpload(ctx context.Context, key, id string) (storage.Obj
 		return storage.ObjectInfo{}, err
 	}
 
-	if dir := path.Dir(key); dir != "." {
-		if err := s.root.MkdirAll(dir, dirMode); err != nil {
-			return storage.ObjectInfo{}, fmt.Errorf("create parents of %q: %w", key, err)
-		}
-	}
 	// The same rename Put ends with, and atomic for the same reason: a reader
 	// sees the old object or the new one, never the growing file.
-	if err := s.root.Rename(uploadPath(id), key); err != nil {
+	if err := s.publish(uploadPath(id), key); err != nil {
 		return storage.ObjectInfo{}, fmt.Errorf("publish the upload of %q: %w", key, mapErr(id, err))
 	}
 	return s.Stat(ctx, key)
