@@ -20,8 +20,8 @@
 // to no owner and this tree is always somebody's.
 //
 // Nothing here writes. The rows are a view of what was deleted, the bytes
-// belong to the blob that was never moved, and putting something back is the
-// page's business.
+// belong to the blob that was never moved, and putting something back is
+// internal/files' business, asked by the page and by a MOVE alike.
 package trash
 
 import (
@@ -56,6 +56,9 @@ type Node struct {
 	// Row is what was deleted, and the zero value at the mount root, which is
 	// the one place here that nothing was deleted at.
 	Row db.Trashed
+	// Deletion is whether this is a deletion itself rather than something
+	// inside one: what can be restored and destroyed (stratus-app#179).
+	Deletion bool
 }
 
 // Tree is one owner's trash as folders, for the length of one request.
@@ -114,7 +117,7 @@ func (t *Tree) Resolve(ctx context.Context, name string) (Node, error) {
 	if !ok {
 		return Node{}, os.ErrNotExist
 	}
-	return Node{Name: named, Dir: row.IsDir, Row: row}, nil
+	return Node{Name: named, Dir: row.IsDir, Row: row, Deletion: rest == ""}, nil
 }
 
 // Children lists what is inside a node: the deletions at the top, and what was
@@ -158,7 +161,7 @@ func (t *Tree) deletions(ctx context.Context) ([]Node, error) {
 		if !ok {
 			continue
 		}
-		out = append(out, Node{Name: name, Dir: root.IsDir, Row: root})
+		out = append(out, Node{Name: name, Dir: root.IsDir, Row: root, Deletion: true})
 	}
 	return out, nil
 }

@@ -19,7 +19,7 @@ const trashPrefix = "/trash/"
 func trashServer(t *testing.T) (http.Handler, *files.Service, db.Store) {
 	t.Helper()
 	svc, meta := service(t)
-	return withUser(dav.Trash(trashPrefix, svc), "edu"), svc, meta
+	return withUser(dav.Trash(trashPrefix, "/files/", svc), "edu"), svc, meta
 }
 
 func put(t *testing.T, svc *files.Service, path, body string) {
@@ -111,15 +111,15 @@ func TestTheSweepsFindsAreNotInTheCollection(t *testing.T) {
 		"/trash/", "/trash/notes.txt")
 }
 
-// TestTheTrashRefusesEveryWrite: restoring and destroying are the page's, and
-// a write here would have nothing to mean.
+// TestTheTrashRefusesEveryWrite but the two it has a meaning for, a restore
+// and a destruction, which have tests of their own.
 func TestTheTrashRefusesEveryWrite(t *testing.T) {
 	t.Parallel()
 	h, svc, _ := trashServer(t)
 	put(t, svc, "notes.txt", "notes")
 	remove(t, svc, "notes.txt")
 
-	for _, m := range []string{http.MethodPut, http.MethodDelete, "MKCOL", "MOVE", "COPY", "PROPPATCH", "LOCK"} {
+	for _, m := range []string{http.MethodPut, "MKCOL", "COPY", "PROPPATCH", "LOCK"} {
 		rec := do(t, h, m, "/trash/notes.txt", "")
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Errorf("%s = %d, want 405", m, rec.Code)
@@ -175,5 +175,112 @@ func TestADeletedFileSaysNothingAboutWhereItWas(t *testing.T) {
 
 	if got := sourcesOf(t, do(t, h, "PROPFIND", trashPrefix, "", "Depth", "1").Body.String()); len(got) != 0 {
 		t.Errorf("sources = %v, want none", got)
+	}
+}
+
+// TestAMoveOutOfTheTrashRestoresIt is stratus-app#179: the page's Restore as
+// the verb that already means it, to where the client says.
+func TestAMoveOutOfTheTrashRestoresIt(t *testing.T) {
+	t.Parallel()
+	h, svc, meta := trashServer(t)
+	if _, err := svc.Mkdir(t.Context(), "edu", "album"); err != nil {
+		t.Fatal(err)
+	}
+	put(t, svc, "album/one.txt", "one")
+	remove(t, svc, "album")
+
+	if got := do(t, h, "MOVE", "/trash/album", "", "Destination", "http://example.com/files/album").Code; got != http.StatusCreated {
+		t.Fatalf("MOVE = %d, want 201", got)
+	}
+	if _, err := meta.FileByPath(t.Context(), "edu", "album/one.txt"); err != nil {
+		t.Errorf("not restored: %v", err)
+	}
+	wantHrefs(t, hrefs(t, do(t, h, "PROPFIND", trashPrefix, "", "Depth", "1")), "/trash/")
+}
+
+// TestAMoveNeverReplaces: what has the name now is not a mistake, so a taken
+// destination is the client's to number around, Overwrite or not.
+func TestAMoveNeverReplaces(t *testing.T) {
+	t.Parallel()
+	h, svc, meta := trashServer(t)
+	put(t, svc, "notes.txt", "old")
+	remove(t, svc, "notes.txt")
+	put(t, svc, "notes.txt", "new")
+
+	for _, overwrite := range []string{"F", "T"} {
+		rec := do(t, h, "MOVE", "/trash/notes.txt", "", "Destination", "/files/notes.txt", "Overwrite", overwrite)
+		if rec.Code != http.StatusPreconditionFailed {
+			t.Errorf("Overwrite %s: MOVE = %d, want 412", overwrite, rec.Code)
+		}
+	}
+	if got := do(t, h, "MOVE", "/trash/notes.txt", "", "Destination", "/files/a/notes%20(2).txt").Code; got != http.StatusCreated {
+		t.Fatalf("MOVE beside = %d, want 201", got)
+	}
+	if _, err := meta.FileByPath(t.Context(), "edu", "a/notes (2).txt"); err != nil {
+		t.Errorf("not restored beside, with its folder made on the way: %v", err)
+	}
+}
+
+// TestADeleteInTheTrashDestroysIt, the page's Destroy.
+func TestADeleteInTheTrashDestroysIt(t *testing.T) {
+	t.Parallel()
+	h, svc, _ := trashServer(t)
+	put(t, svc, "notes.txt", "notes")
+	remove(t, svc, "notes.txt")
+
+	if got := do(t, h, http.MethodDelete, "/trash/notes.txt", "").Code; got != http.StatusNoContent {
+		t.Fatalf("DELETE = %d, want 204", got)
+	}
+	wantHrefs(t, hrefs(t, do(t, h, "PROPFIND", trashPrefix, "", "Depth", "1")), "/trash/")
+	if got := do(t, h, http.MethodDelete, "/trash/notes.txt", "").Code; got != http.StatusNotFound {
+		t.Errorf("DELETE again = %d, want 404", got)
+	}
+}
+
+// TestOnlyAWholeDeletionIsWritten: a batch is the one shape the port restores
+// and destroys, and anything outside the tree has nowhere to go.
+func TestOnlyAWholeDeletionIsWritten(t *testing.T) {
+	t.Parallel()
+	h, svc, _ := trashServer(t)
+	if _, err := svc.Mkdir(t.Context(), "edu", "album"); err != nil {
+		t.Fatal(err)
+	}
+	put(t, svc, "album/one.txt", "one")
+	remove(t, svc, "album")
+
+	for _, target := range []string{"/trash/", "/trash/album/one.txt"} {
+		if got := do(t, h, http.MethodDelete, target, "").Code; got != http.StatusForbidden {
+			t.Errorf("DELETE %s = %d, want 403", target, got)
+		}
+	}
+	for _, dest := range []string{"/music/album", "/files/", ""} {
+		if got := do(t, h, "MOVE", "/trash/album", "", "Destination", dest).Code; got != http.StatusBadGateway {
+			t.Errorf("MOVE to %q = %d, want 502", dest, got)
+		}
+	}
+	if got := do(t, h, http.MethodOptions, trashPrefix, "").Header().Get("Allow"); !strings.Contains(got, "MOVE") ||
+		!strings.Contains(got, "DELETE") {
+		t.Errorf("Allow = %q, want MOVE and DELETE offered", got)
+	}
+}
+
+// TestADeletionSaysWhereItWasTakenFrom, which is where a client restores it
+// to; what is inside it goes back with it and says nothing.
+func TestADeletionSaysWhereItWasTakenFrom(t *testing.T) {
+	t.Parallel()
+	h, svc, _ := trashServer(t)
+	if _, err := svc.Mkdir(t.Context(), "edu", "my album"); err != nil {
+		t.Fatal(err)
+	}
+	put(t, svc, "my album/one.txt", "one")
+	remove(t, svc, "my album")
+
+	body := do(t, h, "PROPFIND", trashPrefix, "", "Depth", "1").Body.String()
+	if !strings.Contains(body, "deleted-from") || !strings.Contains(body, `/files/my%20album</D:href></deleted-from>`) {
+		t.Errorf("no deleted-from for the deletion in:\n%s", body)
+	}
+	inside := do(t, h, "PROPFIND", "/trash/my%20album/", "", "Depth", "1").Body.String()
+	if strings.Count(inside, "<deleted-from") != 1 {
+		t.Errorf("want deleted-from on the deletion alone, in:\n%s", inside)
 	}
 }

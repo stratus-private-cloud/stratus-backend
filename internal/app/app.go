@@ -333,7 +333,7 @@ func (a *App) Handler(deps Deps) http.Handler {
 		// in it (#213, #215). Every one's byte-serving half is the browser's.
 		mux.Handle(playlistsPrefix, collection(dav.Playlists(playlistsPrefix, filesPrefix, playlists)))
 		mux.Handle(musicPrefix, collection(dav.Music(musicPrefix, filesPrefix, deps.Database)))
-		mux.Handle(trashPrefix, collection(dav.Trash(trashPrefix, service)))
+		mux.Handle(trashPrefix, collection(dav.Trash(trashPrefix, filesPrefix, service)))
 		mux.Handle(photosPrefix, collection(dav.ByDate(photosPrefix, filesPrefix, byDate, db.KindImage)))
 		mux.Handle(videosPrefix, collection(dav.ByDate(videosPrefix, filesPrefix, byDate, db.KindVideo)))
 		// The people the faces are grouped into (#519), empty while faces are

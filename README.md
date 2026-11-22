@@ -93,7 +93,7 @@ read-only collection holding everything there is:
                   (empty unless faces are on)
 /photos/          your photographs by year and month, generated, read-only
 /playlists/       your playlists as .m3u8, generated, read-only
-/trash/           what you deleted, one folder per deletion, read-only
+/trash/           what you deleted, one folder per deletion: MOVE one out to restore it, DELETE it to destroy it
 /videos/          your videos by year and month, generated, read-only
 ```
 
@@ -1504,16 +1504,23 @@ throws it away now if you want the room back. The page still asks first,
 because a folder is worth a question. It is in the menu under your own name,
 beside Status.
 
-**And that same address is a read-only WebDAV collection**, beside the other
+**And that same address is a WebDAV collection**, beside the other
 folders the origin holds: one folder per deletion, named by **what was
 deleted** — `holiday`, or `notes.txt` when a file was — with the tree inside it
 exactly as it was. Deleting `holiday` twice is two folders, and the older keeps
 the plain name while the newer is `holiday (2)`. Reading a file there is the
 file that was deleted, which is the useful half: one photograph can be copied
-out of an accident instead of a thousand being put back to get at one. Nothing
-there writes — restoring and destroying are the page's — and what the sweep
-could not account for is not in it at all, because a blob with no path has no
-name to be listed under.
+out of an accident instead of a thousand being put back to get at one. What
+the sweep could not account for is not in it at all, because a blob with no
+path has no name to be listed under.
+
+**Two writes, the page's two buttons as the verbs that already mean them**:
+`MOVE` of a deletion to an address under `/files/` restores it there, and
+`DELETE` of one destroys it now. A deletion carries where it was taken from,
+the `deleted-from` property in Stratus's namespace, which is where a client
+restores it to. A `MOVE` never replaces — a taken destination is `412`,
+whatever `Overwrite` says — and makes the folders on the way. Both act on a
+whole deletion and nothing inside one, which is still copied out.
 
 **Restoring puts the tree back where it was**, and the three things that can
 have happened to that place since are each decided rather than discovered: a
