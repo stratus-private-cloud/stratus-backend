@@ -195,7 +195,12 @@ type view struct {
 	// FoundEvents and FoundContacts are the two buckets matched in Go, the
 	// first page's twenty and a link to the rest; Searches says there is a
 	// calendar or an address book to have searched at all.
-	FoundEvents      []foundEvent
+	FoundEvents []foundEvent
+	// FoundPeople is everybody named that (#526), above the rest and only
+	// when there is somebody: faces are opt-in, and a line saying nobody is
+	// called that already belongs to the contacts.
+	FoundPeople      []personTile
+	MorePeople       string
 	FoundContacts    []foundContact
 	MoreEvents       string
 	MoreContacts     string

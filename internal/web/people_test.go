@@ -549,3 +549,60 @@ func TestAPhotographInSomebodysFolderIsTheFile(t *testing.T) {
 		t.Errorf("a photograph whose row cannot be read = %d, want 500", rec.Code)
 	}
 }
+
+// TestTheSearchFindsAPersonByName is #526: a named person is an answer to
+// their name, accents ignored, leading to their page; nobody unnamed is, and
+// with faces off nobody at all.
+func TestTheSearchFindsAPersonByName(t *testing.T) {
+	t.Parallel()
+	p, h, cookie, _ := withFaces(t, true)
+	p.everybody[1].Name = "Ána María"
+
+	body := get(t, h, "/search?q=ana+maria", cookie).Body.String()
+	has(t, body, "People", `href="/people/%C3%81na%20Mar%C3%ADa"`, "Ána María", "1 photo<")
+	if body := get(t, h, "/search?q=person", cookie).Body.String(); strings.Contains(body, `href="/people/Person%201"`) {
+		t.Error("an unnamed person was found by their placeholder")
+	}
+	if body := get(t, h, "/search?q=maria&in=files", cookie).Body.String(); strings.Contains(body, "/people/") {
+		t.Error("a search narrowed to files shows people")
+	}
+
+	narrowed := get(t, h, "/search?q=ana&in=people", cookie)
+	if narrowed.Code != http.StatusOK {
+		t.Fatalf("the search narrowed to people = %d", narrowed.Code)
+	}
+	has(t, narrowed.Body.String(), `href="/people/%C3%81na%20Mar%C3%ADa"`)
+	if strings.Contains(narrowed.Body.String(), `text-body-secondary">Files</h2>`) {
+		t.Error("the search narrowed to people shows the other buckets")
+	}
+	has(t, get(t, h, "/search?q=zoe&in=people", cookie).Body.String(), "Nobody is called that.")
+
+	_, off, offCookie, _ := withFaces(t, false)
+	if body := get(t, off, "/search?q=ana", offCookie).Body.String(); strings.Contains(body, "/people/") {
+		t.Error("the search finds people with faces off")
+	}
+}
+
+// TestTheSearchPagesPeople: twenty beside the rest and a link to the page
+// narrowed to them, which has them all.
+func TestTheSearchPagesPeople(t *testing.T) {
+	t.Parallel()
+	p := &people{}
+	h, cookie, photo := browserWithPeople(t, p, true)
+	f := photo("IMG_0001.jpg")
+	for i := range 25 {
+		id := int64(i + 1)
+		p.everybody = append(p.everybody, db.Person{ID: id, Name: fmt.Sprintf("Ana %02d", i)})
+		p.faces = append(p.faces, db.Face{ID: 100 + id, FileID: f.ID, BlobKey: f.BlobKey, Person: id})
+	}
+
+	body := get(t, h, "/search?q=ana", cookie).Body.String()
+	if n := strings.Count(body, `href="/people/Ana%20`); n != 20 {
+		t.Errorf("the search shows %d people, want 20", n)
+	}
+	has(t, body, "More people", "in=people")
+	all := get(t, h, "/search?q=ana&in=people", cookie).Body.String()
+	if n := strings.Count(all, `href="/people/Ana%20`); n != 25 {
+		t.Errorf("the page narrowed to people shows %d, want 25", n)
+	}
+}

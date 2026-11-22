@@ -35,6 +35,7 @@ const (
 	inAlbums   = "albums"
 	inEvents   = "events"
 	inContacts = "contacts"
+	inPeople   = "people"
 	inContent  = "content"
 )
 
@@ -62,7 +63,7 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request, user string) {
 
 	only := q.Get("in")
 	switch only {
-	case "", inFiles, inTracks, inPhotos, inArtists, inAlbums, inEvents, inContacts, inContent:
+	case "", inFiles, inTracks, inPhotos, inArtists, inAlbums, inEvents, inContacts, inPeople, inContent:
 	default:
 		h.badRequest(w, user, "There is nothing here to search called that.")
 		return
@@ -113,6 +114,12 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request, user string) {
 		filter.Albums = db.TagWindow{After: afterTag, Limit: searchPageSize + 1}
 	}
 	v.Only = only
+	if only == "" || only == inPeople {
+		v.FoundPeople = h.findPeople(r.Context(), term)
+		if only == "" && len(v.FoundPeople) > searchCollectionLimit {
+			v.FoundPeople, v.MorePeople = v.FoundPeople[:searchCollectionLimit], searchResumed(term, inPeople, "")
+		}
+	}
 	if only == "" || only == inEvents {
 		v.FoundEvents = h.findEvents(r.Context(), user, term)
 		v.SearchesEvents = h.calendars != nil
@@ -130,7 +137,7 @@ func (h *handler) search(w http.ResponseWriter, r *http.Request, user string) {
 	if only == "" || only == inContent {
 		h.findContent(r, user, term, only, &v)
 	}
-	if only == inEvents || only == inContacts || only == inContent {
+	if only == inEvents || only == inContacts || only == inPeople || only == inContent {
 		h.render(w, http.StatusOK, pageSearch, v)
 		return
 	}

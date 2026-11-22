@@ -14,6 +14,7 @@ import (
 	"github.com/stratus-private-cloud/stratus-backend/internal/calendar"
 	"github.com/stratus-private-cloud/stratus-backend/internal/contacts"
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
+	"github.com/stratus-private-cloud/stratus-backend/internal/faces"
 )
 
 // Events and contacts in the search box: matched here, in Go, over every
@@ -122,6 +123,33 @@ func (h *handler) findEvents(ctx context.Context, user, term string) []foundEven
 		}
 	}
 	slices.SortStableFunc(out, func(a, b foundEvent) int { return b.start.Compare(a.start) })
+	return out
+}
+
+// findPeople is everybody named at /people/ whose name holds the term, by
+// name (#526): nothing with faces off, and nobody unnamed, since "Person 3"
+// is a placeholder and not something anybody types.
+func (h *handler) findPeople(ctx context.Context, term string) []personTile {
+	ix := h.indexingNow()
+	if !ix.Faces || ix.People == nil {
+		return nil
+	}
+	all, err := ix.People.People(ctx)
+	if err != nil {
+		slog.WarnContext(ctx, "listing people for a search", "err", err)
+		return nil
+	}
+	want := words(term)
+	names := faces.Names(all)
+	var out []personTile
+	for _, p := range all {
+		if p.Name == "" || !matches(want, p.Name) {
+			continue
+		}
+		name := names[p.ID]
+		out = append(out, personTile{Name: name, Href: personHref(name), Thumb: personCoverURL(name, p.Cover), Faces: p.Faces})
+	}
+	slices.SortStableFunc(out, func(a, b personTile) int { return db.CompareNames(a.Name, b.Name) })
 	return out
 }
 
