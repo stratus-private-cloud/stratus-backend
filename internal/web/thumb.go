@@ -28,6 +28,19 @@ const listThumb = 96
 // only the browser keeps it.
 const pictureCache = "private, max-age=259200"
 
+// The other three ways a response here asks to be kept, each said once.
+const (
+	// keptForGood is a picture whose address changes when it does: a
+	// thumbnail versioned by its file's ETag, a face by its id.
+	keptForGood = "private, max-age=31536000, immutable"
+	// revalidated is kept by the browser alone and asked about every time,
+	// which a file's bytes at their own address are: they change in place.
+	revalidated = "private, no-cache"
+	// notKept is never kept at all: a page drawn for one request, or one
+	// carrying something that must not outlive it.
+	notKept = "no-store"
+)
+
 // thumbnail serves a picture of a file, making it on the first ask.
 //
 // The URL carries the file's ETag and the answer is cached for a year: every
@@ -72,7 +85,7 @@ func (h *handler) thumbnail(w http.ResponseWriter, r *http.Request, user string)
 	w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
 	// Private: it is a picture of somebody's photograph, which a browser may
 	// keep and a cache between it and here may not.
-	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	w.Header().Set("Cache-Control", keptForGood)
 	// Ignored deliberately: the response has started, so a client that hung up
 	// has already been told everything there is to tell it.
 	_, _ = io.Copy(w, body)

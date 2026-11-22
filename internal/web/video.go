@@ -192,7 +192,7 @@ func (h *handler) hls(w http.ResponseWriter, r *http.Request, f db.File, which s
 	// the URL, which a cross-origin page cannot forge, and no cookie is ever
 	// honoured cross-origin -- a wildcard does not allow credentials.
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "private, no-cache")
+	w.Header().Set("Cache-Control", revalidated)
 
 	m, err := h.playback.Media.MediaByFile(r.Context(), f.ID)
 	if err != nil {

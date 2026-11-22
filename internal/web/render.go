@@ -364,7 +364,7 @@ func (h *handler) renderTemplate(w http.ResponseWriter, status int, page, name s
 	// Every page here is somebody's session. A browser that kept one would show
 	// it again on the way back after signing out, which on a shared machine is
 	// the difference between logging out and appearing to.
-	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Cache-Control", notKept)
 	w.WriteHeader(status)
 	// Nothing useful to do if the browser hung up mid-page.
 	_, _ = buf.WriteTo(w)
