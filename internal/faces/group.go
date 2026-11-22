@@ -1,6 +1,7 @@
 package faces
 
 import (
+	"context"
 	"math"
 	"slices"
 )
@@ -39,10 +40,40 @@ type grouping struct {
 	seeds [][]int64
 }
 
-// group decides where the loose faces go. Faces somebody already has are only
-// read, for the average each person is compared by: a face put somewhere by
-// hand is never moved.
+// links is what the rounds before this one learned about the loose faces
+// (#560): which faces were loose at the end of the last round, and every pair
+// of loose faces ever found alike enough to link. A face's vector never
+// changes, so a pair compared once is compared for good, and a round only has
+// to compare what has become loose since -- a new face, or one taken out of
+// somebody -- against everything loose. That every pair of faces loose now has
+// been compared holds after each round by the same argument, so the groups are
+// exactly the ones comparing all of them would make.
+type links struct {
+	loose map[int64]bool
+	pairs map[[2]int64]bool
+}
+
+func newLinks() *links {
+	return &links{loose: map[int64]bool{}, pairs: map[[2]int64]bool{}}
+}
+
+// checkEvery is how many faces go by between two looks at the context: often
+// enough that shutting down does not wait for a round, rarely enough to cost
+// nothing.
+const checkEvery = 256
+
+// group decides where the loose faces go, comparing every pair of them. It is
+// grouping with nothing remembered, which is what a test asks for.
 func group(all []face) grouping {
+	g, _ := groupWith(context.Background(), all, newLinks())
+	return g
+}
+
+// groupWith decides where the loose faces go. Faces somebody already has are
+// only read, for the average each person is compared by: a face put somewhere
+// by hand is never moved. What it learns goes into l only when it finishes, so
+// a round cut short leaves the next one where this one started.
+func groupWith(ctx context.Context, all []face, l *links) (grouping, error) {
 	sums := map[int64][]float32{}
 	for _, f := range all {
 		if f.person == 0 {
@@ -65,7 +96,10 @@ func group(all []face) grouping {
 
 	g := grouping{joins: map[int64][]int64{}}
 	var loose []face
-	for _, f := range all {
+	for n, f := range all {
+		if n%checkEvery == 0 && ctx.Err() != nil {
+			return grouping{}, ctx.Err()
+		}
 		if f.person != 0 {
 			continue
 		}
@@ -85,7 +119,30 @@ func group(all []face) grouping {
 		loose = append(loose, f)
 	}
 
-	// What is left is linked pair by pair, and a group is what hangs together.
+	// What is new to being loose is compared with everything loose; the rest
+	// was compared in a round before. Two new ones are compared once.
+	at := make(map[int64]int, len(loose))
+	for i, f := range loose {
+		at[f.id] = i
+	}
+	found := map[[2]int64]bool{}
+	for i, f := range loose {
+		if i%checkEvery == 0 && ctx.Err() != nil {
+			return grouping{}, ctx.Err()
+		}
+		if l.loose[f.id] {
+			continue
+		}
+		for j, o := range loose {
+			if j == i || (!l.loose[o.id] && j < i) {
+				continue
+			}
+			if dot(f.v, o.v) >= SeedFloor {
+				found[pairOf(f.id, o.id)] = true
+			}
+		}
+	}
+
 	parent := make([]int, len(loose))
 	for i := range parent {
 		parent[i] = i
@@ -97,12 +154,18 @@ func group(all []face) grouping {
 		}
 		return i
 	}
-	for i := range loose {
-		for j := i + 1; j < len(loose); j++ {
-			if dot(loose[i].v, loose[j].v) >= SeedFloor {
-				parent[root(i)] = root(j)
-			}
+	link := func(pair [2]int64) {
+		a, aok := at[pair[0]]
+		b, bok := at[pair[1]]
+		if aok && bok {
+			parent[root(a)] = root(b)
 		}
+	}
+	for pair := range l.pairs {
+		link(pair)
+	}
+	for pair := range found {
+		link(pair)
 	}
 	members := map[int][]int64{}
 	var order []int
@@ -118,7 +181,32 @@ func group(all []face) grouping {
 			g.seeds = append(g.seeds, members[r])
 		}
 	}
-	return g
+
+	// Kept: the pairs between faces that still exist, and who is loose.
+	exists := make(map[int64]bool, len(all))
+	for _, f := range all {
+		exists[f.id] = true
+	}
+	for pair := range l.pairs {
+		if !exists[pair[0]] || !exists[pair[1]] {
+			delete(l.pairs, pair)
+		}
+	}
+	for pair := range found {
+		l.pairs[pair] = true
+	}
+	clear(l.loose)
+	for _, f := range loose {
+		l.loose[f.id] = true
+	}
+	return g, nil
+}
+
+func pairOf(a, b int64) [2]int64 {
+	if a > b {
+		a, b = b, a
+	}
+	return [2]int64{a, b}
 }
 
 func dot(a, b []float32) float32 {

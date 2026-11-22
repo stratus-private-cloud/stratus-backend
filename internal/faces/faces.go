@@ -100,13 +100,18 @@ type Service struct {
 	era      uint64
 	// deferred is what Batch failed on and is not to retry yet (#557).
 	deferred *media.Deferred
+	// links is what earlier rounds of grouping learned, so a round compares
+	// what is new rather than every pair again (#560). Group alone uses it,
+	// one round at a time.
+	grouping sync.Mutex
+	links    *links
 }
 
 // New wires the service for the models named model.
 func New(store Store, blobs Blobs, pictures Pictures, models Models, model string) *Service {
 	return &Service{
 		store: store, blobs: blobs, pictures: pictures, models: models, model: model + Pipeline,
-		deferred: media.NewDeferred(),
+		deferred: media.NewDeferred(), links: newLinks(),
 	}
 }
 
@@ -327,7 +332,12 @@ func (s *Service) Group(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("read the faces: %w", err)
 	}
-	g := group(all)
+	s.grouping.Lock()
+	g, err := groupWith(ctx, all, s.links)
+	s.grouping.Unlock()
+	if err != nil {
+		return err
+	}
 	for person, ids := range g.joins {
 		if err := s.store.AssignFaces(ctx, person, ids); err != nil {
 			// Merged away meanwhile; the next round finds them loose again.
