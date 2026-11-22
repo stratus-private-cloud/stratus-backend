@@ -229,7 +229,9 @@ could not — so a recording in a codec this image was not built with says no in
 the listing instead of saying yes and answering `404`. Free space is reported the way RFC 4331
 says — `quota-available-bytes` and `quota-used-bytes` — which is what a mounted
 volume draws its bar from, so Finder and `rclone about` understand it without
-being told anything.
+being told anything. They are answered for the folder asked about and not for
+each folder listed in it, and only to a request that names them or asks for
+everything, since what is used is a sum over everything below.
 
 **And a file says what was read out of it, to a client that asks.** The web's
 Details are properties too, in the server's namespace

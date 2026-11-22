@@ -44,11 +44,12 @@ import (
 
 // propfindHandler answers one PROPFIND, over a filesystem built for that
 // request alone. See readOnlyFS for why it cannot be shared.
-func (f *fileSystem) propfindHandler(ctx context.Context, owner string, info bool) http.Handler {
+func (f *fileSystem) propfindHandler(ctx context.Context, owner string, info, quota bool, target string) http.Handler {
 	return &xnet.Handler{
 		Prefix: f.prefix,
 		FileSystem: &readOnlyFS{
 			files: f.files, index: f.index, owner: owner, ctx: ctx, info: info,
+			quota: quota, target: target,
 			listed: map[string]db.File{}, drawn: map[int64]db.MediaState{},
 		},
 		// The server's own rather than one built for this request (#174), bound
@@ -88,6 +89,10 @@ type readOnlyFS struct {
 	// info is whether the request named a property of info.go, which is a
 	// query per file and so answered only to somebody who asked.
 	info bool
+	// quota is whether it asked for RFC 4331's two, and target the one
+	// collection they are answered for (#555).
+	quota  bool
+	target string
 }
 
 // errReadOnly is what the methods PROPFIND cannot reach return. They are on the
@@ -166,7 +171,7 @@ func (f *readOnlyFile) Readdir(count int) ([]os.FileInfo, error) {
 	if !f.row.IsDir {
 		return nil, errReadOnly
 	}
-	children, err := f.fs.files.List(context.Background(), f.fs.owner, f.row.Path)
+	children, err := f.fs.files.List(f.fs.ctx, f.fs.owner, f.row.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -341,11 +346,18 @@ func (f *readOnlyFile) DeadProps() (map[xml.Name]xnet.Property, error) {
 	}
 
 	// RFC 4331, on a collection: what a mounted volume draws its bar from.
-	free, err := f.fs.files.FreeSpace(context.Background())
+	// The one asked about and not each folder listed in it, and only when
+	// asked (#555): SubtreeSize is a sum over everything below, so a listing
+	// of the root used to sum the library twice to answer five properties
+	// that were not these.
+	if !f.fs.quota || f.row.Path != f.fs.target {
+		return props, nil
+	}
+	free, err := f.fs.files.FreeSpace(f.fs.ctx)
 	if err == nil && free != storage.Unlimited {
 		props[quotaAvailable] = property(quotaAvailable, strconv.FormatInt(free, 10))
 	}
-	used, err := f.fs.files.SubtreeSize(context.Background(), f.fs.owner, f.row.Path)
+	used, err := f.fs.files.SubtreeSize(f.fs.ctx, f.fs.owner, f.row.Path)
 	if err == nil {
 		props[quotaUsed] = property(quotaUsed, strconv.FormatInt(used, 10))
 	}
