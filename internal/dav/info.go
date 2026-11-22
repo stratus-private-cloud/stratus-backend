@@ -40,12 +40,21 @@ var infoNames = map[xml.Name]bool{
 }
 
 // asksForInfo reads whether a PROPFIND names any of them, and puts the body
-// back for x/net to read. Past the limit it says no: a request body that size
-// is not a list of properties somebody wrote by hand, and the walk it asks
-// for is answered as it was before these existed.
+// back for x/net to read.
 func asksForInfo(r *http.Request) bool {
+	info, _ := asksFor(r)
+	return info
+}
+
+// asksFor reads which of the two costly groups a PROPFIND wants, and puts the
+// body back for x/net to read: info, a query per file, only when one of its
+// names is there; quota, a sum over a subtree, when one of its two names is
+// or when everything is asked for -- an allprop, a propname, or no body,
+// which RFC 4918 reads as allprop (#555). Past the limit it says neither: a
+// body that size is not a list of properties somebody wrote by hand.
+func asksFor(r *http.Request) (info, quota bool) {
 	if r.Body == nil || r.Body == http.NoBody {
-		return false
+		return false, true
 	}
 	head, err := io.ReadAll(io.LimitReader(r.Body, infoPeek))
 	r.Body = struct {
@@ -53,16 +62,28 @@ func asksForInfo(r *http.Request) bool {
 		io.Closer
 	}{io.MultiReader(bytes.NewReader(head), r.Body), r.Body}
 	if err != nil {
-		return false
+		return false, false
+	}
+	if len(bytes.TrimSpace(head)) == 0 {
+		return false, true
 	}
 	dec := xml.NewDecoder(bytes.NewReader(head))
 	for {
 		tok, err := dec.Token()
 		if err != nil {
-			return false
+			return info, quota
 		}
-		if start, ok := tok.(xml.StartElement); ok && infoNames[start.Name] {
-			return true
+		start, ok := tok.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		switch {
+		case infoNames[start.Name]:
+			info = true
+		case start.Name == quotaAvailable, start.Name == quotaUsed,
+			start.Name == (xml.Name{Space: "DAV:", Local: "allprop"}),
+			start.Name == (xml.Name{Space: "DAV:", Local: "propname"}):
+			quota = true
 		}
 	}
 }

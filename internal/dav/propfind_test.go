@@ -526,3 +526,40 @@ func sourcesOf(t *testing.T, body string) map[string]string {
 	}
 	return out
 }
+
+// TestPropfindAnswersQuotaForTheTargetOnly is #555: every folder in a listing
+// summed everything under it, asked or not, so listing the root summed the
+// library twice to answer properties nobody had named.
+func TestPropfindAnswersQuotaForTheTargetOnly(t *testing.T) {
+	t.Parallel()
+	h := server(t)
+	do(t, h, "MKCOL", "/files/album", "")
+	do(t, h, http.MethodPut, "/files/album/one.txt", "twelve bytes")
+
+	// An allprop: the target answers, and the folder listed in it does not.
+	all := propsOf(t, do(t, h, "PROPFIND", "/files/", "", "Depth", "1").Body.String())
+	if _, there := all["/files"]["quota-used-bytes"]; !there {
+		t.Errorf("an allprop of the root has no quota: %v", all["/files"])
+	}
+	if _, there := all["/files/album"]["quota-used-bytes"]; there {
+		t.Error("a folder listed inside the target answered quota too")
+	}
+
+	// What stratus-app sends: no quota named, so none computed.
+	const named = `<?xml version="1.0" encoding="utf-8"?>
+<propfind xmlns="DAV:"><prop><resourcetype/><getcontentlength/><getlastmodified/><getetag/><getcontenttype/></prop></propfind>`
+	listed := propsOf(t, do(t, h, "PROPFIND", "/files/", named, "Depth", "1",
+		"Content-Type", "application/xml").Body.String())
+	if _, there := listed["/files"]["quota-used-bytes"]; there {
+		t.Error("quota was answered to a body that never named it")
+	}
+
+	// And named, it is the target's.
+	const quota = `<?xml version="1.0" encoding="utf-8"?>
+<propfind xmlns="DAV:"><prop><quota-used-bytes/></prop></propfind>`
+	asked := propsOf(t, do(t, h, "PROPFIND", "/files/album", quota, "Depth", "1",
+		"Content-Type", "application/xml").Body.String())
+	if got := asked["/files/album"]["quota-used-bytes"]; got != "12" {
+		t.Errorf("quota-used-bytes named = %q, want 12 (%v)", got, asked)
+	}
+}

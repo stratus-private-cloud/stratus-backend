@@ -93,7 +93,15 @@ func Handler(prefix string, service *files.Service, index Index) http.Handler {
 			// stripped path would cost the hrefs their /dav.
 			restored := r.Clone(r.Context())
 			restored.URL.Path = prefix + r.URL.Path
-			fs.propfindHandler(r.Context(), owner, asksForInfo(restored)).ServeHTTP(w, restored)
+			info, quota := asksFor(restored)
+			// Quota is the request's target's alone: a sum over every folder
+			// in a listing was the whole library summed twice to list the root
+			// (#555). A target that is not a path is x/net's to refuse.
+			target, terr := toPath(r.URL.Path)
+			if terr != nil {
+				quota = false
+			}
+			fs.propfindHandler(r.Context(), owner, info, quota, target).ServeHTTP(w, restored)
 			return
 		}
 
