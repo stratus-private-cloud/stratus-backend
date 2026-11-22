@@ -203,7 +203,7 @@ func TestTheSmallerScanners(t *testing.T) {
 	if err != nil || id != 4 || state.Thumb != db.ThumbMade || !state.ThumbAt.Equal(when) {
 		t.Errorf("ScanMediaState = %d %+v, %v", id, state, err)
 	}
-	a, err := sqlutil.ScanAlbum(row{"Artist", "Album", 12, int64(3000), 1998, "Electronic", when}, codec)
+	a, err := sqlutil.ScanAlbum(row{"Artist", "Album", 12, int64(3000), 1998, "Electronic", when, int64(7)}, codec)
 	if err != nil || a.SongCount != 12 || !a.Created.Equal(when) {
 		t.Errorf("ScanAlbum = %+v, %v", a, err)
 	}

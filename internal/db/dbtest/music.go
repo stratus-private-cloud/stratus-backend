@@ -73,6 +73,10 @@ func musicGroupsAlbums(t *testing.T, s db.Repo) {
 	if albums[0].Created.IsZero() {
 		t.Error("Created is zero, and the Subsonic schema requires it on every album")
 	}
+	// One of its own tracks, which is what a page names its cover by (#556).
+	if got, err := s.TrackByFile(t.Context(), owner, albums[0].Track); err != nil || got.Media.Album != "Geogaddi" {
+		t.Errorf("Track = %d names %+v, %v; want a track of the album", albums[0].Track, got.Media, err)
+	}
 }
 
 // musicCompilation is why album_artist is a column of its own. Filed under the

@@ -75,7 +75,7 @@ func (h *handler) bar(w http.ResponseWriter, r *http.Request, user string, tree 
 		// The album the track is on, which for a playlist is not the queue. A
 		// track the tree cannot place has no album to show, not an error.
 		if at, err := tree.PathOf(r.Context(), t); err == nil {
-			b.Album, b.Cover = musicHref(path.Dir(at), true), coverHref(path.Dir(at), coverTile)
+			b.Album, b.Cover = musicHref(path.Dir(at), true), coverHref(path.Dir(at), coverTile, t.File.ID)
 		}
 		if n > 1 {
 			b.Prev = playHref(queue, n-1)

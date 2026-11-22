@@ -40,6 +40,10 @@ const (
 	musicPrefix = "/music/"
 	// coverParam is how a page asks for an album's picture.
 	coverParam = "cover"
+	// coverFileParam names a track of that album beside it, by its file id,
+	// which is what the picture is found from (#556). Not "track", which on
+	// the same address is a position in the queue the player bar walks.
+	coverFileParam = "file"
 	// artistParam and albumParam are how a caller holding tags reaches the
 	// address they are served at: see musicByTag.
 	artistParam = "artist"
@@ -116,6 +120,10 @@ func (h *handler) music(w http.ResponseWriter, r *http.Request, user string) {
 	tree := music.NewTree(h.library, user)
 	raw := strings.Trim(r.PathValue("path"), "/")
 
+	if h.coverByTrack(w, r, user, raw) {
+		return
+	}
+
 	if raw == "" {
 		if tag := r.URL.Query().Get(artistParam); tag != "" {
 			h.musicByTag(w, r, user, tree, tag, r.URL.Query().Get(albumParam))
@@ -190,7 +198,7 @@ func (h *handler) artist(w http.ResponseWriter, r *http.Request, user string, tr
 	for i, c := range children {
 		rows[i] = albumRow{
 			Name: c.Album.Name, Href: musicHref(c.Path(), true), Year: c.Album.Year,
-			Cover: coverHref(c.Path(), coverTile),
+			Cover: coverHref(c.Path(), coverTile, c.Album.Track),
 		}
 	}
 	w.Header().Set("Content-Security-Policy", albumPolicy)
@@ -246,7 +254,7 @@ func (h *handler) album(w http.ResponseWriter, r *http.Request, user string, tre
 
 	av := &albumView{
 		Artist: artist, ArtistHref: musicHref(n.ArtistName, true),
-		Cover:   coverHref(n.Path(), coverAlbum),
+		Cover:   coverHref(n.Path(), coverAlbum, n.Album.Track),
 		Starred: !notes[album].Starred.IsZero(),
 		Rating:  stars(notes[album].Rating),
 	}
@@ -292,12 +300,47 @@ func (h *handler) cover(w http.ResponseWriter, r *http.Request, user string, n m
 	first, err := music.FirstTrack(r.Context(), h.library, user, n.Artist.Name, n.Album.Name)
 	switch {
 	case errors.Is(err, db.ErrNotFound):
-		http.NotFound(w, r)
+		noCover(w, r)
 		return
 	case err != nil:
 		h.fail(w, r, user, err)
 		return
 	}
+	h.coverOf(w, r, user, n.Path(), first)
+}
+
+// coverByTrack answers a cover whose address names a track of its album,
+// which is every one a page draws: resolving the album from its address
+// listed every artist in the library, once per picture on the page (#556).
+// A track that is not there, or not a track, is the address answered the long
+// way, as a face that is gone is (#549).
+func (h *handler) coverByTrack(w http.ResponseWriter, r *http.Request, user, raw string) bool {
+	q := r.URL.Query()
+	id, err := strconv.ParseInt(q.Get(coverFileParam), 10, 64)
+	if !q.Has(coverParam) || err != nil || id <= 0 || strings.Count(raw, "/") != 1 {
+		return false
+	}
+	track, err := h.library.TrackByFile(r.Context(), user, id)
+	switch {
+	case errors.Is(err, db.ErrNotFound):
+		return false
+	case err != nil:
+		h.fail(w, r, user, err)
+		return true
+	}
+	h.coverOf(w, r, user, raw, track.File)
+	return true
+}
+
+// noCover is the answer for half a library, kept an hour: long enough that a
+// page of albums with none is not asked again on every visit, short enough
+// that one fetched from outside since shows up (#556).
+func noCover(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	http.NotFound(w, r)
+}
+
+func (h *handler) coverOf(w http.ResponseWriter, r *http.Request, user, album string, first db.File) {
 	size := coverTile
 	if px, perr := strconv.Atoi(r.URL.Query().Get(coverParam)); perr == nil && px > 0 {
 		size = px
@@ -314,9 +357,9 @@ func (h *handler) cover(w http.ResponseWriter, r *http.Request, user string, n m
 		// was going to fill -- and a picture that is there and will not draw
 		// is the same square with a line in the log, as getCoverArt does.
 		if errors.Is(err, thumb.ErrNoThumbnail) {
-			slog.WarnContext(r.Context(), "cover art that cannot be drawn", "album", n.Path(), "err", err)
+			slog.WarnContext(r.Context(), "cover art that cannot be drawn", "album", album, "err", err)
 		}
-		http.NotFound(w, r)
+		noCover(w, r)
 		return
 	case err != nil:
 		h.fail(w, r, user, err)
@@ -380,9 +423,14 @@ func musicHref(p string, dir bool) string {
 	return at
 }
 
-// coverHref is an album's picture, at the album's own address.
-func coverHref(album string, px int) string {
-	return musicHref(album, true) + "?" + coverParam + "=" + strconv.Itoa(px)
+// coverHref is an album's picture, at the album's own address, named by one
+// of its tracks when there is one to name.
+func coverHref(album string, px int, track int64) string {
+	href := musicHref(album, true) + "?" + coverParam + "=" + strconv.Itoa(px)
+	if track > 0 {
+		href += "&" + coverFileParam + "=" + strconv.FormatInt(track, 10)
+	}
+	return href
 }
 
 func scrobbleURL(fileID int64) string {
