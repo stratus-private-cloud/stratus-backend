@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
+	"github.com/stratus-private-cloud/stratus-backend/internal/files"
 )
 
 // Store is the file layer this needs, which is the ordinary one. Narrow on
@@ -56,14 +57,37 @@ type Watcher struct {
 	// the whole of "has it finished arriving": a file is imported when two
 	// passes in a row agree about its size. See Pass.
 	sizes map[string]int64
+	// kept is what was imported and could not be deleted, as it measured
+	// then (#552). Only Pass touches it. A file that still measures the same
+	// is not read again, let alone imported again: on a share this process
+	// may read and not unlink in, that was a copy of it every interval.
+	kept  map[string]keptFile
 	state State
 }
+
+type keptFile struct {
+	size int64
+	mod  time.Time
+}
+
+// notRemoved is a file the library has and the directory still has too, and
+// whether this attempt is what put it in the library.
+type notRemoved struct {
+	err   error
+	wrote bool
+}
+
+func (e notRemoved) Error() string { return e.err.Error() }
+func (e notRemoved) Unwrap() error { return e.err }
 
 // State is what the last pass did, for the page that reports on it.
 type State struct {
 	// Waiting is how many files are in the directory but not in the library
 	// yet: still being written, or failing.
 	Waiting int
+	// Stuck is how many are in the library already and could not be deleted
+	// from the directory, which nothing here will copy again until they change.
+	Stuck int
 	// Imported is the running total since this process started.
 	Imported int64
 	// LastRun is when the last pass finished, zero before the first one.
@@ -78,7 +102,7 @@ type State struct {
 // touches nothing until Pass is called, so a directory that is not there yet is
 // a failure of a pass rather than of a startup.
 func New(dir, owner string, files Store) *Watcher {
-	return &Watcher{dir: dir, owner: owner, files: files, sizes: map[string]int64{}}
+	return &Watcher{dir: dir, owner: owner, files: files, sizes: map[string]int64{}, kept: map[string]keptFile{}}
 }
 
 // Dir is the directory being swept.
@@ -108,6 +132,7 @@ func (w *Watcher) State() State {
 func (w *Watcher) Pass(ctx context.Context) (int, error) {
 	before := w.snapshot()
 	after := make(map[string]int64, len(before))
+	kept := map[string]keptFile{}
 
 	var imported int
 	var failure error
@@ -120,7 +145,8 @@ func (w *Watcher) Pass(ctx context.Context) (int, error) {
 	// got there.
 	root, err := os.OpenRoot(w.dir)
 	if err != nil {
-		w.record(after, 0, err)
+		w.kept = kept
+		w.record(after, 0, 0, err)
 		return 0, err
 	}
 	defer func() { _ = root.Close() }()
@@ -167,6 +193,17 @@ func (w *Watcher) Pass(ctx context.Context) (int, error) {
 			return nil
 		}
 
+		// Already in the library and unchanged since: only the delete is
+		// owed, and it is asked again in case whatever refused it has been
+		// put right.
+		if k, ok := w.kept[rel]; ok && k.size == info.Size() && k.mod.Equal(info.ModTime()) {
+			if err := root.Remove(rel); err != nil {
+				failure = cmp(failure, fmt.Errorf("imported %q and could not remove it: %w", rel, err))
+				kept[rel] = k
+			}
+			return nil
+		}
+
 		// Two passes agreeing is what makes it finished. Anything else is
 		// remembered at its current size and looked at again next time.
 		if was, seen := before[rel]; !seen || was != info.Size() {
@@ -174,9 +211,16 @@ func (w *Watcher) Pass(ctx context.Context) (int, error) {
 			return nil
 		}
 
+		var stays notRemoved
 		switch err := w.importFile(ctx, root, rel); {
 		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 			return err
+		case errors.As(err, &stays):
+			failure = cmp(failure, err)
+			kept[rel] = keptFile{size: info.Size(), mod: info.ModTime()}
+			if stays.wrote {
+				imported++
+			}
 		case err != nil:
 			failure = cmp(failure, err)
 			// Kept at its size, so the next pass finds it finished and tries
@@ -191,7 +235,8 @@ func (w *Watcher) Pass(ctx context.Context) (int, error) {
 		failure = walkErr
 	}
 
-	w.record(after, imported, failure)
+	w.kept = kept
+	w.record(after, len(kept), imported, failure)
 	return imported, failure
 }
 
@@ -200,18 +245,15 @@ func (w *Watcher) Pass(ctx context.Context) (int, error) {
 // In that order, and never the other way round: the copy that matters is the
 // one in the blob store, and a file deleted before the write committed would be
 // a file nobody has. A write that succeeds and a delete that fails leaves the
-// file to be imported again next pass, which arrives beside the first as a
-// copy -- the one direction of this that costs a duplicate rather than a loss.
+// file on disk, and it is not copied again: Pass steps over it while it is
+// unchanged, and a restart that forgot finds the same bytes already at its
+// name (#552).
 func (w *Watcher) importFile(ctx context.Context, root *os.Root, rel string) error {
 	target := rel
 	if err := db.ValidatePath(target); err != nil {
 		return fmt.Errorf("%q is not a path this server can store: %w", rel, err)
 	}
 	if err := w.files.MkdirAll(ctx, w.owner, path.Dir(target)); err != nil {
-		return err
-	}
-	target, err := w.files.FreeName(ctx, w.owner, target)
-	if err != nil {
 		return err
 	}
 
@@ -232,15 +274,51 @@ func (w *Watcher) importFile(ctx context.Context, root *os.Root, rel string) err
 	}
 	size := info.Size()
 
-	// No MIME type: the one thing this knows about the file is less than what
-	// internal/files works out from its first bytes.
-	if _, err := w.files.Write(ctx, w.owner, target, body, size, ""); err != nil {
-		return fmt.Errorf("import %q: %w", rel, err)
+	// The same bytes already at this name are a file imported once and not
+	// deleted -- by a process that has restarted since, or the kept set
+	// would have stepped over it -- and a copy beside them is the one thing
+	// not to make (#552). Read only when the size agrees, which is rare.
+	same, err := w.alreadyThere(ctx, target, body, size)
+	if err != nil {
+		return err
+	}
+	if !same {
+		free, err := w.files.FreeName(ctx, w.owner, target)
+		if err != nil {
+			return err
+		}
+		// No MIME type: the one thing this knows about the file is less than
+		// what internal/files works out from its first bytes.
+		if _, err := w.files.Write(ctx, w.owner, free, body, size, ""); err != nil {
+			return fmt.Errorf("import %q: %w", rel, err)
+		}
 	}
 	if err := root.Remove(rel); err != nil {
-		return fmt.Errorf("imported %q and could not remove it: %w", rel, err)
+		return notRemoved{fmt.Errorf("imported %q and could not remove it: %w", rel, err), !same}
 	}
 	return nil
+}
+
+// alreadyThere is whether the library holds these bytes at target, leaving
+// body at its start either way.
+func (w *Watcher) alreadyThere(ctx context.Context, target string, body *os.File, size int64) (bool, error) {
+	there, err := w.files.Stat(ctx, w.owner, target)
+	switch {
+	case errors.Is(err, db.ErrNotFound):
+		return false, nil
+	case err != nil:
+		return false, err
+	case there.IsDir || there.Size != size || there.ETag == "":
+		return false, nil
+	}
+	tag, err := files.ETagOf(body)
+	if err != nil {
+		return false, err
+	}
+	if _, err := body.Seek(0, io.SeekStart); err != nil {
+		return false, err
+	}
+	return tag == there.ETag, nil
 }
 
 func (w *Watcher) snapshot() map[string]int64 {
@@ -249,11 +327,12 @@ func (w *Watcher) snapshot() map[string]int64 {
 	return w.sizes
 }
 
-func (w *Watcher) record(sizes map[string]int64, imported int, err error) {
+func (w *Watcher) record(sizes map[string]int64, stuck, imported int, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.sizes = sizes
 	w.state.Waiting = len(sizes)
+	w.state.Stuck = stuck
 	w.state.Imported += int64(imported)
 	w.state.LastRun = time.Now()
 	w.state.LastError = ""

@@ -479,3 +479,83 @@ func TestAFolderSwappedForASymlinkIsNotFollowedOut(t *testing.T) {
 		t.Errorf("imported %+v through the symlink", f)
 	}
 }
+
+// lockedIn makes dir refuse to have anything deleted from it, the way a share
+// this process can read and not write is, and puts it back afterwards so the
+// test directory can be cleaned up.
+func lockedIn(t *testing.T, dir string) {
+	t.Helper()
+	if os.Geteuid() == 0 {
+		t.Skip("root deletes from a read-only directory anyway")
+	}
+	if err := os.Chmod(dir, 0o500); err != nil { //nolint:gosec // a directory needs its x bit.
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o750) }) //nolint:gosec // as above.
+}
+
+// TestAFileThatCannotBeDeletedIsImportedOnce is #552: a successful import that
+// could not remove its file used to import it again every interval, as
+// "notes (2).txt", "notes (3).txt" and so on for ever.
+func TestAFileThatCannotBeDeletedIsImportedOnce(t *testing.T) {
+	t.Parallel()
+	w, s, dir := watcher(t)
+	stays := drop(t, dir, "notes.txt", "hello")
+	lockedIn(t, dir)
+
+	w.Pass(t.Context()) //nolint:errcheck // the first pass only measures.
+	for range 3 {
+		if _, err := w.Pass(t.Context()); err == nil {
+			t.Error("a file that could not be removed was not reported")
+		}
+	}
+
+	if got := read(t, s, "notes.txt"); got != "hello" {
+		t.Errorf("the library holds %q", got)
+	}
+	if _, err := s.Stat(t.Context(), owner, "notes (2).txt"); !errors.Is(err, db.ErrNotFound) {
+		t.Errorf("a second copy was made: %v", err)
+	}
+	if _, err := os.Stat(stays); err != nil {
+		t.Errorf("the file on disk went: %v", err)
+	}
+	if state := w.State(); state.Stuck != 1 || state.Waiting != 0 || state.Imported != 1 {
+		t.Errorf("state = %+v, want one stuck, none waiting, one imported", state)
+	}
+
+	// A process that has forgotten all of that finds the same bytes at the
+	// same name and makes no copy either.
+	again := incoming.New(dir, owner, s)
+	again.Pass(t.Context()) //nolint:errcheck // measuring.
+	again.Pass(t.Context()) //nolint:errcheck // the delete still fails.
+	if _, err := s.Stat(t.Context(), owner, "notes (2).txt"); !errors.Is(err, db.ErrNotFound) {
+		t.Errorf("a restarted sweep made a second copy: %v", err)
+	}
+	if state := again.State(); state.Stuck != 1 || state.Imported != 0 {
+		t.Errorf("after a restart state = %+v, want one stuck and nothing imported", state)
+	}
+}
+
+// TestAStuckFileThatChangesIsImportedAgain: what is skipped is those bytes,
+// not that name for ever.
+func TestAStuckFileThatChangesIsImportedAgain(t *testing.T) {
+	t.Parallel()
+	w, s, dir := watcher(t)
+	stays := drop(t, dir, "notes.txt", "hello")
+	lockedIn(t, dir)
+
+	w.Pass(t.Context()) //nolint:errcheck // measuring.
+	w.Pass(t.Context()) //nolint:errcheck // imported, not removed.
+
+	// Writing an existing file needs the file's permission and not the
+	// directory's, which is why a locked folder can still change.
+	if err := os.WriteFile(stays, []byte("hello, again"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	w.Pass(t.Context()) //nolint:errcheck // measures the new size.
+	w.Pass(t.Context()) //nolint:errcheck // imports it, cannot remove it.
+
+	if got := read(t, s, "notes (2).txt"); got != "hello, again" {
+		t.Errorf("the changed file arrived as %q", got)
+	}
+}

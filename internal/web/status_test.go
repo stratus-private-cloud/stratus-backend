@@ -295,12 +295,12 @@ func TestTheImportFolderIsOnTheStatusPage(t *testing.T) {
 	}
 
 	folder := stuck{dir: "/srv/incoming", state: incoming.State{
-		Waiting: 3, Imported: 11, LastRun: time.Now(),
+		Waiting: 3, Stuck: 2, Imported: 11, LastRun: time.Now(),
 		LastError: "import \"holiday/photo.jpg\": no room left on device",
 	}}
 	h := handlerImports(t, s, blobs, meta, folder)
 	body := get(t, h, "/status", signIn(t, h)).Body.String()
-	for _, want := range []string{"Waiting on disk", "/srv/incoming", ">3<", ">11<", "no room left on device"} {
+	for _, want := range []string{"Waiting on disk", "/srv/incoming", ">3<", ">11<", "no room left on device", "Imported, not removed", ">2<"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the status page does not say %q:\n%s", want, body)
 		}

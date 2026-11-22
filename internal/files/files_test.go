@@ -951,3 +951,18 @@ func TestTheWalkAndTheNameNeedTheStore(t *testing.T) {
 		t.Error("FreeName over a store that cannot answer succeeded")
 	}
 }
+
+// TestETagOfIsWhatAWriteIsGiven: the import folder compares the two to know a
+// file is already in the library (#552), so they cannot be two formulas.
+func TestETagOfIsWhatAWriteIsGiven(t *testing.T) {
+	t.Parallel()
+	s, _ := service(t)
+	written, err := s.Write(t.Context(), "edu", "notes.txt", strings.NewReader("hello"), 5, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tag, err := files.ETagOf(strings.NewReader("hello"))
+	if err != nil || tag != written.ETag {
+		t.Errorf("ETagOf = %q, %v; a write was given %q", tag, err, written.ETag)
+	}
+}
