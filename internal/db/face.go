@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"slices"
-	"strings"
 	"time"
 )
 
@@ -168,7 +167,7 @@ func SortPeople(people []Person) []Person {
 			}
 			return 1
 		case a.Name != b.Name:
-			return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+			return CompareNames(a.Name, b.Name)
 		case a.Faces != b.Faces:
 			return cmp.Compare(b.Faces, a.Faces)
 		}

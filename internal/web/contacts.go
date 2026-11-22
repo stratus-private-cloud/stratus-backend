@@ -108,7 +108,7 @@ func (h *handler) addressBook(w http.ResponseWriter, r *http.Request, user, name
 		rows = append(rows, row)
 	}
 	slices.SortStableFunc(rows, func(a, b contactRow) int {
-		return strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name))
+		return db.CompareNames(a.Name, b.Name)
 	})
 
 	cv := &contactsView{Name: bookName(b), New: contactHref(contactNewPrefix, name, ""), Count: len(rows)}
@@ -199,7 +199,7 @@ func joinParts(v string) string {
 // initial is the heading a name is listed under: its first letter, or # for
 // one that does not start with a letter.
 func initial(name string) string {
-	r, _ := utf8.DecodeRuneInString(name)
+	r, _ := utf8.DecodeRuneInString(db.FoldName(name))
 	if unicode.IsLetter(r) {
 		return string(unicode.ToUpper(r))
 	}
