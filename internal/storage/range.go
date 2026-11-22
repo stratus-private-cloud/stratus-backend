@@ -71,3 +71,18 @@ func (r Range) Resolve(size int64) (off, n int64, err error) {
 	}
 	return r.off, min(r.n, size-r.off), nil
 }
+
+// Forward is the HTTP Range header asking for r without knowing the object's
+// size, which a range from an offset can be and a suffix cannot: "bytes=off-"
+// or "bytes=off-last". Not ok for a suffix, the whole object, a zero-length
+// read or a negative bound, which are the cases Resolve has to see the size
+// for. An adapter that sends it saves the request asking for the size (#562).
+func (r Range) Forward() (string, bool) {
+	switch {
+	case r == All(), r.suffix, r.off < 0, r.hasLen && r.n <= 0:
+		return "", false
+	case !r.hasLen:
+		return fmt.Sprintf("bytes=%d-", r.off), true
+	}
+	return fmt.Sprintf("bytes=%d-%d", r.off, r.off+r.n-1), true
+}
