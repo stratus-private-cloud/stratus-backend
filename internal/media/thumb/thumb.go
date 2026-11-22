@@ -132,6 +132,8 @@ type Service struct {
 	lookups db.Lookups
 	// readers are handed the pixels of every decode a pass makes (#519).
 	readers []Reader
+	// deferred is what the pass ahead failed on and is not to retry yet.
+	deferred *media.Deferred
 }
 
 // New wires the generator. It takes the blob store directly because a
@@ -147,6 +149,7 @@ func New(blobs storage.Storage, service *files.Service, meta db.MediaIndex, ffmp
 	return &Service{
 		blobs: blobs, files: service, meta: meta, ffmpeg: ffmpeg, tmpDir: tmpDir,
 		decoding: make(chan struct{}, slots), queue: queue, maxWait: defaultMaxWait,
+		deferred: media.NewDeferred(),
 	}
 }
 

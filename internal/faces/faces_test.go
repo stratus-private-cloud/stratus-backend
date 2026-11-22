@@ -3,6 +3,7 @@ package faces_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"io"
@@ -70,6 +71,7 @@ type pictures struct {
 	colours map[int64]color.Color
 	busy    bool
 	refuse  map[int64]bool
+	lost    map[int64]bool
 }
 
 func (p *pictures) Look(_ context.Context, f db.File, size int, fn func(image.Image) error) error {
@@ -78,6 +80,9 @@ func (p *pictures) Look(_ context.Context, f db.File, size int, fn func(image.Im
 	}
 	if p.refuse[f.ID] {
 		return thumb.ErrNoThumbnail
+	}
+	if p.lost[f.ID] {
+		return errors.New("the store did not answer")
 	}
 	if size != faces.PictureSize {
 		return errors.New("asked for the wrong size")
@@ -123,7 +128,7 @@ func newFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &pictures{colours: map[int64]color.Color{}, refuse: map[int64]bool{}}
+	p := &pictures{colours: map[int64]color.Color{}, refuse: map[int64]bool{}, lost: map[int64]bool{}}
 	m := &models{}
 	return &fixture{store: store, blobs: blobs, pictures: p, models: m, service: faces.New(store, blobs, p, m, "fake-1")}
 }
@@ -446,5 +451,24 @@ func TestAPageOfPicturesListsEverybodyOnce(t *testing.T) {
 	}
 	if renamed, _ := s.People(t.Context()); renamed[0].Name != "Ana" || store.listings != 2 {
 		t.Errorf("after a rename People = %+v in %d listings, want Ana in two", renamed, store.listings)
+	}
+}
+
+// TestABatchIsNotHeldByWhatItCannotRead is #557 here too: what could not be
+// read is put off, and what is older is looked at.
+func TestABatchIsNotHeldByWhatItCannotRead(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.photo(t, "older.jpg", red)
+	for i := range faces.Batch {
+		f := fx.photo(t, fmt.Sprintf("lost-%d.jpg", i), red)
+		fx.pictures.lost[f.ID] = true
+	}
+	now := time.Now()
+	if n, err := fx.service.Batch(t.Context(), now); err != nil || n != 0 {
+		t.Fatalf("a batch of nothing readable = %d, %v", n, err)
+	}
+	if n, err := fx.service.Batch(t.Context(), now.Add(time.Second)); err != nil || n != 1 {
+		t.Errorf("the next batch = %d, %v; want the older photograph looked at", n, err)
 	}
 }

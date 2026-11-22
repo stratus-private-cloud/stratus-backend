@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"io"
 	"testing"
@@ -349,5 +350,54 @@ func TestALookIsSharedWithTheOtherReaders(t *testing.T) {
 	}
 	if len(other.got) != 0 {
 		t.Error("a look whose own reader failed handed the picture on anyway")
+	}
+}
+
+// brokenKeys is a store that will not read some objects, which is a bucket
+// that lost a few rather than one that went quiet.
+type brokenKeys struct {
+	storage.Storage
+	broken map[string]bool
+}
+
+func (b brokenKeys) Get(ctx context.Context, key string, rng storage.Range) (io.ReadCloser, storage.ObjectInfo, error) {
+	if b.broken[key] {
+		return nil, storage.ObjectInfo{}, storagetest.ErrInjected
+	}
+	return b.Storage.Get(ctx, key, rng)
+}
+
+// TestAPassIsNotHeldByWhatItCannotReach is #557: a batch of files whose bytes
+// would not come back looked full, so the pass came back in a second to the
+// same files at the head of the queue, and nothing older was ever reached.
+func TestAPassIsNotHeldByWhatItCannotReach(t *testing.T) {
+	t.Parallel()
+	_, service, blobs, meta := thumbsOver(t)
+
+	older := writeImage(t, service, "photos/older.jpg", 120, 90)
+	indexAs(t, meta, older, db.KindImage)
+	store := brokenKeys{Storage: blobs, broken: map[string]bool{}}
+	for i := range Batch {
+		f := writeImage(t, service, fmt.Sprintf("photos/lost-%d.jpg", i), 120, 90)
+		indexAs(t, meta, f, db.KindImage)
+		store.broken[f.BlobKey] = true
+	}
+	th := New(blobs, files.New(store, meta), meta, stubFFmpeg(t), t.TempDir())
+
+	now := time.Now()
+	if made, err := th.PrepareBatch(t.Context(), now); err != nil || made != 0 {
+		t.Fatalf("a batch of nothing it could read = %d, %v; want none made, so not a full batch", made, err)
+	}
+	if made, err := th.PrepareBatch(t.Context(), now.Add(time.Second)); err != nil || made != 1 {
+		t.Fatalf("the next pass = %d, %v; want the older photograph reached", made, err)
+	}
+	if _, err := blobs.Stat(t.Context(), thumbKey(older.BlobKey, thumbMedium)); err != nil {
+		t.Errorf("the older photograph has no picture: %v", err)
+	}
+
+	// The bucket answers again, and once their minute is up they are made.
+	clear(store.broken)
+	if made, err := th.PrepareBatch(t.Context(), now.Add(2*time.Minute)); err != nil || made != Batch {
+		t.Errorf("after the wait = %d, %v; want the %d put off", made, err, Batch)
 	}
 }

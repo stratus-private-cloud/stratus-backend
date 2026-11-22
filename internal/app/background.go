@@ -206,6 +206,8 @@ func (a *App) thumbsAhead(ctx context.Context, deps Deps) time.Duration {
 		slog.Info("made thumbnails ahead", "files", made)
 	}
 
+	// Only what was made counts: a batch of failures used to look full and
+	// come back in a second to the same files (#557).
 	if made < thumb.Batch {
 		return 0
 	}
