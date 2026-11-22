@@ -451,9 +451,15 @@ func TestTheTrashIsOneAddressAndTwoProtocols(t *testing.T) {
 		t.Errorf("PROPFIND /trash = %d %q, want the collection", bare.Code, bare.Header().Get("Location"))
 	}
 
-	// And the mount writes nothing: what a deletion has done to it is decided
-	// on the page.
-	if code := client(http.MethodDelete, "/trash/album/IMG_0001.jpg").Code; code != http.StatusMethodNotAllowed {
-		t.Errorf("DELETE in the trash = %d, want 405", code)
+	// And the mount writes a whole deletion and nothing inside one
+	// (stratus-app#179): a MOVE out of it is the page's Restore.
+	if code := client(http.MethodDelete, "/trash/album/IMG_0001.jpg").Code; code != http.StatusForbidden {
+		t.Errorf("DELETE inside a deletion = %d, want 403", code)
+	}
+	if code := client("MOVE", "/trash/album", "Destination", "/files/album"); code.Code != http.StatusCreated {
+		t.Errorf("MOVE out of the trash = %d, want 201:\n%s", code.Code, code.Body.String())
+	}
+	if page := client(http.MethodGet, "/files/album/IMG_0001.jpg"); page.Code != http.StatusOK {
+		t.Errorf("the restored file = %d, want 200", page.Code)
 	}
 }
