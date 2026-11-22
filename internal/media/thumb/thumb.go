@@ -24,6 +24,7 @@ import (
 
 	"github.com/evanoberholster/imagemeta"
 
+	_ "image/gif" // registered so a GIF decodes: its first frame, for an animated one
 	_ "image/png" // registered so a PNG cover decodes
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
@@ -290,7 +291,7 @@ func (t *Service) decodeInto(ctx context.Context, f db.File, sizes []thumbSize, 
 }
 
 // decode is that one decode, by whichever half can read the file: Go for a
-// JPEG or a PNG, and ffmpeg for a HEIC or a frame out of a video.
+// JPEG, a PNG or a GIF, and ffmpeg for a HEIC or a frame out of a video.
 //
 // The second costs a copy of the file, which is the one thing #48 was about
 // removing -- and it is unavoidable here for the reason it was unavoidable
@@ -963,7 +964,7 @@ func CanThumbnail(p string, size int64) bool {
 // here or refused honestly, never read badly.
 func decodableInGo(p string) bool {
 	switch strings.ToLower(path.Ext(p)) {
-	case ".jpg", ".jpeg", ".png":
+	case ".jpg", ".jpeg", ".png", ".gif":
 		return true
 	}
 	return false

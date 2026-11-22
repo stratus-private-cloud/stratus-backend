@@ -5,6 +5,7 @@ import (
 	"errors"
 	"image"
 	"image/color"
+	"image/gif"
 	"image/jpeg"
 	"image/png"
 	"io"
@@ -109,7 +110,7 @@ func TestThumbKeyIsCollectable(t *testing.T) {
 func TestDecodableInGo(t *testing.T) {
 	t.Parallel()
 
-	for _, p := range []string{"a.jpg", "A.JPG", "a.jpeg", "a.png", "dir/b.PNG"} {
+	for _, p := range []string{"a.jpg", "A.JPG", "a.jpeg", "a.png", "dir/b.PNG", "a.gif", "A.GIF"} {
 		if !decodableInGo(p) {
 			t.Errorf("%q should be decodable without ffmpeg", p)
 		}
@@ -152,6 +153,40 @@ func TestOpenMakesAndKeeps(t *testing.T) {
 	}
 	if got := read(t, th, f, 300); string(got) != "not a picture" {
 		t.Error("the second request generated the thumbnail again instead of reading it")
+	}
+}
+
+// TestAnAnimatedGIFIsDrawnByItsFirstFrame: a GIF was an image to the indexer
+// and nothing to the generator, so it never had a picture (#588).
+func TestAnAnimatedGIFIsDrawnByItsFirstFrame(t *testing.T) {
+	t.Parallel()
+	th, service, _ := thumbs(t)
+
+	frame := func(c color.Color) *image.Paletted {
+		img := image.NewPaletted(image.Rect(0, 0, 400, 200), color.Palette{color.Black, color.White})
+		for y := range 200 {
+			for x := range 400 {
+				img.Set(x, y, c)
+			}
+		}
+		return img
+	}
+	var body bytes.Buffer
+	anim := &gif.GIF{Image: []*image.Paletted{frame(color.White), frame(color.Black)}, Delay: []int{10, 10}}
+	if err := gif.EncodeAll(&body, anim); err != nil {
+		t.Fatal(err)
+	}
+	f := write(t, service, "memes/dance.gif", body.Bytes(), "image/gif")
+
+	got, err := jpeg.Decode(bytes.NewReader(read(t, th, f, 300)))
+	if err != nil {
+		t.Fatalf("the thumbnail does not decode: %v", err)
+	}
+	if b := got.Bounds(); b.Dx() != 300 || b.Dy() != 150 {
+		t.Errorf("the thumbnail is %dx%d, want 300x150", b.Dx(), b.Dy())
+	}
+	if r, _, _, _ := got.At(150, 75).RGBA(); r>>8 < 200 {
+		t.Errorf("the middle is %d of 255 red, want the white first frame", r>>8)
 	}
 }
 
@@ -289,10 +324,14 @@ func writeImage(t *testing.T, s *files.Service, path string, w, h int) db.File {
 	var body bytes.Buffer
 	var err error
 	mime := "image/jpeg"
-	if filepath.Ext(path) == ".png" {
+	switch filepath.Ext(path) {
+	case ".png":
 		mime = "image/png"
 		err = png.Encode(&body, gradientImage(w, h))
-	} else {
+	case ".gif":
+		mime = "image/gif"
+		err = gif.Encode(&body, gradientImage(w, h), nil)
+	default:
 		err = jpeg.Encode(&body, gradientImage(w, h), nil)
 	}
 	if err != nil {

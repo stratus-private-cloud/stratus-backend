@@ -1382,7 +1382,8 @@ disk.
 **A photograph in a listing shows a picture of itself**, made the first time
 somebody looks at the folder and kept as a derived blob the sweep collects. The
 URL carries the file's ETag, so a browser caches it forever and a new upload
-gets a new one. **HEIC and video included**: JPEG and PNG are decoded in Go, and
+gets a new one. **HEIC and video included**: JPEG, PNG and GIF — an animated one
+by its first frame — are decoded in Go, and
 what Go cannot read goes to the ffmpeg in the image, which is also what turns
 the first second of a video into a frame. A photograph taken on a phone held
 upright comes out upright, whichever half of the pipeline read it: ffmpeg
