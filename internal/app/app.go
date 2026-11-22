@@ -35,6 +35,7 @@ import (
 	"github.com/stratus-private-cloud/stratus-backend/internal/settings"
 	"github.com/stratus-private-cloud/stratus-backend/internal/storage"
 	"github.com/stratus-private-cloud/stratus-backend/internal/subsonic"
+	"github.com/stratus-private-cloud/stratus-backend/internal/timeline"
 	"github.com/stratus-private-cloud/stratus-backend/internal/tus"
 	"github.com/stratus-private-cloud/stratus-backend/internal/web"
 )
@@ -129,6 +130,9 @@ type App struct {
 	// backedUp is the newest backup and what became of the last attempt, and
 	// nil until the backup loop has looked.
 	backedUp atomic.Pointer[web.Backup]
+	// byDate is the trees by date's memo, built with the handler and told by
+	// the indexer when the index has changed (#561).
+	byDate atomic.Pointer[timeline.Memo]
 }
 
 // Deps are the backends the protocol surfaces are built on.
@@ -263,9 +267,13 @@ func (a *App) Handler(deps Deps) http.Handler {
 		playlists := music.New(deps.Database)
 		calendarService := calendar.New(deps.Database)
 		contactsService := contacts.New(deps.Database)
+		// The library by date, read by the pages and the WebDAV mount alike
+		// and kept a few seconds for both (#561).
+		byDate := timeline.Memoize(deps.Database)
+		a.byDate.Store(byDate)
 		browser := web.Handler(web.Deps{
 			Version: a.version, BuildDate: a.buildDate, Verifier: verifier, Sessions: sessions, Shares: shares,
-			Files: service, Thumbs: deps.Thumbs, Index: deps.Database, Playlists: playlists,
+			Files: service, Thumbs: deps.Thumbs, Index: deps.Database, Playlists: playlists, ByDate: byDate,
 			Indexing: web.Indexing{
 				Index: deps.Database, Interval: a.cfg.IndexInterval, Ahead: a.cfg.ThumbsAhead,
 				Lookups: deps.Database, Lookup: a.cfg.MusicLookup,
@@ -326,8 +334,8 @@ func (a *App) Handler(deps Deps) http.Handler {
 		mux.Handle(playlistsPrefix, collection(dav.Playlists(playlistsPrefix, filesPrefix, playlists)))
 		mux.Handle(musicPrefix, collection(dav.Music(musicPrefix, filesPrefix, deps.Database)))
 		mux.Handle(trashPrefix, collection(dav.Trash(trashPrefix, service)))
-		mux.Handle(photosPrefix, collection(dav.ByDate(photosPrefix, filesPrefix, deps.Database, db.KindImage)))
-		mux.Handle(videosPrefix, collection(dav.ByDate(videosPrefix, filesPrefix, deps.Database, db.KindVideo)))
+		mux.Handle(photosPrefix, collection(dav.ByDate(photosPrefix, filesPrefix, byDate, db.KindImage)))
+		mux.Handle(videosPrefix, collection(dav.ByDate(videosPrefix, filesPrefix, byDate, db.KindVideo)))
 		// The people the faces are grouped into (#519), empty while faces are
 		// off; the pages at the same addresses are the browser half.
 		mux.Handle(peoplePrefix, collection(dav.People(peoplePrefix, filesPrefix, deps.Database,

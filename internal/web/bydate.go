@@ -168,7 +168,7 @@ func (h *handler) byDate(l library) func(http.ResponseWriter, *http.Request, str
 
 func (h *handler) serveByDate(w http.ResponseWriter, r *http.Request, user string, l library) {
 	raw := strings.Trim(r.PathValue("path"), "/")
-	tree := timeline.New(h.captures, user, l.kind)
+	tree := timeline.New(h.dated, user, l.kind)
 
 	if raw == "" {
 		if f := r.URL.Query().Get(fileParam); f != "" {
