@@ -129,7 +129,7 @@ func (h *handler) profile(w http.ResponseWriter, r *http.Request, user string) {
 	}
 	w.Header().Set("Content-Type", "application/x-apple-aspen-config")
 	w.Header().Set("Content-Disposition", `attachment; filename="stratus.mobileconfig"`)
-	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Cache-Control", notKept)
 	_, _ = w.Write(buf.Bytes())
 }
 

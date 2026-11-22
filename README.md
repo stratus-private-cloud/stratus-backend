@@ -293,6 +293,13 @@ A multistatus is the same forty tags repeated, which is the best case deflate
 has. It costs under a millisecond of CPU for that document, and it is done here
 rather than by a reverse proxy because this server is meant to run without one.
 
+**And nothing behind the password is left for a cache in between.** Every
+response is `Cache-Control: private` unless it says something stricter, so a
+CDN in front of the server — Cloudflare proxying, for instance — keeps only
+what is public on purpose: the static assets, `robots.txt` and the manifest.
+Without it a photograph served with no such header could be kept at the edge by
+its extension and handed to whoever asked for the same address.
+
 What is **not** compressed: anything that is not text — a photograph, a video
 and a track are already compressed, and the only thing gzip could do is spend
 CPU to make them slightly bigger — and any partial response, because

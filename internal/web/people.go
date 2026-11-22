@@ -325,7 +325,7 @@ func (h *handler) face(w http.ResponseWriter, r *http.Request, user string) {
 		http.NotFound(w, r)
 		return
 	}
-	h.crop(w, r, user, ix.People, id, "private, max-age=31536000, immutable", "")
+	h.crop(w, r, user, ix.People, id, keptForGood, "")
 }
 
 // personCover is a person's picture, the face their tiles show, at
@@ -372,7 +372,7 @@ func (h *handler) namedFace(w http.ResponseWriter, r *http.Request, user string,
 	}
 	defer func() { _ = body.Close() }()
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+	w.Header().Set("Cache-Control", keptForGood)
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
 	_, _ = io.Copy(w, body)
@@ -387,7 +387,7 @@ func (h *handler) crop(w http.ResponseWriter, r *http.Request, user string, peop
 	body, length, err := people.Crop(r.Context(), id)
 	switch {
 	case errors.Is(err, db.ErrNotFound), errors.Is(err, storage.ErrNotFound):
-		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Cache-Control", notKept)
 		http.NotFound(w, r)
 		return
 	case err != nil:

@@ -60,7 +60,7 @@ func (h *handler) transcoded(w http.ResponseWriter, r *http.Request, user string
 	// what fetches this may be a receiver on somebody else's page.
 	header := w.Header()
 	header.Set("Access-Control-Allow-Origin", "*")
-	header.Set("Cache-Control", "private, no-cache")
+	header.Set("Cache-Control", revalidated)
 	header.Set("Content-Security-Policy", filePolicy(plan.MIME))
 	if r.Method == http.MethodHead {
 		// What a client checks before it hands the URL on, so it starts

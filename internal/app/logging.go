@@ -122,3 +122,17 @@ func identify(version string, h http.Handler) http.Handler {
 		h.ServeHTTP(w, r)
 	})
 }
+
+// privateByDefault says every response is for one browser alone unless its
+// handler says otherwise (#587). Most of what this server answers is behind a
+// password, and a response with no Cache-Control is one a CDN in front of it
+// -- Cloudflare proxying, say -- may keep by its extension and hand to the next
+// person who asks for the same address: somebody's photograph, served from an
+// edge. Set before the handler runs, so a handler that sets its own replaces
+// it: the static assets, robots.txt and the manifest are public on purpose.
+func privateByDefault(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "private")
+		h.ServeHTTP(w, r)
+	})
+}

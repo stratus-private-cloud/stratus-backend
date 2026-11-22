@@ -152,7 +152,7 @@ func (h *handler) download(w http.ResponseWriter, r *http.Request, user string, 
 	}
 	// Private and revalidated: it is one person's file, and the ETag makes
 	// asking again cheap.
-	w.Header().Set("Cache-Control", "private, no-cache")
+	w.Header().Set("Cache-Control", revalidated)
 
 	// ServeContent implements RFC 7233 over the seeker internal/files returns,
 	// which is where ranges, conditional requests and resuming a download come
