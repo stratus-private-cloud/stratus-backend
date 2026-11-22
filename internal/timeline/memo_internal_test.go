@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -129,7 +130,7 @@ func TestAFailureIsNotKeptAndTheMemoIsBounded(t *testing.T) {
 	at := june
 	full.clock = func() time.Time { return at }
 	for i := range memoLimit {
-		if _, err := full.Months(t.Context(), fmt.Sprint(i), db.KindImage); err != nil {
+		if _, err := full.Months(t.Context(), strconv.Itoa(i), db.KindImage); err != nil {
 			t.Fatal(err)
 		}
 	}
