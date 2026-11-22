@@ -857,6 +857,28 @@ func (r *repo) BlobKeys(ctx context.Context) iter.Seq2[string, error] {
 	return sqlutil.Label(sqlutil.Seq(ctx, r.q, sqlutil.ScanOne[string], query), "list blob keys")
 }
 
+// HeldKeys implements db.Repo.
+func (r *repo) HeldKeys(ctx context.Context, keys []string) ([]string, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	var places strings.Builder
+	args := make([]any, 0, len(keys))
+	for i, key := range keys {
+		if i > 0 {
+			places.WriteString(", ")
+		}
+		places.WriteString("$" + strconv.Itoa(i+1))
+		args = append(args, key)
+	}
+	query := `SELECT DISTINCT blob_key FROM files WHERE is_dir = FALSE AND blob_key IN (` + places.String() + `)`
+	out, err := sqlutil.Collect(ctx, r.q, sqlutil.ScanOne[string], query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read held keys: %w", mapErr(err))
+	}
+	return out, nil
+}
+
 // MoveFile implements db.Repo.
 // SubtreeSize implements db.Files.
 func (r *repo) SubtreeSize(ctx context.Context, owner, dir string) (int64, error) {

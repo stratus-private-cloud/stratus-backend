@@ -149,6 +149,13 @@ type Files interface {
 	// stored, not by what the caller asked for.
 	BlobKeys(ctx context.Context) iter.Seq2[string, error]
 
+	// HeldKeys is which of keys a file row names now, for the two places that
+	// are about to treat a key as nobody's (#553): the sweep, which read
+	// BlobKeys long before it got to an orphan, and the pass that destroys
+	// what the trash held. Not scoped to an owner, as BlobKeys is not. The
+	// caller keeps the list short enough for one statement.
+	HeldKeys(ctx context.Context, keys []string) ([]string, error)
+
 	// DeleteFile removes the file at path, or returns ErrNotFound.
 	//
 	// Unlike a blob delete, this is not idempotent: the caller is asking about

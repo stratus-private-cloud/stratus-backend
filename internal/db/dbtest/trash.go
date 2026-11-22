@@ -28,6 +28,7 @@ func RunTrash(t *testing.T, newRepo func(t *testing.T) db.Repo) {
 		{"the trash belongs to its owner", trashOwner},
 		{"a row with no owner is only seen by asking for none", trashNoOwner},
 		{"its keys are what keeps the sweep off them", trashKeys},
+		{"a key a file names is held, and one only the trash names is not", heldKeys},
 		{"expired deletions come back oldest first", trashExpiry},
 		{"deleting one is idempotent", trashDelete},
 		{"the totals are files and bytes, not rows", trashTotals},
@@ -316,5 +317,36 @@ func trashTotals(t *testing.T, s db.Repo) {
 func trashLimit(t *testing.T, s db.Repo) {
 	if _, err := s.TrashBatches(t.Context(), owner, db.TrashCursor{}, 0); err == nil {
 		t.Error("a page of no deletions was allowed")
+	}
+}
+
+// heldKeys is the question the sweep and the trash's own emptying ask before
+// treating a key as nobody's (#553): a file row names it, whoever owns it.
+func heldKeys(t *testing.T, s db.Repo) {
+	live := deleted("live.jpg")
+	live.BlobKey = "blobs/live"
+	if _, err := s.PutFile(t.Context(), live); err != nil {
+		t.Fatal(err)
+	}
+	theirs := deleted("theirs.jpg")
+	theirs.OwnerID = "someone-else"
+	theirs.BlobKey = "blobs/theirs"
+	if _, err := s.PutFile(t.Context(), theirs); err != nil {
+		t.Fatal(err)
+	}
+	gone := deleted("gone.jpg")
+	gone.BlobKey = "blobs/gone"
+	trashed(t, s, time.Now().UTC(), gone)
+
+	got, err := s.HeldKeys(t.Context(), []string{"blobs/live", "blobs/gone", "blobs/theirs", "blobs/nowhere"})
+	if err != nil {
+		t.Fatalf("HeldKeys: %v", err)
+	}
+	slices.Sort(got)
+	if want := []string{"blobs/live", "blobs/theirs"}; !slices.Equal(got, want) {
+		t.Errorf("HeldKeys = %q, want %q", got, want)
+	}
+	if none, err := s.HeldKeys(t.Context(), nil); err != nil || len(none) != 0 {
+		t.Errorf("HeldKeys of nothing = %q, %v", none, err)
 	}
 }

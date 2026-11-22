@@ -293,14 +293,35 @@ func (s *Service) Collect(ctx context.Context, olderThan time.Duration) (Collect
 
 	// The originals first, so that what they were made into is judged against
 	// a trash that already holds them.
+	//
+	// Asked again first, in the transaction that files them (#553). What is
+	// referenced was read before a listing that can take minutes, and in
+	// that time a Restore can move a key from the trash back to a file --
+	// after the first read and before the second, so neither saw it -- or a
+	// copy can commit rows for blobs it wrote an hour ago. Filed as orphans,
+	// those were a live file's bytes destroyed a month later.
 	if len(orphans) > 0 {
-		if err := s.meta.Trash(ctx, rand.Text(), orphans, time.Now().UTC()); err != nil {
+		var filed int
+		err := s.meta.Tx(ctx, func(r db.Repo) error {
+			unheld, err := withoutHeld(ctx, r, orphans)
+			if err != nil {
+				return err
+			}
+			filed = len(unheld)
+			if filed == 0 {
+				return nil
+			}
+			return r.Trash(ctx, rand.Text(), unheld, time.Now().UTC())
+		})
+		if err != nil {
 			return done, fmt.Errorf("move %d unaccounted blobs to the trash: %w", len(orphans), err)
 		}
+		// Every candidate is referenced now, filed or held: either way what
+		// was derived from it is not garbage.
 		for _, o := range orphans {
 			referenced[o.BlobKey] = struct{}{}
 		}
-		done.Trashed = len(orphans)
+		done.Trashed = filed
 	}
 
 	for _, info := range derivedKeys {
@@ -328,4 +349,34 @@ func (s *Service) Collect(ctx context.Context, olderThan time.Duration) (Collect
 		done.Bytes += info.Size
 	}
 	return done, nil
+}
+
+// heldChunk is how many keys go into one HeldKeys statement, well under the
+// bound every engine puts on the parameters of one.
+const heldChunk = 500
+
+// withoutHeld is rows less those whose key a file row names now.
+func withoutHeld(ctx context.Context, r db.Repo, rows []db.File) ([]db.File, error) {
+	held := map[string]struct{}{}
+	for start := 0; start < len(rows); start += heldChunk {
+		end := min(start+heldChunk, len(rows))
+		keys := make([]string, 0, end-start)
+		for _, row := range rows[start:end] {
+			keys = append(keys, row.BlobKey)
+		}
+		found, err := r.HeldKeys(ctx, keys)
+		if err != nil {
+			return nil, err
+		}
+		for _, key := range found {
+			held[key] = struct{}{}
+		}
+	}
+	out := rows[:0:0]
+	for _, row := range rows {
+		if _, ok := held[row.BlobKey]; !ok {
+			out = append(out, row)
+		}
+	}
+	return out, nil
 }

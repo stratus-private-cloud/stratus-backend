@@ -58,12 +58,33 @@ func (s *Service) EmptyTrash(ctx context.Context, before time.Time) (Emptied, er
 //
 // Nothing is reported for a batch that is not there. Pressing a button twice
 // is not an error, and neither is this pass racing the one in the background.
+//
+// A key a file row names is not dropped, whatever the trash says (#553): the
+// sweep re-checks before it files an orphan, and this is the second net under
+// it, since what it destroys cannot be had back.
 func (s *Service) DestroyTrashed(ctx context.Context, owner, batch string) (int, int64, error) {
 	var rows []db.Trashed
+	held := map[string]struct{}{}
 	err := s.meta.Tx(ctx, func(r db.Repo) error {
 		var rerr error
 		if rows, rerr = r.TrashedIn(ctx, owner, batch); rerr != nil {
 			return rerr
+		}
+		asFiles := make([]db.File, 0, len(rows))
+		for _, t := range rows {
+			if !t.IsDir {
+				asFiles = append(asFiles, db.File{BlobKey: t.BlobKey})
+			}
+		}
+		unheld, rerr := withoutHeld(ctx, r, asFiles)
+		if rerr != nil {
+			return rerr
+		}
+		for _, f := range asFiles {
+			held[f.BlobKey] = struct{}{}
+		}
+		for _, f := range unheld {
+			delete(held, f.BlobKey)
 		}
 		return r.DeleteTrash(ctx, owner, batch)
 	})
@@ -75,6 +96,9 @@ func (s *Service) DestroyTrashed(ctx context.Context, owner, batch string) (int,
 	var bytes int64
 	for _, t := range rows {
 		if t.IsDir {
+			continue
+		}
+		if _, live := held[t.BlobKey]; live {
 			continue
 		}
 		if derr := s.dropBlob(ctx, t.BlobKey); derr != nil {
