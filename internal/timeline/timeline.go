@@ -95,11 +95,17 @@ type Tree struct {
 
 	months []db.Month
 	named  map[db.Month]map[string]db.Capture
+	// ids is named the other way round, so naming one photograph is a lookup
+	// rather than a walk through its month.
+	ids map[db.Month]map[int64]string
 }
 
 // New makes the tree over one kind for owner.
 func New(source Source, owner string, kind db.Kind) *Tree {
-	return &Tree{source: source, owner: owner, kind: kind, named: map[db.Month]map[string]db.Capture{}}
+	return &Tree{
+		source: source, owner: owner, kind: kind,
+		named: map[db.Month]map[string]db.Capture{}, ids: map[db.Month]map[int64]string{},
+	}
 }
 
 // Resolve turns a path under the mount into what is at it, or os.ErrNotExist.
@@ -192,16 +198,14 @@ func (t *Tree) Children(ctx context.Context, n Node) ([]Node, error) {
 // reading the month, because two photographs in one can share a filename.
 func (t *Tree) PathOf(ctx context.Context, p db.Capture) (string, error) {
 	month := db.MonthOf(p.SortAt)
-	named, err := t.Month(ctx, month)
-	if err != nil {
+	if _, err := t.Month(ctx, month); err != nil {
 		return "", err
 	}
-	for name, candidate := range named {
-		if candidate.File.ID == p.File.ID {
-			return Node{Year: month.Year, Month: month.Month, Name: name}.Path(), nil
-		}
+	name, ok := t.ids[month][p.File.ID]
+	if !ok {
+		return "", os.ErrNotExist
 	}
-	return "", os.ErrNotExist
+	return Node{Year: month.Year, Month: month.Month, Name: name}.Path(), nil
 }
 
 // Months is every month with a photograph in it, newest first.
@@ -236,7 +240,11 @@ func (t *Tree) Month(ctx context.Context, m db.Month) (map[string]db.Capture, er
 		f.After = page[len(page)-1].Cursor()
 	}
 	named := Names(all)
-	t.named[m] = named
+	ids := make(map[int64]string, len(named))
+	for name, p := range named {
+		ids[p.File.ID] = name
+	}
+	t.named[m], t.ids[m] = named, ids
 	return named, nil
 }
 

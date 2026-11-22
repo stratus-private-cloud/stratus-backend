@@ -333,7 +333,9 @@ func (a *App) thumbFor(ctx context.Context, deps Deps, f db.File, held io.ReadSe
 // each read is a request (#519). False only when the process is stopping.
 func (a *App) arrived(ctx context.Context, deps Deps, f db.File) bool {
 	held := a.hold(ctx, deps, f)
-	switch err := deps.Indexer.IndexFileFrom(ctx, time.Now(), f, held); {
+	err := deps.Indexer.IndexFileFrom(ctx, time.Now(), f, held)
+	a.byDate.Load().Changed()
+	switch {
 	case errors.Is(err, context.Canceled):
 		return false
 	case err != nil:
@@ -414,6 +416,7 @@ func (a *App) indexUntilDry(ctx context.Context, deps Deps) bool {
 			slog.Error("indexing media", "err", err)
 		case indexed > 0:
 			slog.Info("indexed media", "files", indexed)
+			a.byDate.Load().Changed()
 		}
 
 		// A full batch means there is probably more, which is what makes a

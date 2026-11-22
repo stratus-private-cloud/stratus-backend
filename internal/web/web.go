@@ -22,6 +22,7 @@ import (
 	"github.com/stratus-private-cloud/stratus-backend/internal/config"
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
 	"github.com/stratus-private-cloud/stratus-backend/internal/files"
+	"github.com/stratus-private-cloud/stratus-backend/internal/timeline"
 )
 
 // Each vendored library carries its own version in its path, which is what
@@ -150,6 +151,9 @@ type Deps struct {
 	// Backup is the database's newest backup, and nil when nothing reports
 	// one.
 	Backup func() Backup
+	// ByDate is what the two trees by date are read from, kept a few seconds
+	// and shared with the WebDAV mount (#561). Index when nil.
+	ByDate timeline.Source
 }
 
 // Backup is the database's newest backup, as the status page tells it.
@@ -241,6 +245,8 @@ type handler struct {
 	// captures is what the two grids by date read: the index by when a camera
 	// made something, rather than the tree by path.
 	captures db.Captures
+	// dated is captures as the trees read it, through the shared memo.
+	dated timeline.Source
 	// library is the same index by tag, for the music pages.
 	library Library
 	// finder is what the search box asks, which is neither of those two: it
@@ -285,10 +291,13 @@ type handler struct {
 // other surface -- a WebDAV or Subsonic client is not a browser and sends no
 // cookie -- and a caller that forgot it would lose the defence silently.
 func Handler(d Deps) http.Handler {
+	if d.ByDate == nil {
+		d.ByDate = d.Index
+	}
 	h := &handler{
 		pages:   newStash(),
 		version: d.Version, buildDate: d.BuildDate, verifier: d.Verifier, sessions: d.Sessions, shares: d.Shares,
-		files: d.Files, thumbs: d.Thumbs, captures: d.Index, library: d.Index, finder: d.Index, byID: d.Index, playlists: d.Playlists,
+		files: d.Files, thumbs: d.Thumbs, captures: d.Index, dated: d.ByDate, library: d.Index, finder: d.Index, byID: d.Index, playlists: d.Playlists,
 		indexing: d.Indexing, imports: d.Imports, playback: d.Playback, kept: d.TrashRetention,
 		calendars: d.Calendars, contacts: d.Contacts, settings: d.Settings, editor: d.Editor, zones: d.Zones,
 		started: d.Started, database: d.Database, storage: d.Storage, sweep: d.Sweep, system: d.System, backup: d.Backup,
