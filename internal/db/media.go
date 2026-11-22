@@ -1,9 +1,12 @@
 package db
 
 import (
+	"math"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // Kind is what an extractor decided a file is.
@@ -198,4 +201,41 @@ func (m Media) Normalize() Media {
 		m.RetryAt = m.RetryAt.UTC().Truncate(TimePrecision)
 	}
 	return m
+}
+
+// Storable is m with what one engine refuses and another takes made the same
+// for all three (#559): every int inside the range of the INTEGER columns they
+// are written to, and every string valid UTF-8 with no NUL in it. PostgreSQL
+// and MySQL refuse an out-of-range int4 and invalid UTF-8, and PostgreSQL a NUL
+// besides; SQLite takes all of it. An EXIF width is a uint32, and a tag is
+// whatever bytes the file held.
+//
+// By reflection over the fields, so that one added later is covered without
+// anybody remembering this.
+func (m Media) Storable() Media {
+	clean(reflect.ValueOf(&m).Elem())
+	return m
+}
+
+var timeType = reflect.TypeFor[time.Time]()
+
+func clean(v reflect.Value) {
+	switch v.Kind() {
+	case reflect.Struct:
+		if v.Type() == timeType {
+			return
+		}
+		for i := range v.NumField() {
+			if f := v.Field(i); f.CanSet() {
+				clean(f)
+			}
+		}
+	case reflect.Int:
+		v.SetInt(min(max(v.Int(), math.MinInt32), math.MaxInt32))
+	case reflect.String:
+		s := v.String()
+		if !utf8.ValidString(s) || strings.ContainsRune(s, 0) {
+			v.SetString(strings.ReplaceAll(strings.ToValidUTF8(s, "�"), "\x00", ""))
+		}
+	}
 }

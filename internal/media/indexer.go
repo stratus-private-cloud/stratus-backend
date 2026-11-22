@@ -194,13 +194,27 @@ func (i *Indexer) IndexFileFrom(ctx context.Context, now time.Time, f db.File, h
 // somebody who uploaded a file and deleted it, and there is nothing to record
 // about a file that does not exist.
 func (i *Indexer) record(ctx context.Context, now time.Time, a attempt, batch []attempt) (bool, error) {
-	m := a.media
+	m := a.media.Storable()
 	put := !a.deferred(batch)
 	if !put {
 		m.RetryAt = now.Add(retryAfter)
 	}
 
-	switch err := i.meta.PutMedia(ctx, m); {
+	err := i.meta.PutMedia(ctx, m)
+	if err != nil && !errors.Is(err, db.ErrNotFound) && ctx.Err() == nil {
+		// A row the database would not take is one file's problem and not the
+		// batch's: returning here wrote nothing for the rest, and the same
+		// batch came back with the same row at its head for ever (#559). What
+		// is written instead is that it could not be -- and if even that is
+		// refused, the database is what is wrong, and that is said.
+		slog.Warn("storing what was read", "path", a.path, "err", err)
+		err = i.meta.PutMedia(ctx, db.Media{
+			FileID: m.FileID, Kind: m.Kind, IndexedAt: m.IndexedAt, Version: m.Version, ETag: m.ETag,
+			Error: "could not store what was read: " + err.Error(),
+		}.Storable())
+		put = true
+	}
+	switch {
 	case errors.Is(err, db.ErrNotFound):
 		return true, nil
 	case err != nil:

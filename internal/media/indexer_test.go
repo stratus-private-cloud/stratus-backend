@@ -2,6 +2,7 @@ package media
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -296,5 +297,49 @@ func TestIndexRefusesToDownloadAFilm(t *testing.T) {
 		if p.ID == stored.ID {
 			t.Error("the file is still queued, so the refusal will be made again on every pass")
 		}
+	}
+}
+
+// refusing is a database that will not store one file's row, which is what
+// PostgreSQL does with a value SQLite takes.
+type refusing struct {
+	db.Store
+	file int64
+}
+
+func (r refusing) PutMedia(ctx context.Context, m db.Media) error {
+	if m.FileID == r.file && m.Error == "" {
+		return errors.New("value out of range for type integer")
+	}
+	return r.Store.PutMedia(ctx, m)
+}
+
+// TestARowTheDatabaseRefusesDoesNotStopTheBatch is #559: the first refused
+// row returned from the batch with nothing written, so the same batch came
+// back with the same file at its head and nothing after it was ever indexed.
+func TestARowTheDatabaseRefusesDoesNotStopTheBatch(t *testing.T) {
+	t.Parallel()
+	_, service, meta := indexer(t)
+	bad := write(t, service, "a.txt", []byte("one"), "text/plain")
+	good := write(t, service, "b.txt", []byte("two"), "text/plain")
+	dir := t.TempDir()
+	tmp, err := TempDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ix := NewIndexer(service, refusing{Store: meta, file: bad.ID}, tmp, "ffprobe-does-not-exist")
+
+	if _, berr := ix.IndexBatch(t.Context(), time.Now()); berr != nil {
+		t.Fatalf("IndexBatch = %v, want one refused row not to stop it", berr)
+	}
+	if after, gerr := meta.MediaByFile(t.Context(), good.ID); gerr != nil || after.Version != Version {
+		t.Errorf("the file after the refused one = %+v, %v; want it indexed", after, gerr)
+	}
+	got, err := meta.MediaByFile(t.Context(), bad.ID)
+	if err != nil || !strings.Contains(got.Error, "could not store") {
+		t.Errorf("the refused file = %+v, %v; want a row saying why", got, err)
+	}
+	if n, _ := ix.IndexBatch(t.Context(), time.Now()); n != 0 {
+		t.Errorf("a second batch indexed %d, want the refused file not back at the head", n)
 	}
 }

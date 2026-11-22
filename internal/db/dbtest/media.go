@@ -2,6 +2,7 @@ package dbtest
 
 import (
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -21,6 +22,7 @@ func RunMedia(t *testing.T, newRepo func(t *testing.T) db.Repo) {
 		fn   func(t *testing.T, s db.Repo)
 	}{
 		{"metadata survives a round trip", mediaRoundTrip},
+		{"what an engine would refuse is made storable for all three", mediaStorable},
 		{"every column of a media row survives a round trip", mediaEveryColumn},
 		{"all three media times survive a round trip", mediaTimeRoundTrip},
 		{"the fields another kind does not use stay empty", mediaSparse},
@@ -802,5 +804,34 @@ func mediaCascade(t *testing.T, s db.Repo) {
 	}
 	if _, err := s.MediaByFile(t.Context(), f.ID); !errors.Is(err, db.ErrNotFound) {
 		t.Errorf("MediaByFile after deleting the file = %v, want ErrNotFound", err)
+	}
+}
+
+// mediaStorable is #559: values SQLite takes and the other two refuse, made
+// the same for all three before they are written. An EXIF width is a uint32,
+// and a tag is whatever bytes the file held.
+func mediaStorable(t *testing.T, s db.Repo) {
+	f := put(t, s, file("photos/odd.jpg"))
+	odd := db.Media{
+		FileID:    f.ID,
+		Kind:      db.KindImage,
+		IndexedAt: time.Now(),
+		Version:   3,
+		Width:     4_294_967_295,
+		Height:    -4_294_967_295,
+		Camera:    "Can\xffon\x00 EOS",
+	}
+	if err := s.PutMedia(t.Context(), odd.Storable()); err != nil {
+		t.Fatalf("PutMedia of a storable row: %v", err)
+	}
+	got, err := s.MediaByFile(t.Context(), f.ID)
+	if err != nil {
+		t.Fatalf("MediaByFile: %v", err)
+	}
+	if got.Width != math.MaxInt32 || got.Height != math.MinInt32 {
+		t.Errorf("Width, Height = %d, %d; want them at the ends of an int4", got.Width, got.Height)
+	}
+	if got.Camera != "Can\uFFFDon EOS" {
+		t.Errorf("Camera = %q, want the bad byte replaced and the NUL gone", got.Camera)
 	}
 }
