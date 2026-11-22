@@ -1,7 +1,9 @@
 package files_test
 
 import (
+	"context"
 	"errors"
+	"iter"
 	"strings"
 	"testing"
 	"time"
@@ -407,5 +409,87 @@ func TestCollectLeavesAnUnparseableDerivedKeyAlone(t *testing.T) {
 	}
 	if _, err := blobs.Stat(t.Context(), stray); err != nil {
 		t.Errorf("an object nothing can judge was deleted: %v", err)
+	}
+}
+
+// restoredMidSweep is a database where a Restore commits between the sweep
+// reading the files' keys and reading the trash's, which is the window #553
+// is about: the key has moved from the second to the first, so neither read
+// sees it.
+type restoredMidSweep struct {
+	db.Store
+	restore func()
+}
+
+func (m *restoredMidSweep) TrashKeys(ctx context.Context) iter.Seq2[string, error] {
+	if m.restore != nil {
+		m.restore()
+		m.restore = nil
+	}
+	return m.Store.TrashKeys(ctx)
+}
+
+// TestCollectAsksAgainBeforeItFilesAnOrphan is #553: a file restored while the
+// sweep was reading was filed as unaccounted, and a month later its bytes were
+// destroyed under a live row.
+func TestCollectAsksAgainBeforeItFilesAnOrphan(t *testing.T) {
+	t.Parallel()
+	_, blobs, meta := serviceOver(t)
+	racing := &restoredMidSweep{Store: meta}
+	s := files.New(blobs, racing)
+
+	write(t, s, "keep.txt", "keep")
+	write(t, s, "back.txt", "back")
+	if err := s.Remove(t.Context(), "edu", "back.txt"); err != nil {
+		t.Fatal(err)
+	}
+	batches, err := s.Trash(t.Context(), "edu", db.TrashCursor{}, 10)
+	if err != nil || len(batches) != 1 {
+		t.Fatalf("Trash = %+v, %v", batches, err)
+	}
+	racing.restore = func() {
+		if _, rerr := s.Restore(t.Context(), "edu", batches[0].ID); rerr != nil {
+			t.Errorf("Restore: %v", rerr)
+		}
+	}
+
+	done, err := s.Collect(t.Context(), 0)
+	if err != nil {
+		t.Fatalf("Collect: %v", err)
+	}
+	if done.Trashed != 0 {
+		t.Errorf("Collect = %+v, want the restored file's blob left alone", done)
+	}
+	if got := read(t, s, "back.txt"); got != "back" {
+		t.Errorf("the restored file reads %q", got)
+	}
+	if found, _ := s.Trash(t.Context(), "", db.TrashCursor{}, 10); len(found) != 0 {
+		t.Errorf("the sweep filed something as unaccounted: %+v", found)
+	}
+}
+
+// TestEmptyingTheTrashNeverDropsALiveFilesBytes is the second net under the
+// first: whatever put a live key in the trash, destroying the deletion keeps
+// the blob a file row still names.
+func TestEmptyingTheTrashNeverDropsALiveFilesBytes(t *testing.T) {
+	t.Parallel()
+	s, blobs, meta := serviceOver(t)
+	live := write(t, s, "live.txt", "live")
+
+	// What the race used to leave: the sweep's own kind of row, no owner and
+	// no path, naming a key a file still points at.
+	when := time.Now().UTC().Truncate(db.TimePrecision)
+	if err := meta.Trash(t.Context(), "swept", []db.File{{BlobKey: live.BlobKey, Size: live.Size, MTime: when}}, when); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, err := s.DestroyTrashed(t.Context(), "", "swept"); err != nil {
+		t.Fatalf("DestroyTrashed: %v", err)
+	}
+	if _, err := blobs.Stat(t.Context(), live.BlobKey); err != nil {
+		t.Errorf("a live file's blob was destroyed: %v", err)
+	}
+	if got := read(t, s, "live.txt"); got != "live" {
+		t.Errorf("the live file reads %q", got)
 	}
 }
