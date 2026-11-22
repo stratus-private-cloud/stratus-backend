@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
 )
@@ -588,5 +589,15 @@ func TestEachVector(t *testing.T) {
 	}
 	if err := EachVector(t.Context(), open(t, &config{queryErr: errBoom}), "SELECT", "m", nil); !errors.Is(err, errBoom) {
 		t.Errorf("a failing query = %v", err)
+	}
+}
+
+func TestLimitPoolCapsThePool(t *testing.T) {
+	t.Parallel()
+	sqlDB := open(t, &config{})
+
+	LimitPool(sqlDB, time.Minute)
+	if got := sqlDB.Stats().MaxOpenConnections; got != MaxOpenConns {
+		t.Errorf("MaxOpenConnections = %d, want %d", got, MaxOpenConns)
 	}
 }
