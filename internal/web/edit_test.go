@@ -179,7 +179,7 @@ func TestWhenTheTreeWillNotAnswer(t *testing.T) {
 		working := files.New(blobs, meta)
 		write(t, working, "notes.txt", "hello")
 
-		h := handlerOver(t, files.New(blobs, dbtest.FailOn(t, meta, "DeleteFile")), blobs, meta)
+		h := handlerOver(t, files.New(blobs, dbtest.FailOn(t, meta, "TrashTree")), blobs, meta)
 		if got := remove(t, h, "notes.txt", signIn(t, h)).Code; got != http.StatusInternalServerError {
 			t.Errorf("deleting through a database that refuses = %d, want 500", got)
 		}
@@ -194,7 +194,7 @@ func TestWhenTheTreeWillNotAnswer(t *testing.T) {
 		blobs, meta := backends(t)
 		write(t, files.New(blobs, meta), "notes.txt", "hello")
 
-		h := handlerOver(t, files.New(blobs, dbtest.FailOn(t, meta, "DeleteFile")), blobs, meta)
+		h := handlerOver(t, files.New(blobs, dbtest.FailOn(t, meta, "TrashTree")), blobs, meta)
 		form := url.Values{"name": {"notes.txt"}, "confirm": {"1"}}
 		if got := post(t, h, "/delete-selected/", form, signIn(t, h)).Code; got != http.StatusInternalServerError {
 			t.Errorf("deleting a selection through a database that refuses = %d, want 500", got)

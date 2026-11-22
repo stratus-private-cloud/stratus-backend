@@ -40,7 +40,7 @@ var repoMethods = []string{
 	"Find", "TrackByFile", "CreatePlaylist", "Playlists", "PlaylistByID", "LockPlaylist", "PlaylistTracks",
 	"UpdatePlaylist", "SetPlaylistTracks", "Timeline", "Around", "Months",
 	"Artists", "Albums", "Tracks", "AnnotationsOf",
-	"Trash", "TrashBatches", "TrashTotals", "TrashedIn", "ExpiredTrash",
+	"Trash", "TrashTree", "TrashBatches", "TrashTotals", "TrashedIn", "ExpiredTrash",
 	"LyricsOf", "AlbumLookup", "LookupCounts",
 	"PruneAlbumLookups", "PendingAlbumLookups", "PendingLyrics", "PutAlbumLookup", "PutLyrics",
 	"PruneCalendarTombstones", "Calendars", "CalendarObjects", "AddressBooks", "Contacts", "PruneContactTombstones", "Settings", "PutSetting", "DeleteSetting",
@@ -103,6 +103,14 @@ func (f *failingRepo) Trash(ctx context.Context, batch string, rows []db.File, a
 		return err
 	}
 	return f.Repo.Trash(ctx, batch, rows, at)
+}
+
+// TrashTree implements db.Repo.
+func (f *failingRepo) TrashTree(ctx context.Context, batch, owner, path string, at time.Time) error {
+	if err := f.fails("TrashTree"); err != nil {
+		return err
+	}
+	return f.Repo.TrashTree(ctx, batch, owner, path, at)
 }
 
 // TrashBatches implements db.Repo.
