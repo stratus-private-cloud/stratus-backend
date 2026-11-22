@@ -50,6 +50,7 @@ func New(ctx context.Context, dsn string) (*Store, error) {
 		// The DSN carries a password, so it is never in the message.
 		return nil, fmt.Errorf("postgres: open: %w", err)
 	}
+	sqlutil.LimitPool(sqlDB, 0)
 	if err := sqlDB.PingContext(ctx); err != nil {
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("postgres: connect: %w", err)

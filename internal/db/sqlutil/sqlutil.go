@@ -33,6 +33,7 @@ import (
 	"fmt"
 	"iter"
 	"strings"
+	"time"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
 )
@@ -256,4 +257,26 @@ func Contains(term string) string {
 	}
 	b.WriteByte('%')
 	return b.String()
+}
+
+// MaxOpenConns is the most connections a server engine's pool opens (#570).
+// database/sql opens as many as there are callers, and a managed database on a
+// small plan accepts twenty or so in all; a burst of thumbnails and uploads
+// was enough to be refused at the door. Sixteen leaves room for a second
+// process during a rolling deploy.
+const MaxOpenConns = 16
+
+// LimitPool bounds a PostgreSQL or MySQL pool. Not SQLite's: its writers
+// already queue behind _txlock=immediate, so a cap there would add a way to
+// deadlock and save nothing.
+//
+// What a cap makes possible is a caller holding one connection while asking
+// for another -- a query on the store inside a Tx instead of on its Repo --
+// which at the cap waits for ever. Nothing does that today, and dbtest runs
+// more callers at once than the cap to keep it that way.
+func LimitPool(sqlDB *sql.DB, maxLifetime time.Duration) {
+	sqlDB.SetMaxOpenConns(MaxOpenConns)
+	sqlDB.SetMaxIdleConns(MaxOpenConns)
+	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
+	sqlDB.SetConnMaxLifetime(maxLifetime)
 }

@@ -8,11 +8,14 @@
 package dbtest
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
 )
@@ -111,6 +114,7 @@ func Run(t *testing.T, newStore func(t *testing.T) db.Store) {
 		{"migrating twice changes nothing", migrateIsIdempotent},
 		{"a move rolled back leaves the tree as it was", moveRollsBack},
 		{"two writers at once both get through", concurrentWriters},
+		{"more callers than a pool holds all get through", manyCallers},
 	}
 
 	for _, tc := range cases {
@@ -281,4 +285,33 @@ func moveRollsBack(t *testing.T, s db.Store) {
 			t.Errorf("%q survived the rollback: %v", path, err)
 		}
 	}
+}
+
+// manyCallers is a pool's cap seen from above (#570): four times as many
+// callers as sqlutil.MaxOpenConns, each in a transaction and each reading
+// outside one, all finish. A caller that held a connection while asking for a
+// second would wait for ever here instead.
+func manyCallers(t *testing.T, s db.Store) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	for i := range 64 {
+		wg.Go(func() {
+			p := "caller" + strconv.Itoa(i)
+			if err := s.Tx(ctx, func(r db.Repo) error {
+				if _, err := r.PutFile(ctx, file(p)); err != nil {
+					return err
+				}
+				_, err := r.FileByPath(ctx, owner, p)
+				return err
+			}); err != nil {
+				t.Errorf("Tx for %q = %v", p, err)
+			}
+			if _, err := s.ListFiles(ctx, owner, ""); err != nil {
+				t.Errorf("ListFiles = %v", err)
+			}
+		})
+	}
+	wg.Wait()
 }

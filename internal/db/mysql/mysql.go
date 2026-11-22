@@ -93,6 +93,10 @@ func New(ctx context.Context, dsn string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("mysql: open: %w", err)
 	}
+	// Recycled well inside the server's wait_timeout, as go-sql-driver asks:
+	// a connection the server dropped while idle is otherwise found dead by
+	// the next query.
+	sqlutil.LimitPool(sqlDB, 3*time.Minute)
 	if err := sqlDB.PingContext(ctx); err != nil {
 		_ = sqlDB.Close()
 		return nil, fmt.Errorf("mysql: connect: %w", err)

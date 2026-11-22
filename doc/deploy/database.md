@@ -52,6 +52,9 @@ rather than the exotic one.
   endpoint) re-uses server connections between statements, and pgx prepares
   statements by name. Prefer the direct or session connection string; if you
   cannot, `default_query_exec_mode=exec` in the DSN is the knob.
+- **At most 16 connections are opened**, plus one for a few seconds during a
+  rolling deploy's overlap. A plan that allows fewer — some free tiers allow
+  ten — needs a pooler in front, in session mode.
 - **MySQL means MySQL 8.0.19 or newer**, for the upsert syntax the driver uses.
   MariaDB is a different database wearing the same name and is not what this is
   tested against.
