@@ -147,15 +147,15 @@ func facesRoundTrip(t *testing.T, s db.Repo) {
 		t.Fatal(err)
 	}
 	if got.FileID != want.FileID || got.BlobKey != want.BlobKey || got.X != want.X || got.Y != want.Y ||
-		got.W != want.W || got.H != want.H || got.Score != want.Score || !bytes.Equal(got.Vector, want.Vector) ||
+		got.W != want.W || got.H != want.H || got.Score != want.Score || got.Vector != nil ||
 		got.Person != 0 || !got.SortAt.Equal(time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC)) {
 		t.Errorf("Face = %+v, want %+v", got, want)
 	}
 	if of, err := s.FacesOf(t.Context(), photo.ID); err != nil || len(of) != 2 || of[0].ID != want.ID {
 		t.Errorf("FacesOf = %v, %v; want both, oldest first", faceIDs(of), err)
 	}
-	if each := eachFace(t, s, faceModel); len(each) != 2 {
-		t.Errorf("EachFace = %v, want both", faceIDs(each))
+	if each := eachFace(t, s, faceModel); len(each) != 2 || !bytes.Equal(each[0].Vector, want.Vector) {
+		t.Errorf("EachFace = %v, want both, with their vectors", faceIDs(each))
 	}
 	if each := eachFace(t, s, "another-model"); len(each) != 0 {
 		t.Errorf("EachFace for another model = %v, want none", faceIDs(each))

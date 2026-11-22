@@ -74,6 +74,8 @@ func (r *repo) AddFace(ctx context.Context, f db.Face) (int64, error) {
 
 func scanFace(rows *sql.Rows) (db.Face, error) { return sqlutil.ScanFace(rows, times) }
 
+func scanFaceVector(rows *sql.Rows) (db.Face, error) { return sqlutil.ScanFaceVector(rows, times) }
+
 // FacesOf implements db.Faces.
 func (r *repo) FacesOf(ctx context.Context, fileID int64) ([]db.Face, error) {
 	query := `SELECT ` + sqlutil.FaceColumns + ` FROM faces fa JOIN media m ON m.file_id = fa.file_id
@@ -105,10 +107,10 @@ func (r *repo) Face(ctx context.Context, id int64) (db.Face, error) {
 
 // EachFace implements db.Faces.
 func (r *repo) EachFace(ctx context.Context, model string, fn func(db.Face) error) error {
-	query := `SELECT ` + sqlutil.FaceColumns + ` FROM ` + currentFaces + `
+	query := `SELECT ` + sqlutil.FaceVectorColumns + ` FROM ` + currentFaces + `
 		JOIN face_scans s ON s.file_id = fa.file_id AND s.blob_key = fa.blob_key
 		WHERE s.model = $1 ORDER BY fa.id`
-	for f, err := range sqlutil.Seq(ctx, r.q, scanFace, query, model) {
+	for f, err := range sqlutil.Seq(ctx, r.q, scanFaceVector, query, model) {
 		if err != nil {
 			return fmt.Errorf("read faces: %w", mapErr(err))
 		}
