@@ -133,8 +133,13 @@ while read -r dir; do
 	esac
 done < <(cd "$work/media" && find . -type d | sed 's|^\./||' | sort)
 
+# Retried on a 503, which is not the server refusing the file: a machine that
+# has just started is reading the library and finding faces at once, and Fly's
+# proxy says 503 when a health check is slow to answer. curl retries what is
+# transient and nothing else, and a file is read again from the start.
 while read -r f; do
-	dav -T "$work/media/$f" -H "Content-Type: $(content_type "$f")" "$BASE/files/$(encode "$f")" >/dev/null ||
+	dav --retry 6 --retry-delay 10 --retry-max-time 120 \
+		-T "$work/media/$f" -H "Content-Type: $(content_type "$f")" "$BASE/files/$(encode "$f")" >/dev/null ||
 		die "PUT $f failed"
 done <<<"$files"
 ok "$count files in"
