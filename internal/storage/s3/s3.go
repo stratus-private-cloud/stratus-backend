@@ -68,10 +68,15 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 		return nil, errors.New("s3: access key and secret key are required")
 	}
 
+	transport, err := minio.DefaultTransport(cfg.UseTLS)
+	if err != nil {
+		return nil, fmt.Errorf("s3: transport for %s: %w", cfg.Endpoint, err)
+	}
 	client, err := minio.New(cfg.Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
-		Secure: cfg.UseTLS,
-		Region: cfg.Region,
+		Creds:     credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
+		Secure:    cfg.UseTLS,
+		Region:    cfg.Region,
+		Transport: dates{transport},
 	})
 	if err != nil {
 		// Nothing here interpolates the credentials: an error message is a log
@@ -176,11 +181,19 @@ func (s *Store) Put(ctx context.Context, key string, r io.Reader, size int64) (s
 		}
 		body = bytes.NewReader(buf.Bytes())
 	}
-	if _, err := s.client.PutObject(ctx, s.bucket, key, body, size, opts); err != nil {
+	answered := &responseDate{}
+	info, err := s.client.PutObject(withResponseDate(ctx, answered), s.bucket, key, body, size, opts)
+	if err != nil {
 		return storage.ObjectInfo{}, mapErr(key, err)
 	}
-	// A PUT response carries no Last-Modified, so the timestamp comes from a
-	// stat rather than from an invented time.Now().
+	// A PUT response carries no Last-Modified, and a HEAD to learn it was four
+	// requests per new photograph that only one caller reads (#563). Its Date
+	// is the store's own clock at the moment the object exists, to the second
+	// a Last-Modified has. A store that sends none is asked, rather than
+	// handed an invented time.Now().
+	if at := answered.get(); !at.IsZero() {
+		return storage.ObjectInfo{Key: key, Size: info.Size, ModTime: at}, nil
+	}
 	return s.Stat(ctx, key)
 }
 
