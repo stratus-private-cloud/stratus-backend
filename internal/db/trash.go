@@ -70,6 +70,12 @@ type Trash interface {
 	// between them would be a file that is in neither place.
 	Trash(ctx context.Context, batch string, rows []File, at time.Time) error
 
+	// TrashTree moves path and everything under it out of files and into the
+	// trash as one deletion: two statements whatever the size of the tree
+	// (#564), where a row at a time held SQLite's write lock past the uploads'
+	// busy_timeout. ErrNotFound when there is no path.
+	TrashTree(ctx context.Context, batch, owner, path string, at time.Time) error
+
 	// TrashBatches is a page of deletions, newest first.
 	TrashBatches(ctx context.Context, owner string, after TrashCursor, limit int) ([]TrashBatch, error)
 

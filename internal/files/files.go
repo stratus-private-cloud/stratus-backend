@@ -462,11 +462,7 @@ func (s *Service) Move(ctx context.Context, owner, from, to string) error {
 func (s *Service) Remove(ctx context.Context, owner, path string) error {
 	batch := rand.Text()
 	return s.meta.Tx(ctx, func(r db.Repo) error {
-		rows, err := removeTree(ctx, r, owner, path)
-		if err != nil {
-			return err
-		}
-		return r.Trash(ctx, batch, rows, time.Now().UTC())
+		return r.TrashTree(ctx, batch, owner, path, time.Now().UTC())
 	})
 }
 

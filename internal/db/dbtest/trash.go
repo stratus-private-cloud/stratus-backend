@@ -1,6 +1,7 @@
 package dbtest
 
 import (
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -22,6 +23,7 @@ func RunTrash(t *testing.T, newRepo func(t *testing.T) db.Repo) {
 		fn   func(t *testing.T, s db.Repo)
 	}{
 		{"a trashed row survives a round trip", trashRoundTrip},
+		{"a tree is trashed whole, and nothing beside it", trashTree},
 		{"two deletions of one path do not collide", trashSamePath},
 		{"a deletion is one entry, named by its root", trashBatches},
 		{"deletions come back newest first, a page at a time", trashPaged},
@@ -348,5 +350,61 @@ func heldKeys(t *testing.T, s db.Repo) {
 	}
 	if none, err := s.HeldKeys(t.Context(), nil); err != nil || len(none) != 0 {
 		t.Errorf("HeldKeys of nothing = %q, %v", none, err)
+	}
+}
+
+// trashTree is Remove's half of the port (#564): the root and everything
+// under it leave files for one deletion, the rows as they were, and a sibling
+// whose name merely begins the same way stays.
+func trashTree(t *testing.T, s db.Repo) {
+	ctx := t.Context()
+	for _, dir := range []string{"album", "album/sub", "album2"} {
+		if _, err := s.CreateDir(ctx, owner, dir); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := map[string]db.File{}
+	for _, p := range []string{"album/a.jpg", "album/sub/b.jpg", "album2/c.jpg", "album_x.jpg"} {
+		want[p] = put(t, s, deleted(p))
+	}
+	at := time.Now().UTC().Truncate(db.TimePrecision)
+
+	if err := s.TrashTree(ctx, "tree", owner, "album", at); err != nil {
+		t.Fatalf("TrashTree: %v", err)
+	}
+	rows, err := s.TrashedIn(ctx, owner, "tree")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, 0, len(rows))
+	for _, r := range rows {
+		got = append(got, r.Path)
+		if !r.DeletedAt.Equal(at) {
+			t.Errorf("%q deleted at %s, want %s", r.Path, r.DeletedAt, at)
+		}
+		if w, ok := want[r.Path]; ok && (r.BlobKey != w.BlobKey || r.Size != w.Size || !r.MTime.Equal(w.MTime) || r.IsDir) {
+			t.Errorf("%q came back as %+v, want %+v", r.Path, r.File, w)
+		}
+	}
+	if w := []string{"album", "album/a.jpg", "album/sub", "album/sub/b.jpg"}; !slices.Equal(got, w) {
+		t.Errorf("trashed %q, want %q", got, w)
+	}
+	for _, p := range []string{"album", "album/sub/b.jpg"} {
+		if _, err := s.FileByPath(ctx, owner, p); !errors.Is(err, db.ErrNotFound) {
+			t.Errorf("%q is still in files: %v", p, err)
+		}
+	}
+	for _, p := range []string{"album2", "album2/c.jpg", "album_x.jpg"} {
+		if _, err := s.FileByPath(ctx, owner, p); err != nil {
+			t.Errorf("%q went with it: %v", p, err)
+		}
+	}
+
+	// One file is a tree of one, and nothing there is not found.
+	if err := s.TrashTree(ctx, "one", owner, "album_x.jpg", at); err != nil {
+		t.Errorf("TrashTree of a file: %v", err)
+	}
+	if err := s.TrashTree(ctx, "none", owner, "nowhere", at); !errors.Is(err, db.ErrNotFound) {
+		t.Errorf("TrashTree of nothing = %v, want ErrNotFound", err)
 	}
 }

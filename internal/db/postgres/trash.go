@@ -31,6 +31,33 @@ func (r *repo) Trash(ctx context.Context, batch string, rows []db.File, at time.
 	return nil
 }
 
+// TrashTree implements db.Trash.
+func (r *repo) TrashTree(ctx context.Context, batch, owner, path string, at time.Time) error {
+	if err := db.ValidatePath(path); err != nil {
+		return err
+	}
+	const where = ` WHERE owner_id = $3 AND (path = $4 OR path LIKE $5 ESCAPE '` + sqlutil.LikeEscape + `')`
+	moved, err := r.q.ExecContext(ctx, `INSERT INTO trash (`+trashColumns+`)
+		SELECT $1, owner_id, path, blob_key, size, mtime, etag, mime_type, is_dir, $2 FROM files`+where,
+		batch, at, owner, path, sqlutil.Under(path))
+	if err != nil {
+		return fmt.Errorf("trash %q: %w", path, mapErr(err))
+	}
+	n, err := moved.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("trash %q: %w", path, err)
+	}
+	if n == 0 {
+		return fmt.Errorf("trash %q: %w", path, db.ErrNotFound)
+	}
+	_, err = r.q.ExecContext(ctx, `DELETE FROM files WHERE owner_id = $1 AND (path = $2 OR path LIKE $3 ESCAPE '`+sqlutil.LikeEscape+`')`,
+		owner, path, sqlutil.Under(path))
+	if err != nil {
+		return fmt.Errorf("remove %q: %w", path, mapErr(err))
+	}
+	return nil
+}
+
 // batchColumns is a deletion summed up: the shortest path in it is the folder
 // that was deleted, because "holiday" sorts before "holiday/sunset.jpg" and
 // every row of a tree is under its root.
