@@ -203,6 +203,11 @@ func TestThePeoplePageShowsEverybodyByTheirName(t *testing.T) {
 			t.Errorf("%s = %d, want 404", missing, rec.Code)
 		}
 	}
+	// A face whose crop is not stored yet is kept by nobody (#554): its rows
+	// commit first, and a 404 cached for a year was a hole for a year.
+	if got := get(t, h, "/face/99", cookie).Header().Get("Cache-Control"); strings.Contains(got, "max-age") {
+		t.Errorf("a face with no picture is cached as %q", got)
+	}
 }
 
 // TestAPersonsCoverIsTheirFolderAsked: the face a person's tile shows, at

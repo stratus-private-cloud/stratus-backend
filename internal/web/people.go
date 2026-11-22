@@ -325,8 +325,7 @@ func (h *handler) face(w http.ResponseWriter, r *http.Request, user string) {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
-	h.crop(w, r, user, ix.People, id)
+	h.crop(w, r, user, ix.People, id, "private, max-age=31536000, immutable", "")
 }
 
 // personCover is a person's picture, the face their tiles show, at
@@ -338,13 +337,12 @@ func (h *handler) face(w http.ResponseWriter, r *http.Request, user string) {
 func (h *handler) personCover(w http.ResponseWriter, r *http.Request, user string, people People, person db.Person) {
 	face := strconv.FormatInt(person.Cover, 10)
 	etag := `"face-` + face + `"`
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", pictureCache)
 	if r.Header.Get("If-None-Match") == etag {
+		w.Header().Set("ETag", etag)
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	h.crop(w, r, user, people, person.Cover)
+	h.crop(w, r, user, people, person.Cover, pictureCache, etag)
 }
 
 // namedFace answers a cover whose address names its face, which is every one
@@ -381,10 +379,15 @@ func (h *handler) namedFace(w http.ResponseWriter, r *http.Request, user string,
 	return true
 }
 
-func (h *handler) crop(w http.ResponseWriter, r *http.Request, user string, people People, id int64) {
+// crop answers a face's picture, and only a picture is kept: the cache and the
+// validator go on once there are bytes (#554). A face's rows commit before its
+// crop is stored, so a page drawn in between asks for one that is not there
+// yet -- and a 404 carrying immutable was a hole that browser kept for a year.
+func (h *handler) crop(w http.ResponseWriter, r *http.Request, user string, people People, id int64, cache, etag string) {
 	body, length, err := people.Crop(r.Context(), id)
 	switch {
 	case errors.Is(err, db.ErrNotFound), errors.Is(err, storage.ErrNotFound):
+		w.Header().Set("Cache-Control", "no-store")
 		http.NotFound(w, r)
 		return
 	case err != nil:
@@ -392,6 +395,10 @@ func (h *handler) crop(w http.ResponseWriter, r *http.Request, user string, peop
 		return
 	}
 	defer func() { _ = body.Close() }()
+	w.Header().Set("Cache-Control", cache)
+	if etag != "" {
+		w.Header().Set("ETag", etag)
+	}
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
 	_, _ = io.Copy(w, body)
