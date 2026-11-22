@@ -88,6 +88,12 @@ type mediaEntry interface {
 	Media() db.Media
 }
 
+// deletedEntry is an entry of the trash, which says where a deletion was
+// taken from (stratus-app#179).
+type deletedEntry interface {
+	DeletedFrom() (string, bool)
+}
+
 // tree is a generated tree for the length of one request, which is the shape
 // internal/timeline, internal/music and internal/trash each already have.
 type tree[N any] interface {
@@ -226,10 +232,19 @@ func (f *generatedFile[N]) Stat() (os.FileInfo, error) { return entryInfo{e: f.f
 // to present that address and could not otherwise find it (#431).
 func (f *generatedFile[N]) DeadProps() (map[xml.Name]xnet.Property, error) {
 	e := f.fs.entry(f.node)
-	if e.IsDir() {
-		return nil, nil
-	}
 	props := map[xml.Name]xnet.Property{}
+	if from, ok := e.(deletedEntry); ok {
+		if p, ok := from.DeletedFrom(); ok {
+			var href bytes.Buffer
+			if err := xml.EscapeText(&href, []byte(hrefOf(p))); err != nil {
+				return nil, err
+			}
+			props[deletedFromName] = property(deletedFromName, `<D:href xmlns:D="DAV:">`+href.String()+`</D:href>`)
+		}
+	}
+	if e.IsDir() {
+		return props, nil
+	}
 	if withMedia, ok := e.(mediaEntry); ok && f.fs.info {
 		props = infoProps(withMedia.Media())
 	}

@@ -953,6 +953,20 @@ Hard constraints, in the same spirit as the rest of the project:
   always somebody's. There would be nothing to call one, which the page can
   say in a sentence and a collection cannot.
 
+  **And it takes two writes now** (stratus-app#179): `MOVE` of a deletion to
+  an address under `/files/` is `files.RestoreTo`, and `DELETE` of one is
+  `DestroyTrashed` -- the page's two buttons as the verbs that already mean
+  them, so the app restores without an API of ours and Finder could too. A
+  deletion carries `deleted-from`, where it was taken from, which is what a
+  client restores it to; it is not `source`, which names a file that is
+  there. **A `MOVE` never replaces, whatever `Overwrite` says**: unlike
+  Restore it does not land beside a taken name either, since the client chose
+  the destination -- it is a `412` for the client to number around. Only a
+  whole deletion, the one shape the port restores and destroys; inside one is
+  `403` and still copied out. A destination anywhere else is RFC 4918's
+  `502`, and none is checked against the `/files/` lock table, whose mount
+  that is.
+
   **Its browser half serves the bytes**, like every generated mount's: a GET
   under `/trash/` is the file that was deleted, read from the blob the
   deletion never moved. That is what the collection is worth mounting for --

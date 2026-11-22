@@ -705,6 +705,36 @@ func TestRestoreAFile(t *testing.T) {
 
 // TestRestoreLandsBesideWhatTookItsName: restoring is not a PUT, and whatever
 // has the name now is not a mistake. A folder takes its contents with it.
+// TestRestoreToIsWhereTheClientSaid, and never over what is there: the
+// client named it, so a taken name is its to change (stratus-app#179).
+func TestRestoreToIsWhereTheClientSaid(t *testing.T) {
+	t.Parallel()
+	s, _ := service(t)
+	write(t, s, "notes.txt", "hello")
+	if err := s.Remove(t.Context(), owner, "notes.txt"); err != nil {
+		t.Fatal(err)
+	}
+	write(t, s, "notes.txt", "new")
+	batch := onlyBatch(t, s)
+
+	if _, err := s.RestoreTo(t.Context(), owner, batch, "notes.txt"); !errors.Is(err, db.ErrConflict) {
+		t.Errorf("RestoreTo a taken name = %v, want ErrConflict", err)
+	}
+	if _, err := s.RestoreTo(t.Context(), owner, batch, "../x"); !errors.Is(err, db.ErrInvalidPath) {
+		t.Errorf("RestoreTo a bad path = %v, want ErrInvalidPath", err)
+	}
+	back, err := s.RestoreTo(t.Context(), owner, batch, "old/notes (2).txt")
+	if err != nil {
+		t.Fatalf("RestoreTo: %v", err)
+	}
+	if back.Path != "old/notes (2).txt" || read(t, s, "old/notes (2).txt") != "hello" {
+		t.Errorf("it came back as %+v", back)
+	}
+	if got := read(t, s, "notes.txt"); got != "new" {
+		t.Errorf("what had the name reads %q", got)
+	}
+}
+
 func TestRestoreLandsBesideWhatTookItsName(t *testing.T) {
 	t.Parallel()
 	s, _ := service(t)

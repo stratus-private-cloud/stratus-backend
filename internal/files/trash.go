@@ -148,6 +148,22 @@ func (s *Service) TrashTotals(ctx context.Context, owner string) (db.TrashTotals
 // cascade when the row left files, so the indexer reads these again -- which
 // is why each one is announced to it on the way out.
 func (s *Service) Restore(ctx context.Context, owner, batch string) (db.File, error) {
+	return s.restore(ctx, owner, batch, "")
+}
+
+// RestoreTo puts a deletion back at a path the caller chose, which is what a
+// WebDAV MOVE out of the trash asks for (stratus-app#179). Unlike Restore it
+// never lands beside a taken name: the client named the destination, so one
+// that is taken is ErrConflict and the client's to number, as it would for a
+// MOVE anywhere else.
+func (s *Service) RestoreTo(ctx context.Context, owner, batch, to string) (db.File, error) {
+	if err := db.ValidatePath(to); err != nil {
+		return db.File{}, err
+	}
+	return s.restore(ctx, owner, batch, to)
+}
+
+func (s *Service) restore(ctx context.Context, owner, batch, chosen string) (db.File, error) {
 	var root db.File
 	var restored []db.File
 
@@ -170,7 +186,18 @@ func (s *Service) Restore(ctx context.Context, owner, batch string) (db.File, er
 		// Ordered by path, so the first row is the root of what was deleted:
 		// a prefix sorts before everything under it.
 		from := rows[0].Path
-		to, err := freeName(ctx, func(p string) (db.File, error) { return r.FileByPath(ctx, owner, p) }, from)
+		stat := func(p string) (db.File, error) { return r.FileByPath(ctx, owner, p) }
+		to := chosen
+		if to == "" {
+			to, err = freeName(ctx, stat, from)
+		} else {
+			switch _, err = stat(to); {
+			case err == nil:
+				err = fmt.Errorf("%w: %q is taken", db.ErrConflict, to)
+			case errors.Is(err, db.ErrNotFound):
+				err = nil
+			}
+		}
 		if err != nil {
 			return err
 		}
