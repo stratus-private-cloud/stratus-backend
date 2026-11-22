@@ -98,11 +98,16 @@ type Service struct {
 	listed   []db.Person
 	listedAt time.Time
 	era      uint64
+	// deferred is what Batch failed on and is not to retry yet (#557).
+	deferred *media.Deferred
 }
 
 // New wires the service for the models named model.
 func New(store Store, blobs Blobs, pictures Pictures, models Models, model string) *Service {
-	return &Service{store: store, blobs: blobs, pictures: pictures, models: models, model: model + Pipeline}
+	return &Service{
+		store: store, blobs: blobs, pictures: pictures, models: models, model: model + Pipeline,
+		deferred: media.NewDeferred(),
+	}
 }
 
 // Model is the name every scan this writes records.
@@ -125,12 +130,18 @@ func (s *Service) Wants(ctx context.Context, f db.File) (bool, error) {
 // Batch reads up to Batch photographs no scan of this model has reached, as
 // semantic.Batch does, and answers how many it reached a verdict about.
 func (s *Service) Batch(ctx context.Context, now time.Time) (int, error) {
-	pending, err := s.store.PendingFaceScans(ctx, s.model, now.Add(-files.CacheRetention), Batch)
+	pending, err := s.store.PendingFaceScans(ctx, s.model, now.Add(-files.CacheRetention), Batch+s.deferred.Len())
 	if err != nil {
 		return 0, fmt.Errorf("find photographs to look at: %w", err)
 	}
 	done := 0
 	for _, f := range pending {
+		if done >= Batch {
+			break
+		}
+		if !s.deferred.Ready(f.ID, now) {
+			continue
+		}
 		err := s.pictures.Look(ctx, f, PictureSize, func(img image.Image) error { return s.Read(ctx, f, img) })
 		if errors.Is(err, thumb.ErrNoThumbnail) {
 			err = s.scanned(ctx, f, db.EmbeddingRefused, now)
@@ -143,8 +154,12 @@ func (s *Service) Batch(ctx context.Context, now time.Time) (int, error) {
 			// Deleted while it was being read.
 		case err != nil:
 			slog.InfoContext(ctx, "looking for faces", "path", f.Path, "err", err)
+			// Put off rather than offered again at the head of the queue
+			// with everything older behind it (#557).
+			s.deferred.Failed(f.ID, now)
 			continue
 		}
+		s.deferred.Done(f.ID)
 		done++
 	}
 	return done, nil

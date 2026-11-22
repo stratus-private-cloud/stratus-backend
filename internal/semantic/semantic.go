@@ -76,11 +76,16 @@ type Service struct {
 	mu    sync.Mutex
 	index *embed.Index
 	timer *time.Timer
+	// deferred is what Batch failed on and is not to retry yet (#557).
+	deferred *media.Deferred
 }
 
 // New wires the service for the model named model.
 func New(store db.Embeddings, pictures Pictures, encoder Encoder, model string) *Service {
-	return &Service{store: store, pictures: pictures, encoder: encoder, model: model + Pipeline, idle: embed.Idle}
+	return &Service{
+		store: store, pictures: pictures, encoder: encoder, model: model + Pipeline, idle: embed.Idle,
+		deferred: media.NewDeferred(),
+	}
 }
 
 // Model is the name every vector this writes records.
@@ -95,12 +100,18 @@ func (s *Service) Model() string { return s.model }
 // thumbnails' does, and embed.ErrUnavailable a helper that could not run: in
 // both the row is left alone and the caller decides when to come back.
 func (s *Service) Batch(ctx context.Context, now time.Time) (int, error) {
-	pending, err := s.store.PendingEmbeddings(ctx, s.model, now.Add(-files.CacheRetention), Batch)
+	pending, err := s.store.PendingEmbeddings(ctx, s.model, now.Add(-files.CacheRetention), Batch+s.deferred.Len())
 	if err != nil {
 		return 0, fmt.Errorf("find photographs to read: %w", err)
 	}
 	done := 0
 	for _, f := range pending {
+		if done >= Batch {
+			break
+		}
+		if !s.deferred.Ready(f.ID, now) {
+			continue
+		}
 		err := s.pictures.Look(ctx, f, s.Size(), func(img image.Image) error { return s.Read(ctx, f, img) })
 		if errors.Is(err, thumb.ErrNoThumbnail) {
 			err = s.refuse(ctx, f, now)
@@ -113,8 +124,12 @@ func (s *Service) Batch(ctx context.Context, now time.Time) (int, error) {
 			// Deleted while it was being read.
 		case err != nil:
 			slog.InfoContext(ctx, "reading a photograph's content", "path", f.Path, "err", err)
+			// Put off rather than offered again at the head of the queue
+			// with everything older behind it (#557).
+			s.deferred.Failed(f.ID, now)
 			continue
 		}
+		s.deferred.Done(f.ID)
 		done++
 	}
 	return done, nil

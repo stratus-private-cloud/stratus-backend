@@ -3,6 +3,7 @@ package semantic_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"path/filepath"
@@ -60,11 +61,16 @@ type pictures struct {
 	colours map[int64]color.Color
 	busy    bool
 	refuse  map[int64]bool
+	// lost is a file whose bytes will not come back, which is no verdict.
+	lost map[int64]bool
 }
 
 func (p *pictures) Look(_ context.Context, f db.File, _ int, fn func(image.Image) error) error {
 	if p.busy {
 		return media.ErrBusy
+	}
+	if p.lost[f.ID] {
+		return errors.New("the store did not answer")
 	}
 	if p.refuse[f.ID] {
 		return thumb.ErrNoThumbnail
@@ -93,7 +99,7 @@ func newFixture(t *testing.T) *fixture {
 	if err := store.Migrate(t.Context()); err != nil {
 		t.Fatal(err)
 	}
-	p := &pictures{colours: map[int64]color.Color{}, refuse: map[int64]bool{}}
+	p := &pictures{colours: map[int64]color.Color{}, refuse: map[int64]bool{}, lost: map[int64]bool{}}
 	e := &encoder{}
 	return &fixture{store: store, pictures: p, encoder: e, service: semantic.New(store, p, e, "fake-1")}
 }
@@ -240,5 +246,28 @@ func TestAPhotographsLikeOneAreTheClosestButItself(t *testing.T) {
 	}
 	if hits, err := fx.service.Similar(t.Context(), red.ID, 1); err != nil || len(hits) != 1 {
 		t.Errorf("Similar with a limit of one = %+v, %v", hits, err)
+	}
+}
+
+// TestAPassIsNotHeldByWhatItCannotRead is #557 on this side: a newest
+// photograph whose bytes will not come back held everything older behind it,
+// offered again at the head of every batch.
+func TestAPassIsNotHeldByWhatItCannotRead(t *testing.T) {
+	older := newFixture(t)
+	first := older.photo(t, "older.jpg", color.RGBA{R: 255, A: 255})
+	for i := range semantic.Batch {
+		f := older.photo(t, fmt.Sprintf("lost-%d.jpg", i), color.RGBA{B: 255, A: 255})
+		older.pictures.lost[f.ID] = true
+	}
+
+	now := time.Now()
+	if done, err := older.service.Batch(t.Context(), now); err != nil || done != 0 {
+		t.Fatalf("a batch of nothing readable = %d, %v", done, err)
+	}
+	if done, err := older.service.Batch(t.Context(), now.Add(time.Second)); err != nil || done != 1 {
+		t.Fatalf("the next batch = %d, %v; want the older photograph reached", done, err)
+	}
+	if wanted, err := older.service.Wants(t.Context(), first); err != nil || wanted {
+		t.Errorf("the older photograph is still wanted: %v, %v", wanted, err)
 	}
 }

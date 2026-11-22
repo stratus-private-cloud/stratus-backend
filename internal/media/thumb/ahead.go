@@ -232,12 +232,18 @@ func (t *Service) PrepareBatch(ctx context.Context, now time.Time) (int, error) 
 		// takes a note after: the two halves of a refusal expire together
 		// because they are given the same number (#338).
 		pending, err := t.meta.PendingThumbs(ctx, kind, files.DerivedGeneration,
-			now.Add(-files.CacheRetention), Batch-done)
+			now.Add(-files.CacheRetention), Batch-done+t.deferred.Len())
 		if err != nil {
 			return done, fmt.Errorf("find pictures to make: %w", err)
 		}
 
 		for _, f := range pending {
+			if done >= Batch {
+				break
+			}
+			if !t.deferred.Ready(f.ID, now) {
+				continue
+			}
 			switch _, err := t.Prepare(ctx, f); {
 			case errors.Is(err, media.ErrBusy):
 				return done, media.ErrBusy
@@ -245,9 +251,15 @@ func (t *Service) PrepareBatch(ctx context.Context, now time.Time) (int, error) 
 				return done, err
 			case err != nil:
 				// The bytes could not be reached, which says nothing about the
-				// file: the row is untouched and the next pass offers it again.
+				// file: the row is untouched, so it is put off here instead --
+				// offered again at the head of the queue it was a spin (#557)
+				// -- and not counted, so a batch of nothing but these is not a
+				// full one asking to come straight back.
+				t.deferred.Failed(f.ID, now)
 				slog.InfoContext(ctx, "making a thumbnail ahead", "path", f.Path, "err", err)
+				continue
 			}
+			t.deferred.Done(f.ID)
 			done++
 		}
 		if done >= Batch {
