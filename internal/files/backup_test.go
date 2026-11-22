@@ -217,7 +217,7 @@ func TestABackupCannotBeFiledUnderAFile(t *testing.T) {
 
 func TestWhatTheIndexWillNotSayStopsTheBackups(t *testing.T) {
 	t.Parallel()
-	for _, method := range []string{"ListFiles", "BlobKeys"} {
+	for _, method := range []string{"ListFiles", "HeldKeys", "HeldInTrash"} {
 		blobs, meta := filestest.Backends(t)
 		if _, err := blobs.Put(t.Context(), "backups/20261001T030000Z.db", strings.NewReader("SQLite"), 6); err != nil {
 			t.Fatal(err)

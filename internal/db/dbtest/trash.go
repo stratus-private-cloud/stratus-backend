@@ -30,7 +30,7 @@ func RunTrash(t *testing.T, newRepo func(t *testing.T) db.Repo) {
 		{"the trash belongs to its owner", trashOwner},
 		{"a row with no owner is only seen by asking for none", trashNoOwner},
 		{"its keys are what keeps the sweep off them", trashKeys},
-		{"a key a file names is held, and one only the trash names is not", heldKeys},
+		{"a key a file names is held, and one only the trash names is held by the trash", heldKeys},
 		{"expired deletions come back oldest first", trashExpiry},
 		{"deleting one is idempotent", trashDelete},
 		{"the totals are files and bytes, not rows", trashTotals},
@@ -350,6 +350,17 @@ func heldKeys(t *testing.T, s db.Repo) {
 	}
 	if none, err := s.HeldKeys(t.Context(), nil); err != nil || len(none) != 0 {
 		t.Errorf("HeldKeys of nothing = %q, %v", none, err)
+	}
+
+	inTrash, trashErr := s.HeldInTrash(t.Context(), []string{"blobs/live", "blobs/gone", "blobs/nowhere"})
+	if trashErr != nil {
+		t.Fatalf("HeldInTrash: %v", trashErr)
+	}
+	if want := []string{"blobs/gone"}; !slices.Equal(inTrash, want) {
+		t.Errorf("HeldInTrash = %q, want %q", inTrash, want)
+	}
+	if none, err := s.HeldInTrash(t.Context(), nil); err != nil || len(none) != 0 {
+		t.Errorf("HeldInTrash of nothing = %q, %v", none, err)
 	}
 }
 

@@ -279,6 +279,13 @@ func (s *Service) Collect(ctx context.Context, olderThan time.Duration) (Collect
 			// that loses data.
 			continue
 		case derived:
+			// Only what could end up deleted is kept for the end (#566): a
+			// picture of a live file, of this generation and not a cache gone
+			// stale, is the bulk of a library and is kept whatever this pass
+			// rescues.
+			if _, live := referenced[parent]; live && !doomedDerived(info) {
+				continue
+			}
 			derivedKeys = append(derivedKeys, info)
 		default:
 			if _, live := referenced[info.Key]; !live {
@@ -336,9 +343,7 @@ func (s *Service) Collect(ctx context.Context, olderThan time.Duration) (Collect
 			//
 			// A cache outlives its welcome a week after it was written,
 			// whatever its parent is doing.
-			stale := staleGeneration(info.Key)
-			expired := cached(info.Key) && time.Since(info.ModTime) > CacheRetention
-			if !stale && !expired {
+			if !doomedDerived(info) {
 				continue
 			}
 		}
@@ -349,6 +354,12 @@ func (s *Service) Collect(ctx context.Context, olderThan time.Duration) (Collect
 		done.Bytes += info.Size
 	}
 	return done, nil
+}
+
+// doomedDerived is a derived object that goes even while its parent lives: a
+// generation the generator has moved on from, or a cache past its week.
+func doomedDerived(info storage.ObjectInfo) bool {
+	return staleGeneration(info.Key) || cached(info.Key) && time.Since(info.ModTime) > CacheRetention
 }
 
 // heldChunk is how many keys go into one HeldKeys statement, well under the

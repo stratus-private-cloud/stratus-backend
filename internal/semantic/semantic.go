@@ -233,7 +233,9 @@ func (s *Service) loaded(ctx context.Context) (*embed.Index, error) {
 		return s.index, nil
 	}
 
-	index := embed.NewIndex(Dimensions)
+	// A count that fails or is stale costs a growth, not a wrong answer.
+	counts, _ := s.store.EmbeddingCounts(ctx, s.model)
+	index := embed.NewIndex(Dimensions, int(counts.Made))
 	err := s.store.EachEmbedding(ctx, s.model, func(id int64, v []byte) error {
 		if err := index.Put(id, v); err != nil {
 			// One bad row is not worth a search that answers nothing.
