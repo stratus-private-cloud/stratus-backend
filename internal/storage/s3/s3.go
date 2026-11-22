@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -192,23 +193,27 @@ func (s *Store) Get(ctx context.Context, key string, rng storage.Range) (io.Read
 		return nil, storage.ObjectInfo{}, err
 	}
 
-	// The whole object needs no size up front, so it costs one request.
+	// The whole object needs no size up front, so it costs one request -- and
+	// through Core, because the client's lazy Object asks with a HEAD before
+	// its GET the moment it is asked what it is, which made this two (#562).
 	if rng == storage.All() {
-		obj, err := s.client.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
+		obj, oi, _, err := s.core.GetObject(ctx, s.bucket, key, minio.GetObjectOptions{})
 		if err != nil {
-			return nil, storage.ObjectInfo{}, mapErr(key, err)
-		}
-		// GetObject is lazy: nothing is sent until the first read or stat, so
-		// this is where a missing object actually surfaces.
-		oi, err := obj.Stat()
-		if err != nil {
-			_ = obj.Close()
 			return nil, storage.ObjectInfo{}, mapErr(key, err)
 		}
 		return obj, objectInfo(key, oi), nil
 	}
 
-	// Any other range costs two: Resolve needs the size, and a suffix range is
+	// A range from an offset is asked for as it is, and the object's size
+	// comes back in Content-Range: one request where it was a HEAD and then a
+	// GET, on every seek in a video and every step through an MP4 (#562).
+	if header, ok := rng.Forward(); ok {
+		if body, info, done, err := s.getForward(ctx, key, header); done {
+			return body, info, err
+		}
+	}
+
+	// Anything else costs two: Resolve needs the size, and a suffix range is
 	// precisely the case where the caller does not know it.
 	info, err := s.Stat(ctx, key)
 	if err != nil {
@@ -233,6 +238,49 @@ func (s *Store) Get(ctx context.Context, key string, rng storage.Range) (io.Read
 		return nil, storage.ObjectInfo{}, mapErr(key, err)
 	}
 	return obj, info, nil
+}
+
+// getForward is a ranged GET with no HEAD before it. Not done when the store
+// would not answer it as a range -- 416 for an offset at or past the end, which
+// the port reads two different ways, or no Content-Range to take the size
+// from -- and then the caller asks for the size and decides.
+func (s *Store) getForward(ctx context.Context, key, header string) (io.ReadCloser, storage.ObjectInfo, bool, error) {
+	var opts minio.GetObjectOptions
+	opts.Set("Range", header)
+	// Core's and not the client's: the client's Object asks with a HEAD of its
+	// own before the GET when it is asked what it is, which is the request
+	// this is here to save.
+	obj, oi, headers, err := s.core.GetObject(ctx, s.bucket, key, opts)
+	if err != nil {
+		if unsatisfiable(err) {
+			return nil, storage.ObjectInfo{}, false, nil
+		}
+		return nil, storage.ObjectInfo{}, true, mapErr(key, err)
+	}
+	size, ok := totalOf(headers.Get("Content-Range"))
+	if !ok {
+		_ = obj.Close()
+		return nil, storage.ObjectInfo{}, false, nil
+	}
+	info := objectInfo(key, oi)
+	info.Size = size
+	return obj, info, true, nil
+}
+
+// totalOf is the object's size from a Content-Range, "bytes 0-99/1234".
+func totalOf(contentRange string) (int64, bool) {
+	_, total, ok := strings.Cut(contentRange, "/")
+	if !ok || !strings.HasPrefix(contentRange, "bytes ") {
+		return 0, false
+	}
+	n, err := strconv.ParseInt(total, 10, 64)
+	return n, err == nil && n >= 0
+}
+
+// unsatisfiable is S3's 416, a range that starts at or past the end.
+func unsatisfiable(err error) bool {
+	var resp minio.ErrorResponse
+	return errors.As(err, &resp) && (resp.Code == "InvalidRange" || resp.StatusCode == http.StatusRequestedRangeNotSatisfiable)
 }
 
 // Stat implements storage.Storage.
