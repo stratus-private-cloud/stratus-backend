@@ -104,6 +104,11 @@ func Run(t *testing.T, newStore func(t *testing.T) db.Store) {
 		RunSettings(t, func(t *testing.T) db.Repo { return newStore(t) })
 	})
 
+	t.Run("passkeys", func(t *testing.T) {
+		t.Parallel()
+		RunPasskeys(t, func(t *testing.T) db.Repo { return newStore(t) })
+	})
+
 	cases := []struct {
 		name string
 		fn   func(t *testing.T, s db.Store)
