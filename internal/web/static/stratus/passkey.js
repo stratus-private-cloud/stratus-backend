@@ -67,10 +67,53 @@
     p.classList.add("d-none");
   });
 
-  document.querySelectorAll("form[data-passkey]").forEach(function (form) {
+  // The options as the browser takes them, read afresh each time: a call the
+  // browser refused leaves the decoded copy spent.
+  function optionsOf(form, creating) {
     var options = JSON.parse(form.getAttribute("data-options")).publicKey;
+    options.challenge = bytes(options.challenge);
+    if (creating) {
+      options.user.id = bytes(options.user.id);
+      options.excludeCredentials = descriptors(options.excludeCredentials);
+    } else {
+      options.allowCredentials = descriptors(options.allowCredentials);
+    }
+    return options;
+  }
+
+  function send(form, cred) {
+    form.elements.credential.value = JSON.stringify(encode(cred));
+    form.submit();
+  }
+
+  document.querySelectorAll("form[data-passkey]").forEach(function (form) {
     var creating = form.getAttribute("data-passkey") === "create";
+    // The sign-in's waiting request: offered by the browser or a password
+    // manager in the username field's autofill, with no button to press. A
+    // browser holds one request at a time, so the button aborts it first.
+    var waiting = null;
     form.classList.remove("d-none");
+
+    if (!creating && PublicKeyCredential.isConditionalMediationAvailable) {
+      PublicKeyCredential.isConditionalMediationAvailable().then(function (available) {
+        if (!available) {
+          return;
+        }
+        waiting = new AbortController();
+        navigator.credentials
+          .get({ publicKey: optionsOf(form, false), mediation: "conditional", signal: waiting.signal })
+          .then(
+            function (cred) {
+              send(form, cred);
+            },
+            function () {
+              // Aborted for the button, or nothing chosen: the button is
+              // still there.
+            }
+          );
+      });
+    }
+
     form.addEventListener("submit", function (event) {
       if (form.elements.credential.value) {
         return;
@@ -79,27 +122,19 @@
       if (!form.reportValidity()) {
         return;
       }
-      options.challenge = bytes(options.challenge);
-      var ask;
-      if (creating) {
-        options.user.id = bytes(options.user.id);
-        options.excludeCredentials = descriptors(options.excludeCredentials);
-        ask = navigator.credentials.create({ publicKey: options });
-      } else {
-        options.allowCredentials = descriptors(options.allowCredentials);
-        ask = navigator.credentials.get({ publicKey: options });
+      if (waiting) {
+        waiting.abort();
+        waiting = null;
       }
-      ask.then(
-        function (cred) {
-          form.elements.credential.value = JSON.stringify(encode(cred));
-          form.submit();
-        },
-        function () {
-          // Cancelled, or no passkey there: the page that was is still the
-          // page, and a reload asks again with a fresh challenge.
-          options = JSON.parse(form.getAttribute("data-options")).publicKey;
-        }
-      );
+      var options = optionsOf(form, creating);
+      var ask = creating
+        ? navigator.credentials.create({ publicKey: options })
+        : navigator.credentials.get({ publicKey: options });
+      // Cancelled, or no passkey there: the page that was is still the page,
+      // and the button asks again.
+      ask.then(function (cred) {
+        send(form, cred);
+      }, function () {});
     });
   });
 })();
