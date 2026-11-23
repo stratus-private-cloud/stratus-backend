@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -95,6 +96,28 @@ func TestOnlyErrorsAreReported(t *testing.T) {
 
 	if n := len(tr.sent()); n != 0 {
 		t.Errorf("sent %d events for lines below error", n)
+	}
+}
+
+// A client hanging up is logged and not reported, and only when the error is
+// the hang-up: a real failure logged under a cancelled request still is.
+func TestAnAbandonedRequestIsNotReported(t *testing.T) {
+	t.Parallel()
+	log, tr, buf := newLogger(t, slog.LevelInfo)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	log.ErrorContext(ctx, "reading what has a picture", "err", fmt.Errorf("read media states: %w", ctx.Err()))
+	if n := len(tr.sent()); n != 0 {
+		t.Errorf("sent %d events for a request the client abandoned", n)
+	}
+	if !strings.Contains(buf.String(), "reading what has a picture") {
+		t.Error("the abandoned request was not logged")
+	}
+
+	log.ErrorContext(ctx, "reading what has a picture", "err", errors.New("disk I/O error"))
+	if n := len(tr.sent()); n != 1 {
+		t.Errorf("sent %d events, want 1 for a failure that is not the hang-up", n)
 	}
 }
 

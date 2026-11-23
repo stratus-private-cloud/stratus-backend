@@ -9,6 +9,7 @@ package report
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -61,7 +62,7 @@ func (h *Handler) Enabled(ctx context.Context, level slog.Level) bool {
 
 // Handle implements slog.Handler.
 func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
-	if r.Level >= slog.LevelError {
+	if r.Level >= slog.LevelError && !abandoned(ctx, r) {
 		h.capture(r)
 	}
 	if !h.next.Enabled(ctx, r.Level) {
@@ -95,6 +96,28 @@ func (h *Handler) prefixed(attrs []slog.Attr) []slog.Attr {
 		out[i] = slog.Attr{Key: h.group + a.Key, Value: a.Value}
 	}
 	return out
+}
+
+// abandoned says the error is only the request it was logged for having gone:
+// a client that hung up halfway through a listing leaves every query under it
+// failing with its context, and that is nothing this server did. Still logged,
+// since a client that always hangs up is worth seeing, but not a crash report
+// (STRATUS-BACKEND-A, -B). The err attribute has to say so too, so that a real
+// failure logged after a client left is still reported.
+func abandoned(ctx context.Context, r slog.Record) bool {
+	if ctx == nil || ctx.Err() == nil {
+		return false
+	}
+	gone := false
+	r.Attrs(func(a slog.Attr) bool {
+		if a.Key != "err" {
+			return true
+		}
+		err, ok := a.Value.Resolve().Any().(error)
+		gone = ok && errors.Is(err, ctx.Err())
+		return false
+	})
+	return gone
 }
 
 // capture turns a record into an exception: the message is its title and the
