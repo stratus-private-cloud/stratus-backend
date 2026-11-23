@@ -45,7 +45,7 @@ var repoMethods = []string{
 	"PruneAlbumLookups", "PendingAlbumLookups", "PendingLyrics", "PutAlbumLookup", "PutLyrics",
 	"PruneCalendarTombstones", "Calendars", "CalendarObjects", "AddressBooks", "Contacts", "PruneContactTombstones", "Settings", "PutSetting", "DeleteSetting",
 	"PendingFaceScans", "FacesOf", "AddFace", "EachFace", "EachFaceCrop", "Face", "People", "NewPerson", "DeleteEmptyPeople",
-	"ForgetFaces",
+	"ForgetFaces", "Passkeys", "PutPasskey", "DeletePasskey",
 }
 
 // Failing is a db.Store that fails one named method and passes the rest
@@ -695,4 +695,28 @@ func (f *failingRepo) ForgetFaces(ctx context.Context) error {
 		return err
 	}
 	return f.Repo.ForgetFaces(ctx)
+}
+
+// Passkeys implements db.Repo.
+func (f *failingRepo) Passkeys(ctx context.Context) ([]db.Passkey, error) {
+	if err := f.fails("Passkeys"); err != nil {
+		return nil, err
+	}
+	return f.Repo.Passkeys(ctx)
+}
+
+// PutPasskey implements db.Repo.
+func (f *failingRepo) PutPasskey(ctx context.Context, p db.Passkey) error {
+	if err := f.fails("PutPasskey"); err != nil {
+		return err
+	}
+	return f.Repo.PutPasskey(ctx, p)
+}
+
+// DeletePasskey implements db.Repo.
+func (f *failingRepo) DeletePasskey(ctx context.Context, id []byte) error {
+	if err := f.fails("DeletePasskey"); err != nil {
+		return err
+	}
+	return f.Repo.DeletePasskey(ctx, id)
 }

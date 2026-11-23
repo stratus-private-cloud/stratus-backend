@@ -24,6 +24,7 @@
             The password for every way in: this page, WebDAV, CalDAV, OpenSubsonic.
             <span class="badge text-bg-secondary">set by the environment</span>
           </div>
+          {{if .PasskeysOn}}<div class="form-text"><a href="/settings/passkeys">Passkeys</a> sign in to these pages too.</div>{{end}}
         </div>
       </div>
       {{range .Settings}}

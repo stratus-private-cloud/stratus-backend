@@ -107,6 +107,13 @@ func (t *Throttle) VerifyToken(ctx context.Context, username, token, salt string
 	return t.delay(ctx, tv.VerifyToken(ctx, username, token, salt))
 }
 
+// Fail counts a failed sign-in that was not a password -- a passkey that did
+// not verify (#532) -- against the same budget, and answers err after its
+// turn, or ErrTooManyAttempts.
+func (t *Throttle) Fail(ctx context.Context, err error) error {
+	return t.delay(ctx, err)
+}
+
 // delay answers a success immediately and holds a failure for its turn.
 func (t *Throttle) delay(ctx context.Context, err error) error {
 	if err == nil {

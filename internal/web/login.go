@@ -122,7 +122,7 @@ func (h *handler) loginForm(w http.ResponseWriter, r *http.Request) {
 		redirectLocal(w, r, next)
 		return
 	}
-	h.render(w, http.StatusOK, pageLogin, view{Title: "Sign in", Next: next})
+	h.render(w, http.StatusOK, pageLogin, h.withPasskey(r, view{Title: "Sign in", Next: next}))
 }
 
 func (h *handler) login(w http.ResponseWriter, r *http.Request) {
@@ -134,10 +134,10 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		// The same shared budget WebDAV and OpenSubsonic guess against, so a
 		// login form does not hand an attacker a third one.
 		w.Header().Set("Retry-After", "2")
-		h.render(w, http.StatusTooManyRequests, pageLogin, view{
+		h.render(w, http.StatusTooManyRequests, pageLogin, h.withPasskey(r, view{
 			Title: "Sign in", Next: next, Username: user,
 			Error: "Too many attempts. Try again in a moment.",
-		})
+		}))
 		return
 	case err != nil:
 		// One message for a wrong name and a wrong password, for the reason
@@ -145,10 +145,10 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		//
 		// No WWW-Authenticate header with this 401: it would put the browser's
 		// own credential dialog on top of the form the user is looking at.
-		h.render(w, http.StatusUnauthorized, pageLogin, view{
+		h.render(w, http.StatusUnauthorized, pageLogin, h.withPasskey(r, view{
 			Title: "Sign in", Next: next, Username: user,
 			Error: "Wrong username or password.",
-		})
+		}))
 		return
 	}
 
