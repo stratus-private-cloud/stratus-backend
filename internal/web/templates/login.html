@@ -23,6 +23,17 @@
           </div>
           <button class="btn btn-primary w-100" type="submit">Sign in</button>
         </form>
+        {{/* Hidden until passkey.js finds a browser that can sign with one
+             (#532): with no script, or no WebAuthn, the page is the password
+             and nothing else, as it was. */}}
+        {{if .PasskeyOptions}}
+        <form method="post" action="/login/passkey" class="mt-3 d-none" data-passkey="get" data-options="{{.PasskeyOptions}}">
+          <input type="hidden" name="next" value="{{.Next}}">
+          <input type="hidden" name="ceremony" value="{{.Ceremony}}">
+          <input type="hidden" name="credential">
+          <button class="btn btn-outline-secondary w-100" type="submit">Sign in with a passkey</button>
+        </form>
+        {{end}}
       </div>
     </div>
     <p class="text-body-secondary small mt-3 mb-0">

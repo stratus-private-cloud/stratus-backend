@@ -73,6 +73,7 @@ const (
 	pageEvent     = "event.html"
 	pageUnevent   = "event-delete.html"
 	pageSettings  = "settings.html"
+	pagePasskeys  = "passkeys.html"
 	pageConnect   = "connect.html"
 	pagePeople    = "people.html"
 	pagePerson    = "person.html"
@@ -111,6 +112,7 @@ var pages = map[string]*template.Template{
 	pageEvent:     parse(pageEvent),
 	pageUnevent:   parse(pageUnevent),
 	pageSettings:  parse(pageSettings),
+	pagePasskeys:  parse(pagePasskeys),
 	pageConnect:   parse(pageConnect),
 	pagePeople:    parse(pagePeople),
 	pagePerson:    parse(pagePerson, pageTile),
@@ -168,7 +170,13 @@ type view struct {
 	Error    string
 	Message  string
 	Notice   string
-	Next     string
+	// PasskeyOptions and Ceremony are a passkey sign-in on the login page:
+	// the options the browser is handed, and the challenge they are for.
+	PasskeyOptions, Ceremony string
+	// Passkeys is the passkeys page, and PasskeysOn whether there is one.
+	Passkeys   *passkeysView
+	PasskeysOn bool
+	Next       string
 	// Crumbs and Entries are the file listing: the trail back to the root, and
 	// one page of what is in this directory. Here and Folders are where its two
 	// forms post, and NextPage is where the rest of the listing is -- empty
@@ -347,10 +355,12 @@ func (h *handler) render(w http.ResponseWriter, status int, page string, v view)
 func (h *handler) renderTemplate(w http.ResponseWriter, status int, page, name string, v view) {
 	v.Assets, v.HTMX, v.Version, v.BuildDate = assetPrefix, htmxPrefix, h.version, h.buildDate
 	v.PeopleOn = h.indexingNow().Faces
+	v.PasskeysOn = h.passkeys != nil
 	build := "?v=" + url.QueryEscape(h.version)
 	v.Scripts = []string{
 		ownPrefix + "/copy.js" + build,
 		ownPrefix + "/dialog.js" + build,
+		ownPrefix + "/passkey.js" + build,
 		ownPrefix + "/register.js" + build,
 		ownPrefix + "/select.js" + build,
 	}

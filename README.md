@@ -31,7 +31,7 @@ of this file.
 | CalDAV | calendar events, tasks, journal entries | DAVx5, Thunderbird, iOS/macOS | **works** ¶ |
 | CardDAV | contacts | DAVx5, Thunderbird, iOS/macOS | **works** ¶ |
 | OpenSubsonic | music | Symfonium, Substreamer, DSub, Feishin | **works** † |
-| Web UI | sign in, browse, search, upload, download, rename, delete, the trash, what is known about a file, a photo gallery, a music library, a month of a calendar and its events to write, an address book to read and write, a page that sets a phone up for both, library status | any browser | **partly** |
+| Web UI | sign in with the password or a passkey, browse, search, upload, download, rename, delete, the trash, what is known about a file, a photo gallery, a music library, a month of a calendar and its events to write, an address book to read and write, a page that sets a phone up for both, library status | any browser | **partly** |
 | DLNA / UPnP-AV | TVs, set-top players | | planned |
 
 § Two ways, and the player chooses between them by the codecs each declares.
@@ -1565,6 +1565,24 @@ surprise:
   a browser you open every week is never signed out, and a copied cookie that
   somebody keeps using stays usable until you change the password. That is the
   bound this design has, and it is the one to reach for.
+
+**A passkey signs in too**, instead of the password, from **Settings →
+Passkeys**: a name, the password once more, and the browser makes one. It
+issues the same session the password does, and a passkey that fails counts
+against the same limit on guesses. What to know:
+
+- **It is the web UI's alone.** WebDAV, CalDAV, CardDAV and OpenSubsonic
+  clients keep the password; none of them can hold a passkey.
+- **It belongs to the address it was made at.** One made at
+  `cloud.example.com` does nothing at the machine's other name, which is
+  WebAuthn's rule and not this server's; the page lists which address each
+  one is for. It needs https, or `localhost`.
+- **Removing a passkey does not sign out a browser it already signed in**,
+  for the reason above: the session is signed, not stored. Changing the
+  password does, and does not remove the passkeys.
+- It needs JavaScript, and is the one thing here that does: the browser's
+  passkey prompt has no form of its own. Without it the sign-in page is the
+  password, as before.
 
 The cookie is `HttpOnly` and `SameSite=Lax`, and `Secure` whenever the request
 arrived over HTTPS — directly, or through a proxy that says so with

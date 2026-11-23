@@ -495,6 +495,18 @@ Hard constraints, in the same spirit as the rest of the project:
   UI's own gate: `auth.Session` on the protocol surfaces reads the cookie and
   never sets one. A map in memory was the alternative: real revocation, at the
   price of a restart signing everybody out.
+
+  **A passkey is the UI's second way in** (#532), with `go-webauthn/webauthn`
+  doing the verifying -- 2.2 MB of binary on amd64, taken over a CBOR parser and
+  signature checks of our own in front of the whole cloud. It issues the same
+  session, so everything above holds for it too: removing a passkey revokes
+  no session. The relying party is the request's host, kept with each
+  passkey, rather than a variable naming the real one. A challenge is held in
+  memory and taken once (principle 6), and the browser's answer is posted as
+  a form field: `passkey.js` fills it and submits, and nothing answers in
+  JSON. A failure counts against the same throttle as a password, and adding
+  one asks for the password again, because a passkey made from a stolen
+  cookie would outlive the password change that ends the cookie.
 - **A share link is the ordinary URL with a signature on it, and that is the
   whole of the design** (#169). `internal/auth/share.go` is the fourth
   credential adapter beside the other three, derived from the same password with

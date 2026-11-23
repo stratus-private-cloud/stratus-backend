@@ -273,6 +273,7 @@ func (a *App) Handler(deps Deps) http.Handler {
 		a.byDate.Store(byDate)
 		browser := web.Handler(web.Deps{
 			Version: a.version, BuildDate: a.buildDate, Verifier: verifier, Sessions: sessions, Shares: shares,
+			Passkeys: deps.Database, Owner: creds.Username,
 			Files: service, Thumbs: deps.Thumbs, Index: deps.Database, Playlists: playlists, ByDate: byDate,
 			Indexing: web.Indexing{
 				Index: deps.Database, Interval: a.cfg.IndexInterval, Ahead: a.cfg.ThumbsAhead,

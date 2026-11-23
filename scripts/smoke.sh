@@ -64,7 +64,12 @@ fi
 # that reads them, and main was 352 KB under the line before them --
 # 30,056,608 bytes against 30,408,704, measured the same way. A network
 # lookup would have cost nothing here and sent every position somewhere.
-BIN_SIZE_FAIL=$((30 * 1024 * 1024))
+# Raised from 30 MB with passkeys (#532): go-webauthn and what it brings --
+# a CBOR codec, JWT and go-tpm it links whether or not they are used -- are
+# 2.2 MB on amd64, and main was 16 KB under the line before them --
+# 31,441,056 bytes against 31,457,280, measured the same way. The alternative
+# was a verifier of our own in front of the whole cloud.
+BIN_SIZE_FAIL=$((33 * 1024 * 1024))
 # ffprobe and ffmpeg together, which are trimmed builds of our own: 2.4 MB and
 # 13.2 MB on amd64 today against the 128 MB one general-purpose static FFmpeg costs.
 # Raised from 10 MB when ffmpeg learned audio and HTTPS (#50): the encoders and

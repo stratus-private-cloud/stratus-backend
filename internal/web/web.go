@@ -129,6 +129,11 @@ type Deps struct {
 	// Contacts is the address book pages at /contacts/ and the forms that
 	// write them under /contact/; nil means there are none.
 	Contacts Contacts
+	// Passkeys are the web UI's other way in (#532), and nil means there is
+	// only the password; Owner is who a passkey signs in, the configured
+	// username.
+	Passkeys db.Passkeys
+	Owner    string
 	// Settings are the settings in force (#397), read per request so a
 	// change is on the next page. Nil means the fields above are the whole
 	// story, which is a test.
@@ -268,6 +273,11 @@ type handler struct {
 	// contacts is read for the address book pages, and nil when there are
 	// none.
 	contacts Contacts
+	// passkeys are nil when there are none to sign in with, owner who one
+	// signs in, and ceremonies the challenges handed out and not yet answered.
+	passkeys   db.Passkeys
+	owner      string
+	ceremonies *ceremonies
 	// settings are the settings in force, and nil for a handler a test built.
 	settings func() config.Values
 	// editor is the settings page's, and nil when there is no page.
@@ -300,6 +310,7 @@ func Handler(d Deps) http.Handler {
 		files: d.Files, thumbs: d.Thumbs, captures: d.Index, dated: d.ByDate, library: d.Index, finder: d.Index, byID: d.Index, playlists: d.Playlists,
 		indexing: d.Indexing, imports: d.Imports, playback: d.Playback, kept: d.TrashRetention,
 		calendars: d.Calendars, contacts: d.Contacts, settings: d.Settings, editor: d.Editor, zones: d.Zones,
+		passkeys: d.Passkeys, owner: d.Owner, ceremonies: &ceremonies{},
 		started: d.Started, database: d.Database, storage: d.Storage, sweep: d.Sweep, system: d.System, backup: d.Backup,
 	}
 
@@ -389,6 +400,12 @@ func Handler(d Deps) http.Handler {
 	mux.HandleFunc("GET "+offlinePath, h.offline)
 	mux.HandleFunc("GET /login", h.loginForm)
 	mux.HandleFunc("POST /login", h.login)
+	if h.passkeys != nil {
+		mux.HandleFunc("POST "+passkeyLoginPath, h.passkeyLogin)
+		mux.HandleFunc("GET "+passkeysPath, h.signedIn(h.passkeysPage))
+		mux.HandleFunc("POST "+passkeysPath, h.signedIn(h.addPasskey))
+		mux.HandleFunc("POST "+passkeysPath+"/delete", h.signedIn(h.deletePasskey))
+	}
 	mux.HandleFunc("POST /logout", h.logout)
 	mux.Handle("GET /static/", assets())
 	mux.HandleFunc("/", h.notFound)
