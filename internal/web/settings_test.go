@@ -42,7 +42,7 @@ func settingsHandlerWith(t *testing.T, fixed map[string]string, imports web.Impo
 		Files: s, Thumbs: thumbs, Index: meta, Playlists: playlistsOf(meta), Indexing: indexing(meta),
 		Playback: web.Playback{}, TrashRetention: aMonth, Settings: editor.Values, Editor: editor, Imports: imports,
 		Zones:     []string{"America/New_York", "Europe/Madrid", "UTC"},
-		Calendars: calendar.New(meta),
+		Calendars: calendar.New(meta), Passkeys: meta, Owner: username,
 	}), editor
 }
 
@@ -281,4 +281,12 @@ func TestTheBackupFolderIsWrittenUnderFiles(t *testing.T) {
 	if !strings.Contains(body, want) {
 		t.Errorf("the backup folder is not shown under /files/:\n%s", between(body, "STRATUS_BACKUP_DIR"))
 	}
+}
+
+// TestTheSettingsLeadToThePasskeys: the passkeys page is a door off the
+// account, not an address to know.
+func TestTheSettingsLeadToThePasskeys(t *testing.T) {
+	t.Parallel()
+	h, _ := settingsHandler(t, nil)
+	has(t, get(t, h, "/settings", signIn(t, h)).Body.String(), `href="/settings/passkeys"`, "Manage passkeys")
 }

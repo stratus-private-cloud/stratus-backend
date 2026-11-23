@@ -1582,7 +1582,9 @@ against the same limit on guesses. What to know:
   password does, and does not remove the passkeys.
 - It needs JavaScript, and is the one thing here that does: the browser's
   passkey prompt has no form of its own. Without it the sign-in page is the
-  password, as before.
+  password, as before. With it, a browser or a password manager that offers
+  passkeys in autofill offers yours in the username field, with no button to
+  press.
 
 The cookie is `HttpOnly` and `SameSite=Lax`, and `Secure` whenever the request
 arrived over HTTPS — directly, or through a proxy that says so with

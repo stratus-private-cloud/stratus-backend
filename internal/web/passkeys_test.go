@@ -200,7 +200,11 @@ func TestAPasskeySignsIn(t *testing.T) {
 		t.Fatalf("Passkeys = %+v, %v", stored, err)
 	}
 
-	options, ceremony := optionsOf(t, get(t, h, "/login").Body.String(), "get")
+	login := get(t, h, "/login").Body.String()
+	// The username field says a passkey may fill it, which is what lets a
+	// browser or a password manager offer one without the button.
+	has(t, login, `autocomplete="username webauthn"`)
+	options, ceremony := optionsOf(t, login, "get")
 	signed := a.get(t, options)
 	rec := post(t, h, "/login/passkey", url.Values{"ceremony": {ceremony}, "credential": {signed}, "next": {"/status"}})
 	session := sessionCookie(rec)
