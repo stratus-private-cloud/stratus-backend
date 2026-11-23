@@ -358,6 +358,7 @@ type Repo interface {
 	Calendars
 	Contacts
 	Settings
+	Passkeys
 }
 
 // Store is a database connection.
