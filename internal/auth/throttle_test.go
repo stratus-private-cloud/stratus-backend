@@ -115,3 +115,18 @@ func TestThrottleHonoursCancellation(t *testing.T) {
 		t.Errorf("it waited %v after the context was cancelled", waited)
 	}
 }
+
+// TestThrottleCountsAFailureThatIsNotAPassword is the passkey's half (#532):
+// it spends the same budget the password does, so alternating the two is not
+// twice the guesses.
+func TestThrottleCountsAFailureThatIsNotAPassword(t *testing.T) {
+	t.Parallel()
+	throttle := auth.NewThrottle(credentials(t), auth.ThrottleConfig{Every: time.Hour, Burst: 1, MaxWait: 0})
+	refused := errors.New("not it")
+	if err := throttle.Fail(t.Context(), refused); !errors.Is(err, refused) {
+		t.Fatalf("the first failure = %v, want it back", err)
+	}
+	if err := throttle.Verify(t.Context(), username, "not it"); !errors.Is(err, auth.ErrTooManyAttempts) {
+		t.Errorf("a wrong password after it = %v, want ErrTooManyAttempts", err)
+	}
+}

@@ -1,0 +1,68 @@
+{{/* The passkeys that sign in to this page (#532): every one there is, which
+     host it works on, and a form that makes another for this one. Adding asks
+     for the password, and the form is hidden until passkey.js finds a browser
+     that can make one. */}}
+{{define "content" -}}
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <h1 class="h4">Passkeys</h1>
+    {{if .Notice}}<div class="alert alert-success py-2" role="status">{{.Notice}}</div>{{end}}
+    {{if .Error}}<div class="alert alert-danger py-2" role="alert">{{.Error}}</div>{{end}}
+    <p class="text-body-secondary small">
+      A passkey signs in to these pages instead of the password. WebDAV,
+      CalDAV, CardDAV and OpenSubsonic clients still use the password. Removing
+      a passkey does not sign out a browser it already signed in; changing the
+      password does.
+    </p>
+    {{with .Passkeys}}
+    {{if .Rows}}
+    <div class="list-group mb-4">
+      {{range .Rows}}
+      <div class="list-group-item d-flex align-items-center gap-3">
+        <div class="flex-grow-1 text-break">
+          {{.Name}}
+          <div class="small text-body-secondary">
+            {{.Host}} · added {{.Created.Format "2 Jan 2006"}} ·
+            {{if .LastUsed.IsZero}}never used{{else}}last used {{.LastUsed.Format "2 Jan 2006"}}{{end}}
+          </div>
+        </div>
+        <form method="post" action="/settings/passkeys/delete">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button class="btn btn-sm btn-outline-danger" type="submit">Remove</button>
+        </form>
+      </div>
+      {{end}}
+    </div>
+    {{else}}
+    <p class="mb-4">There are no passkeys yet.</p>
+    {{end}}
+
+    <div class="card">
+      <div class="card-header fw-semibold">Add a passkey for {{.Host}}</div>
+      <div class="card-body">
+        <noscript><p class="mb-0">Making a passkey needs JavaScript.</p></noscript>
+        <p class="mb-0 small text-body-secondary" data-passkey-missing>
+          This browser cannot make a passkey here: it needs JavaScript, and https
+          or localhost.
+        </p>
+        <form method="post" action="/settings/passkeys" class="d-none" data-passkey="create" data-options="{{.Options}}">
+          <input type="hidden" name="ceremony" value="{{.Ceremony}}">
+          <input type="hidden" name="credential">
+          <div class="mb-3">
+            <label class="form-label" for="passkey-name">Name</label>
+            <input class="form-control" id="passkey-name" name="name" maxlength="64" value="{{.Name}}"
+                   placeholder="Phone, laptop…" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="passkey-password">Password</label>
+            <input class="form-control" id="passkey-password" name="password" type="password"
+                   autocomplete="current-password" required>
+          </div>
+          <button class="btn btn-primary" type="submit">Add a passkey</button>
+        </form>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</div>
+{{- end}}
