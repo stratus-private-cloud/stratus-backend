@@ -497,7 +497,7 @@ Hard constraints, in the same spirit as the rest of the project:
   price of a restart signing everybody out.
 
   **A passkey is the UI's second way in** (#532), with `go-webauthn/webauthn`
-  doing the verifying -- 1.8 MB of binary, taken over a CBOR parser and
+  doing the verifying -- 2.2 MB of binary on amd64, taken over a CBOR parser and
   signature checks of our own in front of the whole cloud. It issues the same
   session, so everything above holds for it too: removing a passkey revokes
   no session. The relying party is the request's host, kept with each
