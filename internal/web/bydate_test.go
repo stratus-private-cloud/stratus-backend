@@ -1,9 +1,12 @@
 package web_test
 
 import (
+	"errors"
 	"fmt"
+	htmlstd "html"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -305,6 +308,10 @@ func TestTheViewer(t *testing.T) {
 			t.Errorf("viewer lacks %q", want)
 		}
 	}
+	if strings.Contains(body, "Location") {
+		t.Error("a photo with no position shows a location")
+	}
+
 	// Back to the grid page that starts with this photo.
 	if !regexp.MustCompile(`href="/photos/\?after=\d+\.\d+">All photos`).MatchString(body) {
 		t.Error("the way back is not to this photo's page")
@@ -317,6 +324,72 @@ func TestTheViewer(t *testing.T) {
 	}
 	if !strings.Contains(get(t, h, "/photos/2024/06/c.jpg?view", cookie).Body.String(), `aria-disabled="true">Older`) {
 		t.Error("the oldest photo offers an older one")
+	}
+}
+
+// TestTheViewerSaysWhereItWasTaken: the Details dialog's place and
+// coordinates, which the viewer had left out.
+func TestTheViewerSaysWhereItWasTaken(t *testing.T) {
+	t.Parallel()
+	h, s, meta := browserOver(t)
+	cookie := signIn(t, h)
+	f := addPhoto(t, s, meta, "a.jpg", time.Date(2024, 6, 3, 9, 0, 0, 0, time.UTC), "")
+	if err := meta.PutMedia(t.Context(), db.Media{
+		FileID: f.ID, Kind: db.KindImage, IndexedAt: time.Now(), Version: 1,
+		TakenAt: time.Date(2024, 6, 3, 9, 0, 0, 0, time.UTC), GPS: &db.GPS{Latitude: 41.3874, Longitude: 2.1686},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	body := get(t, h, "/photos/2024/06/a.jpg?view", cookie).Body.String()
+	for _, want := range []string{"Barcelona", "41.38740, 2.16860", "https://www.openstreetmap.org/?mlat=41.38740"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("viewer lacks %q", want)
+		}
+	}
+}
+
+// TestDeletingFromTheViewer lands on the next photograph rather than on the
+// folder it happened to be filed in, and Cancel goes back to the viewer.
+func TestDeletingFromTheViewer(t *testing.T) {
+	t.Parallel()
+	h, s, meta := browserOver(t)
+	cookie := signIn(t, h)
+	addPhoto(t, s, meta, "a.jpg", time.Date(2024, 6, 3, 9, 0, 0, 0, time.UTC), "")
+	addPhoto(t, s, meta, "b.jpg", time.Date(2024, 6, 2, 9, 0, 0, 0, time.UTC), "")
+	addPhoto(t, s, meta, "c.jpg", time.Date(2024, 6, 1, 9, 0, 0, 0, time.UTC), "")
+
+	ask := regexp.MustCompile(`href="(/delete/[^"]+)">Delete<`).FindStringSubmatch(get(t, h, "/photos/2024/06/b.jpg?view", cookie).Body.String())
+	if ask == nil {
+		t.Fatal("the viewer offers no delete")
+	}
+	form := get(t, h, htmlstd.UnescapeString(ask[1]), cookie)
+	if form.Code != http.StatusOK {
+		t.Fatalf("the delete page = %d", form.Code)
+	}
+	body := form.Body.String()
+	for _, want := range []string{
+		`action="/delete/b.jpg"`,
+		`name="next" value="/photos/2024/06/c.jpg?view"`,
+		`href="/photos/2024/06/b.jpg?view">Cancel`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the delete page lacks %q:\n%s", want, body)
+		}
+	}
+
+	rec := post(t, h, "/delete/b.jpg", url.Values{"next": {"/photos/2024/06/c.jpg?view"}}, cookie)
+	if got := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || got != "/photos/2024/06/c.jpg?view" {
+		t.Errorf("deleting = %d to %q, want the next photograph", rec.Code, got)
+	}
+	if _, err := s.Stat(t.Context(), username, "b.jpg"); !errors.Is(err, db.ErrNotFound) {
+		t.Errorf("the photograph survived: %v", err)
+	}
+
+	// Nowhere but here.
+	write(t, s, "d.txt", "x")
+	if got := post(t, h, "/delete/d.txt", url.Values{"next": {"//evil.example/"}}, cookie).Header().Get("Location"); got != "/" {
+		t.Errorf("Location = %q, want a redirect that stays on this server", got)
 	}
 }
 

@@ -3,6 +3,7 @@ package web
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 
@@ -20,12 +21,34 @@ func (h *handler) deleteForm(w http.ResponseWriter, r *http.Request, user string
 	if !ok {
 		return
 	}
-	h.render(w, http.StatusOK, pageDelete, view{
+	v := view{
 		Title: "Delete", User: user,
 		Name: path.Base(target), IsDir: f.IsDir,
 		Action: link(deletePrefix, target), Back: href(db.ParentOf(target)),
 		Kept: h.keptDays(),
-	})
+	}
+	q := r.URL.Query()
+	if c := q.Get(cancelParam); c != "" {
+		v.Back = safeNext(c)
+	}
+	if n := q.Get(nextParam); n != "" {
+		v.Next = safeNext(n)
+	}
+	h.render(w, http.StatusOK, pageDelete, v)
+}
+
+// nextParam and cancelParam are a delete asked from somewhere other than the
+// file's folder -- the gallery -- whose folder is the wrong place to land:
+// where to go once it is gone, and where Cancel goes. Both pass through
+// safeNext, so neither is a redirect off this server.
+const (
+	nextParam   = "next"
+	cancelParam = "cancel"
+)
+
+// deleteFrom is the delete page for a file asked about from another page.
+func deleteFrom(p, next, cancel string) string {
+	return link(deletePrefix, p) + "?" + url.Values{nextParam: {next}, cancelParam: {cancel}}.Encode()
 }
 
 // remove deletes a file, or a directory and everything under it.
@@ -36,6 +59,10 @@ func (h *handler) remove(w http.ResponseWriter, r *http.Request, user string) {
 	}
 	if err := h.files.Remove(r.Context(), user, target); err != nil {
 		h.fail(w, r, user, err)
+		return
+	}
+	if n := r.PostFormValue(nextParam); n != "" {
+		redirectLocal(w, r, safeNext(n))
 		return
 	}
 	redirectLocal(w, r, href(db.ParentOf(target)))

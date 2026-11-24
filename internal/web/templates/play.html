@@ -2,7 +2,8 @@
 <div class="d-flex align-items-baseline gap-3 mb-3">
   <h1 class="h5 mb-0 text-truncate">{{.Name}}</h1>
   <a class="small" href="{{.Film.Direct}}">Open the file</a>
-  <a class="small ms-auto" href="{{.Back}}">Back</a>
+  {{if .Film.Delete}}<a class="small link-danger ms-auto" href="{{.Film.Delete}}">Delete</a>{{end}}
+  <a class="small{{if not .Film.Delete}} ms-auto{{end}}" href="{{.Back}}">Back</a>
 </div>
 {{/* Two sources, and which one plays is the browser's own answer: the
      playlist first, which Safari takes natively and every other browser
