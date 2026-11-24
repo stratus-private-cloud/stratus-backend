@@ -133,6 +133,7 @@ func TestAVideosPageIsThePlayer(t *testing.T) {
 		`href="/videos/2024/06/clip.mp4"`,
 		`<source src="/files/clip.mp4?k=`,
 		`href="/videos/2024/06/"`,
+		`href="/delete/clip.mp4?cancel=%2Fvideos%2F2024%2F06%2Fclip.mp4%3Fplay&next=%2Fvideos%2F2024%2F06%2F">Delete`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the player lacks %q:\n%s", want, body)

@@ -16,6 +16,7 @@ import (
 	"github.com/stratus-private-cloud/stratus-backend/internal/db"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media"
 	"github.com/stratus-private-cloud/stratus-backend/internal/media/thumb"
+	"github.com/stratus-private-cloud/stratus-backend/internal/places"
 	"github.com/stratus-private-cloud/stratus-backend/internal/timeline"
 )
 
@@ -136,9 +137,17 @@ type photoView struct {
 	Arrived    bool
 	Camera     string
 	Dimensions string
-	Newer      string
-	Older      string
-	Back       string
+	// Place is the nearest town and Location the coordinates, linked to a
+	// map, as the Details dialog shows them.
+	Place       string
+	Location    string
+	LocationMap string
+	Newer       string
+	Older       string
+	Back        string
+	// Delete asks to delete it, landing on the next photograph rather than
+	// on its folder.
+	Delete string
 	// Similar are the photographs most like this one (#514), and empty for a
 	// film or with the search by content off.
 	Similar []tile
@@ -344,6 +353,12 @@ func (h *handler) viewer(w http.ResponseWriter, r *http.Request, user string, l 
 	if m := around.Capture.Media; m.Width > 0 && m.Height > 0 {
 		pv.Dimensions = fmt.Sprintf("%d × %d", m.Width, m.Height)
 	}
+	if g := around.Capture.Media.GPS; g != nil {
+		if p, ok := places.Nearest(g.Latitude, g.Longitude); ok {
+			pv.Place = p.String()
+		}
+		pv.Location, pv.LocationMap = coordinates(g), mapOf(g)
+	}
 	switch {
 	case browserShows(f.Path):
 		pv.Image = pv.Original
@@ -363,6 +378,15 @@ func (h *handler) viewer(w http.ResponseWriter, r *http.Request, user string, l 
 			return
 		}
 	}
+
+	next := pv.Older
+	if next == "" {
+		next = pv.Newer
+	}
+	if next == "" {
+		next = l.prefix
+	}
+	pv.Delete = deleteFrom(f.Path, next, r.URL.RequestURI())
 
 	pv.Similar = h.similarTo(r, user, f)
 	pv.People = h.peopleIn(r, f)

@@ -99,6 +99,9 @@ type filmView struct {
 	// playlist offered ahead of it, signed the same way and empty when the
 	// film does not need one or cannot have one.
 	Direct, Source, HLS string
+	// Delete asks to delete it and lands on back; empty on a share link,
+	// which reads and never writes.
+	Delete string
 }
 
 // playerPolicy is the pages' policy plus what a video element needs: media
@@ -151,6 +154,9 @@ func (h *handler) play(w http.ResponseWriter, r *http.Request, user string, f db
 		cast = h.shares.Issue(user, f.Path, false, time.Now().Add(castLife))
 	}
 	film := &filmView{Direct: direct, Source: shared(href(f.Path), cast)}
+	if token == "" {
+		film.Delete = deleteFrom(f.Path, back, r.URL.RequestURI())
+	}
 
 	// A film the browser takes as it is needs nothing more; one it does not,
 	// and that can be remuxed, gets the playlist. A row nobody has read yet

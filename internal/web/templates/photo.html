@@ -2,6 +2,7 @@
 {{with .Photo}}
 <nav class="d-flex justify-content-between align-items-center mb-3" aria-label="Photos either side">
   <a class="btn btn-sm btn-outline-secondary" href="{{.Back}}">All photos</a>
+  <a class="btn btn-sm btn-outline-danger ms-auto me-2" href="{{.Delete}}">Delete</a>
   <div class="btn-group btn-group-sm">
     {{if .Newer}}<a class="btn btn-outline-secondary" href="{{.Newer}}" rel="prev">Newer</a>
     {{else}}<span class="btn btn-outline-secondary disabled" aria-disabled="true">Newer</span>{{end}}
@@ -21,6 +22,8 @@
   <dt class="col-sm-3">{{if .Arrived}}Added{{else}}Taken{{end}}</dt>
   <dd class="col-sm-9">{{.When}}</dd>
   {{if .Camera}}<dt class="col-sm-3">Camera</dt><dd class="col-sm-9">{{.Camera}}</dd>{{end}}
+  {{if .Place}}<dt class="col-sm-3">Place</dt><dd class="col-sm-9">{{.Place}}</dd>{{end}}
+  {{if .Location}}<dt class="col-sm-3">Location</dt><dd class="col-sm-9"><a href="{{.LocationMap}}" target="_blank" rel="noopener noreferrer">{{.Location}}</a></dd>{{end}}
   {{if .Dimensions}}<dt class="col-sm-3">Size</dt><dd class="col-sm-9">{{.Dimensions}}</dd>{{end}}
 </dl>
 
