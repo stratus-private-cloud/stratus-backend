@@ -11,7 +11,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// TestAbortUploadsBefore covers the sweep that runs on every connect. An
+// TestAbortUploadsBefore covers the sweep that runs after every connect. An
 // abandoned multipart upload is invisible to a listing and billed until
 // something aborts it, so nothing else would ever notice it was there.
 func TestAbortUploadsBefore(t *testing.T) {
@@ -46,7 +46,7 @@ func TestAbortUploadsBefore(t *testing.T) {
 		t.Fatal("no upload id")
 	}
 
-	store := &Store{client: client, bucket: bucket}
+	store := &Store{client: client, core: core, bucket: bucket}
 
 	// A cutoff in the past leaves it alone: aborting somebody else's upload in
 	// progress would be worse than paying for a day of orphaned parts.
@@ -62,6 +62,31 @@ func TestAbortUploadsBefore(t *testing.T) {
 	}
 	if hasIncompleteUpload(t, client, bucket) {
 		t.Error("the abandoned upload survived the sweep")
+	}
+
+	// An upload abandoned under a name somebody is uploading again: the
+	// sweep aborts the old one by its id and leaves the new one running.
+	if _, nerr := core.NewMultipartUpload(t.Context(), bucket, "again", minio.PutObjectOptions{}); nerr != nil {
+		t.Fatalf("NewMultipartUpload: %v", nerr)
+	}
+	time.Sleep(1100 * time.Millisecond)
+	cutoff := time.Now()
+	fresh, ferr := core.NewMultipartUpload(t.Context(), bucket, "again", minio.PutObjectOptions{})
+	if ferr != nil {
+		t.Fatalf("NewMultipartUpload: %v", ferr)
+	}
+	if err := store.abortUploadsBefore(t.Context(), cutoff); err != nil {
+		t.Fatalf("abortUploadsBefore: %v", err)
+	}
+	var left []string
+	for upload := range client.ListIncompleteUploads(t.Context(), bucket, "", true) {
+		if upload.Err != nil {
+			t.Fatalf("ListIncompleteUploads: %v", upload.Err)
+		}
+		left = append(left, upload.UploadID)
+	}
+	if len(left) != 1 || left[0] != fresh {
+		t.Errorf("uploads left = %v, want only the fresh one %q", left, fresh)
 	}
 }
 

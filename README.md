@@ -660,7 +660,10 @@ importing its own blob store would do it for ever. It refuses to start instead.
 The two backends also clean up after themselves when they open: the disk one
 empties its reserved directory of interrupted uploads, and the S3 one aborts
 multipart uploads abandoned more than a day ago, which are invisible to a
-listing and billed until something ends them.
+listing and billed until something ends them. The S3 one does it in the
+background once the server is up, so a bucket with many of them, or a slow
+answer from the provider, delays nothing; what it does not finish is logged
+and tried again on the next start.
 
 Both keep a second place for uploads that arrive over several requests and are
 meant to be resumed, which is the opposite case and is deliberately left alone

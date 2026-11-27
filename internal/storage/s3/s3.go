@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -93,11 +94,22 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 	}
 
 	store := &Store{client: client, core: minio.Core{Client: client}, bucket: cfg.Bucket, partSize: defaultPartSize}
-	if err := store.abortStaleUploads(ctx); err != nil {
-		return nil, err
-	}
+	// Not part of opening the store: a bucket with many abandoned uploads
+	// takes longer to clear than startup gives a step, and a server that
+	// cannot start because of housekeeping retries the same housekeeping
+	// forever. Whatever this misses is still stale on the next start.
+	go func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), cleanupTimeout)
+		defer cancel()
+		if err := store.abortStaleUploads(cleanup); err != nil {
+			slog.Warn("s3: clear abandoned uploads", "bucket", cfg.Bucket, "err", err)
+		}
+	}()
 	return store, nil
 }
+
+// cleanupTimeout bounds the clearing of abandoned uploads at startup.
+const cleanupTimeout = 10 * time.Minute
 
 // staleUpload is how long an unfinished multipart upload has to sit before it
 // is treated as abandoned. Unlike the disk backend's reserved directory, a
@@ -122,7 +134,10 @@ func (s *Store) abortUploadsBefore(ctx context.Context, cutoff time.Time) error 
 		if upload.Initiated.After(cutoff) {
 			continue
 		}
-		if err := s.client.RemoveIncompleteUpload(ctx, s.bucket, upload.Key); err != nil {
+		// By its id: RemoveIncompleteUpload lists the key's uploads again
+		// first, one more request per upload, and aborts every one of them --
+		// a fresh upload of the same name included.
+		if err := s.core.AbortMultipartUpload(ctx, s.bucket, upload.Key, upload.UploadID); err != nil && !isNotFound(err) {
 			return fmt.Errorf("s3: abort the incomplete upload of %q: %w", upload.Key, err)
 		}
 	}
